@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cloudEnabled } from '../firebase';
-import { linkGoogle, onAccountChange, renameInLeaderboards, saveCloud, type AccountInfo } from '../game/cloud';
+import { authErrorMessage, linkGoogle, onAccountChange, renameInLeaderboards, saveCloud, type AccountInfo } from '../game/cloud';
 import { claimableAchievements, eraName, totalBuildings } from '../game/economy';
 import { fmt } from '../game/format';
 import { NAME_MAX } from '../game/names';
@@ -60,7 +60,7 @@ function Profile() {
       toast(r === 'linked' ? '✅ Cuenta vinculada con Google' : '✅ Sesión iniciada con tu cuenta de Google');
     } catch (e) {
       console.warn(e);
-      toast('No se pudo vincular la cuenta');
+      toast(`⚠️ ${authErrorMessage(e)}`);
     } finally {
       setLinking(false);
     }

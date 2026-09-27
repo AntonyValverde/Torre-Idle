@@ -44,6 +44,7 @@ export interface OfflineReport {
 export interface Toast {
   id: number;
   text: string;
+  ms: number;
 }
 
 export interface StackReward {
@@ -497,7 +498,9 @@ export const useGame = create<GameStore>((set, get) => ({
 
   toast(text) {
     const id = ++toastId;
-    set({ toasts: [...get().toasts.slice(-3), { id, text }] });
-    setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== id) }), 2600);
+    // Los mensajes largos (errores con instrucciones) se quedan más tiempo
+    const ms = Math.min(7000, 2600 + Math.max(0, text.length - 40) * 45);
+    set({ toasts: [...get().toasts.slice(-3), { id, text, ms }] });
+    setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== id) }), ms);
   },
 }));

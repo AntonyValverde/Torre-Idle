@@ -413,6 +413,31 @@ export async function fetchDailyTop(date: string, n = 25): Promise<ScoreEntry[]>
 // Cuenta de Google
 // =====================================================================
 
+/** Explica en lenguaje claro por qué falló la vinculación con Google. */
+export function authErrorMessage(e: unknown): string {
+  const code = errCode(e);
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return `Este dominio (${location.hostname}) no está autorizado en Firebase → Authentication → Dominios autorizados`;
+    case 'auth/operation-not-allowed':
+      return 'El inicio de sesión con Google no está activado en Firebase';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+    case 'auth/user-cancelled':
+      return 'Cancelaste el inicio de sesión';
+    case 'auth/network-request-failed':
+      return 'Sin conexión a internet. Inténtalo de nuevo';
+    case 'auth/web-storage-unsupported':
+      return 'Tu navegador bloquea el inicio de sesión (modo privado o cookies desactivadas)';
+    case 'auth/too-many-requests':
+      return 'Demasiados intentos. Espera un momento';
+    case 'auth/provider-already-linked':
+      return 'Esta partida ya está vinculada a una cuenta de Google';
+    default:
+      return code ? `No se pudo vincular la cuenta (${code})` : 'No se pudo vincular la cuenta';
+  }
+}
+
 /** Si esa cuenta de Google ya existía, entra en ella y conserva la partida con más progreso. */
 async function switchToExistingAccount(e: unknown): Promise<'switched'> {
   const cred = GoogleAuthProvider.credentialFromError(e as AuthError);
