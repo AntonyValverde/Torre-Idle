@@ -58,7 +58,7 @@ export function RankingTab({ initial = 'daily' }: { initial?: BoardTab }) {
       {!cloudEnabled && <p className="empty">Configura Firebase para ver los rankings.</p>}
       {error && <p className="empty">No se pudo cargar el ranking. Revisa tu conexión.</p>}
       {!error && cloudEnabled && rows === null && <p className="empty">Cargando…</p>}
-      {rows && rows.length === 0 && <p className="empty">Aún no hay nadie. ¡Sé el primero!</p>}
+      {cloudEnabled && rows && rows.length === 0 && <p className="empty">Aún no hay nadie. ¡Sé el primero!</p>}
       {rows && rows.length > 0 && (
         <ol className="ranking">
           {rows.map((r, i) => (
