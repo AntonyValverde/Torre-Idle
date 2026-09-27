@@ -181,7 +181,8 @@ describe('progresión infinita', () => {
     expect(s.upgrades).toEqual([]);
     expect(s.gems).toBe(42);
     expect(s.stackBest).toBe(33);
-    expect(s.allTimeEarned).toBe(8e9);
+    // (init cobra los milisegundos transcurridos al cargar, de ahí el "casi")
+    expect(s.allTimeEarned).toBeCloseTo(8e9, -1);
     expect(s.coins).toBe(1000);
     expect(globalMultiplier(s)).toBeCloseTo(1.06);
     // Sin estrellas nuevas no se puede volver a refundar
