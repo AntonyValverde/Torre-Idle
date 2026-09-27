@@ -1,0 +1,88 @@
+// Pruebas de las reglas de Firestore contra el emulador local (no toca la base de datos real).
+// Requiere Java. Ejecutar con: npm run test:rules
+import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+
+const env = await initializeTestEnvironment({
+  projectId: 'demo-torre',
+  firestore: { rules: readFileSync(process.env.RULES_PATH ?? 'firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
+});
+
+const alice = env.authenticatedContext('alice').firestore();
+const bob = env.authenticatedContext('bob').firestore();
+const anon = env.unauthenticatedContext().firestore();
+
+let pass = 0;
+let fail = 0;
+async function t(name, fn, shouldPass) {
+  try {
+    await (shouldPass ? assertSucceeds(fn()) : assertFails(fn()));
+    pass++;
+    console.log(`  ok   ${name}`);
+  } catch (e) {
+    fail++;
+    console.log(`  FAIL ${name} -> ${e.message?.split('\n')[0]}`);
+  }
+}
+const ok = (n, f) => t(n, f, true);
+const no = (n, f) => t(n, f, false);
+
+const pad = (n) => String(n).padStart(2, '0');
+const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = key(new Date());
+const future = key(new Date(Date.now() + 5 * 86400000));
+
+console.log('users/{uid}');
+const ua = doc(alice, 'users/alice');
+await ok('crear con ping del servidor', () => setDoc(ua, { ping: serverTimestamp() }, { merge: true }));
+await ok('guardar partida', () => setDoc(ua, { state: { coins: 5 }, name: 'Alice', totalEarned: 100, savedAt: serverTimestamp() }, { merge: true }));
+await ok('ping de nuevo (conserva totalEarned)', () => setDoc(ua, { ping: serverTimestamp() }, { merge: true }));
+await ok('subir progreso', () => setDoc(ua, { state: { coins: 9 }, totalEarned: 200, savedAt: serverTimestamp() }, { merge: true }));
+await no('BAJAR progreso (dispositivo viejo)', () => setDoc(ua, { state: { coins: 1 }, totalEarned: 150, savedAt: serverTimestamp() }, { merge: true }));
+await no('marca de tiempo falsa del cliente', () => setDoc(ua, { ping: Timestamp.fromMillis(Date.now() + 86400000) }, { merge: true }));
+await no('campo extra', () => setDoc(ua, { admin: true }, { merge: true }));
+await no('state que no es un mapa', () => setDoc(ua, { state: 'hack' }, { merge: true }));
+await no('otro usuario lee', () => getDoc(doc(bob, 'users/alice')));
+await no('otro usuario escribe', () => setDoc(doc(bob, 'users/alice'), { ping: serverTimestamp() }, { merge: true }));
+await no('sin sesión lee', () => getDoc(doc(anon, 'users/alice')));
+await ok('el dueño lee', () => getDoc(ua));
+
+console.log('leaderboards');
+const la = doc(alice, 'leaderboards/stack/scores/alice');
+await ok('crear récord', () => setDoc(la, { name: 'Alice', score: 10, updatedAt: serverTimestamp() }));
+await ok('lectura pública', () => getDoc(doc(anon, 'leaderboards/stack/scores/alice')));
+await no('puntuación menor', () => setDoc(la, { name: 'Alice', score: 5, updatedAt: serverTimestamp() }));
+await no('récord antes de 5 s', () => setDoc(la, { name: 'Alice', score: 20, updatedAt: serverTimestamp() }));
+await ok('renombrar', () => updateDoc(la, { name: 'José Ñú_2' }));
+await no('nombre con carácter invisible', () => updateDoc(la, { name: 'Ali​ce' }));
+await no('nombre con HTML', () => updateDoc(la, { name: '<b>x</b>' }));
+await no('nombre con espacio al final', () => updateDoc(la, { name: 'Alice ' }));
+await no('nombre demasiado largo', () => updateDoc(la, { name: 'a'.repeat(21) }));
+await no('renombrar + cambiar puntuación', () => updateDoc(la, { name: 'Alice', score: 999 }));
+await no('escribir el récord de otro', () => setDoc(doc(bob, 'leaderboards/stack/scores/alice'), { name: 'Bob', score: 1, updatedAt: serverTimestamp() }));
+await no('puntuación imposible', () => setDoc(doc(bob, 'leaderboards/stack/scores/bob'), { name: 'Bob', score: 1001, updatedAt: serverTimestamp() }));
+await no('puntuación decimal', () => setDoc(doc(bob, 'leaderboards/thief/scores/bob'), { name: 'Bob', score: 10.5, updatedAt: serverTimestamp() }));
+await no('ranking inventado', () => setDoc(doc(bob, 'leaderboards/hack/scores/bob'), { name: 'Bob', score: 1, updatedAt: serverTimestamp() }));
+await no('updatedAt falso', () => setDoc(doc(bob, 'leaderboards/merge/scores/bob'), { name: 'Bob', score: 1, updatedAt: Timestamp.now() }));
+await ok('ciudad con número grande', () => setDoc(doc(bob, 'leaderboards/city/scores/bob'), { name: 'Bob', score: 1.5e40, updatedAt: serverTimestamp() }));
+await new Promise((r) => setTimeout(r, 5500));
+await ok('récord mayor tras 5 s', () => setDoc(la, { name: 'Alice', score: 20, updatedAt: serverTimestamp() }));
+
+console.log('daily');
+const da = doc(alice, `daily/${today}/scores/alice`);
+const entry = (moves, timeMs) => ({ name: 'Alice', moves, timeMs, score: moves * 10000000 + timeMs, createdAt: serverTimestamp() });
+await no('día futuro', () => setDoc(doc(alice, `daily/${future}/scores/alice`), entry(8, 5000)));
+await no('demasiado rápido para un humano', () => setDoc(da, entry(8, 1500)));
+await no('score que no cuadra', () => setDoc(da, { ...entry(8, 5000), score: 1 }));
+await ok('resultado de hoy', () => setDoc(da, entry(8, 5000)));
+await no('reescribir resultado', () => setDoc(da, entry(6, 4000)));
+await no('cambiar movimientos', () => updateDoc(da, { moves: 1 }));
+await ok('renombrar en el diario', () => updateDoc(da, { name: 'Alicia' }));
+
+console.log('otros');
+await no('colección inventada', () => setDoc(doc(alice, 'admin/config'), { x: 1 }));
+
+console.log(`\n${pass} ok, ${fail} FAIL`);
+await env.cleanup();
+process.exit(fail ? 1 : 0);
