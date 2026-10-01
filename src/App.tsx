@@ -141,8 +141,8 @@ export default function App() {
   if (!ready) {
     return (
       <div className="splash">
-        <div className="splash-logo">🏛️</div>
-        <div className="splash-title">Torre Idle</div>
+        <img className="splash-logo" src="/icon.svg" alt="" />
+        <div className="splash-title">Infinite City</div>
         <div className="spinner" />
       </div>
     );

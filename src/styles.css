@@ -130,6 +130,12 @@ small {
   filter: drop-shadow(0 0 24px rgba(255, 200, 80, 0.6));
 }
 
+img.splash-logo {
+  width: 112px;
+  height: 112px;
+  filter: drop-shadow(0 0 24px rgba(255, 200, 80, 0.35));
+}
+
 .splash-title {
   font-size: 2rem;
   font-weight: 800;

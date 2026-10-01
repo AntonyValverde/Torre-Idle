@@ -14,10 +14,10 @@ import { SEASON_LABEL, WEATHER_LABEL, seasonAt, weatherAt } from './weather';
 export async function shareCity(uid: string, name: string) {
   const url = cityLink(uid);
   const toast = useGame.getState().toast;
-  const text = `Visita mi ciudad en Torre Idle: ${name}`;
+  const text = `Visita mi ciudad en Infinite City: ${name}`;
   try {
     if (navigator.share) {
-      await navigator.share({ title: 'Torre Idle', text, url });
+      await navigator.share({ title: 'Infinite City', text, url });
       return;
     }
     await navigator.clipboard.writeText(url);

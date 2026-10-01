@@ -1,6 +1,6 @@
-# Torre Idle
+# Infinite City
 
-Juego idle/clicker para móvil (PWA) con minijuegos. Está hecho con React, Vite y TypeScript, usa Firebase (Auth anónima, Firestore y Analytics) y se despliega en Vercel.
+Juego idle/clicker para móvil (PWA) con minijuegos (antes se llamaba Torre Idle; el repositorio y la dirección `torre-idle.vercel.app` conservan ese nombre para no perder las partidas guardadas). Está hecho con React, Vite y TypeScript, usa Firebase (Auth anónima, Firestore y Analytics) y se despliega en Vercel.
 
 ## Minijuegos
 
@@ -87,6 +87,7 @@ npm install
 npm run dev      # http://localhost:5173
 npm test         # tests de la lógica (economía y minijuegos)
 npm run build    # build de producción en dist/
+npm run icons    # regenera favicon e iconos PWA desde public/icon.svg (ver pwa-assets.config.ts)
 ```
 
 La configuración de Firebase está en `.env.local`, que no se sube al repositorio. `.env.example` sirve de plantilla.

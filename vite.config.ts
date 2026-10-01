@@ -25,8 +25,8 @@ export default defineConfig({
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg'],
       manifest: {
-        name: 'Torre Idle',
-        short_name: 'Torre Idle',
+        name: 'Infinite City',
+        short_name: 'Infinite City',
         description: 'Construye tu ciudad, juega minijuegos y compite en el ranking.',
         lang: 'es',
         theme_color: '#12102a',
