@@ -40,8 +40,9 @@ const NOTES: Record<Sfx, { f: number[]; d: number; type: OscillatorType; vol: nu
 /**
  * Devuelve el contexto de audio listo para sonar. En iOS/Android arranca suspendido y se
  * vuelve a suspender tras una llamada o al pasar a segundo plano, así que se reanuda siempre.
+ * Lo comparten los efectos y la música.
  */
-function audio(): AudioContext {
+export function audio(): AudioContext {
   ctx ??= new AudioContext();
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
   return ctx;

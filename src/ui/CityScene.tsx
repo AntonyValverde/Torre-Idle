@@ -9,7 +9,7 @@ import { useGame } from '../game/store';
 import { mulberry32 } from '../minigames/rng';
 import { celebrating } from './celebrate';
 import { sfx, vibrate } from './haptics';
-import { seasonAt, weatherAt, type Season, type Weather } from './weather';
+import { nightAt, seasonAt, weatherAt, type Season, type Weather } from './weather';
 
 // ---------- Aspecto de cada edificio en la escena ----------
 
@@ -152,14 +152,6 @@ function skyAt(hour: number): [string, string] {
     }
   }
   return [SKY[0][1], SKY[0][2]];
-}
-
-/** 1 = noche cerrada, 0 = pleno día. */
-function nightAt(hour: number): number {
-  if (hour < 5 || hour >= 20.5) return 1;
-  if (hour >= 8 && hour <= 16.5) return 0;
-  if (hour < 8) return 1 - (hour - 5) / 3;
-  return (hour - 16.5) / 4;
 }
 
 /** Coloca los edificios alrededor del ayuntamiento: los más altos cerca del centro. */

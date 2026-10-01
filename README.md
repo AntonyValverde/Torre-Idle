@@ -65,6 +65,13 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
   - El clima (despejado, nublado, lluvia, tormenta o nieve) es el mismo para todos a la misma hora y cambia según el mes.
   - Hay peatones (con paraguas si llueve) y fechas especiales: 🎄 Navidad, 🎆 Año Nuevo y 🎃 Halloween.
   - Hay fuegos artificiales al refundar, al abrir el cofre del día, al cobrar la liga o al batir un récord.
+- **Música por era**:
+  - Se compone en el momento con WebAudio, sin archivos de audio, así que funciona sin conexión y no pesa.
+  - Cada era tiene su estilo: flauta en la Aldea, jazz en Metrópolis, sintetizadores en Megalópolis, ambiente espacial en la Colonia lunar… Pasado el Multiverso cambia de tonalidad en cada era.
+  - Las canciones tienen forma AABA y cambian cada 16 compases.
+  - De noche suena más lenta y suave, con lluvia más apagada, y con nieve o en Navidad lleva campanitas.
+  - En los minijuegos baja de volumen. Durante las pruebas de la Copa suena un tema propio.
+  - En Logros → Perfil se puede apagar y ajustar el volumen, aparte de los efectos.
 - **16 edificios**. Los 6 últimos se desbloquean en eras avanzadas.
 - **Hitos infinitos**: cada edificio produce x2 al llegar a 25, 50, 100… y después cada 100, sin límite.
 - **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado, que tiene niveles infinitos.
@@ -168,6 +175,7 @@ src/
   minigames/     stack/, traffic/ y metro/ (canvas), merge/ (2048), daily/ (Apagón), roads/ (Calles),
                  parks/ (Plan verde), memory/, thief/, fire/ (Bomberos), wheel/, stocks/
   ui/            pestañas, barra superior, modales, globo dorado, sugerencias
+  ui/music/      música generativa: compose.ts (estilos y melodías) y engine.ts (WebAudio)
   admin/         panel de administración (métricas, jugadores, sugerencias)
 firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo suben
 ```

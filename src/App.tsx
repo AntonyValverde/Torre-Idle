@@ -23,6 +23,7 @@ import { CityTab } from './ui/CityTab';
 import { CityVisit } from './ui/CityVisit';
 import { CupScreen } from './ui/cup/CupScreen';
 import { useDecreeScheduler } from './ui/DecreeCard';
+import { setMusicContext } from './ui/music/engine';
 import { GamesTab, TICKET_GAMES, type GameId } from './ui/GamesTab';
 import { GoldenBalloon } from './ui/GoldenBalloon';
 import { OfflineModal } from './ui/OfflineModal';
@@ -57,6 +58,11 @@ export default function App() {
     if (tabRef.current !== 'city') useGame.getState().toast('📜 ¡El consejo tiene una propuesta! Ve a Ciudad');
   }, []);
   useDecreeScheduler(onDecree);
+
+  // Música de la era: más baja mientras hay un minijuego abierto
+  useEffect(() => {
+    setMusicContext(era, game ? 'game' : 'city');
+  }, [era, game]);
 
   const [otherTab, setOtherTab] = useState(false);
 

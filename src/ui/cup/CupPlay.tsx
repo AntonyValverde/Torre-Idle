@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { track } from '../../firebase';
 import { CARDS, CUP_GAME_INFO, TRAINING_BONUS, attemptsFor, type CardId, type CupGame, type CupSlot } from '../../game/cup';
 import { submitCupScore } from '../../game/cupCloud';
@@ -12,6 +12,7 @@ import { TrafficGame } from '../../minigames/traffic/TrafficGame';
 import { celebrate } from '../celebrate';
 import { sfx } from '../haptics';
 import { GameScreen, Modal } from '../Modal';
+import { pushCupMusic } from '../music/engine';
 
 type Props = { onOver: (score: number) => void; onScore: (score: number) => void };
 
@@ -54,6 +55,9 @@ export function CupPlay({
   const [result, setResult] = useState<{ raw: number; score: number; improved: boolean; refunded: boolean; card: CardId | null } | null>(null);
   const live = useRef({ score: 0, done: false });
   const left = attemptsFor(cup, week, slot) - used;
+
+  // Tema propio de la Copa mientras dura la prueba
+  useEffect(() => pushCupMusic(), []);
 
   const finish = (raw: number) => {
     if (live.current.done) return;

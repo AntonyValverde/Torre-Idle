@@ -8,6 +8,7 @@ import { useGame } from '../game/store';
 import { Achievements } from './Achievements';
 import { shareCity } from './CityVisit';
 import { isSoundOn, setSoundOn } from './haptics';
+import { isMusicOn, musicVolume, nowPlaying, setMusicOn, setMusicVolume } from './music/engine';
 import { SuggestionBox } from './SuggestionBox';
 
 export function ProfileTab({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: string) => void }) {
@@ -38,6 +39,8 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [linking, setLinking] = useState(false);
   const [sound, setSound] = useState(isSoundOn());
+  const [music, setMusic] = useState(isMusicOn());
+  const [vol, setVol] = useState(Math.round(musicVolume() * 100));
   const [admin, setAdmin] = useState(false);
 
   useEffect(() => onAccountChange(setAccount), []);
@@ -178,9 +181,9 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
 
       {cloudEnabled && <SuggestionBox />}
 
-      <div className="card">
+      <div className="card settings-card">
         <label className="toggle">
-          <span>Sonido y vibración</span>
+          <span>🔊 Efectos y vibración</span>
           <input
             type="checkbox"
             checked={sound}
@@ -190,6 +193,39 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
             }}
           />
         </label>
+        <label className="toggle">
+          <span>🎵 Música</span>
+          <input
+            type="checkbox"
+            checked={music}
+            onChange={(e) => {
+              setMusic(e.target.checked);
+              setMusicOn(e.target.checked);
+            }}
+          />
+        </label>
+        {music && (
+          <>
+            <label className="volume-row">
+              <span className="muted">Volumen</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={vol}
+                aria-label="Volumen de la música"
+                onChange={(e) => {
+                  setVol(Number(e.target.value));
+                  setMusicVolume(Number(e.target.value) / 100);
+                }}
+              />
+            </label>
+            <small className="muted now-playing">
+              Suena: {nowPlaying()} ({eraName(s.era)})
+            </small>
+          </>
+        )}
       </div>
 
       <div className="section-head">

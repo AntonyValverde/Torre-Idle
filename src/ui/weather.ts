@@ -35,6 +35,14 @@ export function seasonAt(ms: number): Season {
   return null;
 }
 
+/** 1 = noche cerrada, 0 = pleno día (hora local con decimales). */
+export function nightAt(hour: number): number {
+  if (hour < 5 || hour >= 20.5) return 1;
+  if (hour >= 8 && hour <= 16.5) return 0;
+  if (hour < 8) return 1 - (hour - 5) / 3;
+  return (hour - 16.5) / 4;
+}
+
 export const WEATHER_LABEL: Record<Weather, string> = {
   clear: '☀️ Despejado',
   cloudy: '☁️ Nublado',
