@@ -4,9 +4,19 @@ import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebas
 import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
+// CUP_SHIFT_DAYS=n mueve la semana de la Copa n días hacia atrás (en las reglas y en las pruebas):
+// así se puede probar el sábado y el domingo cualquier día. Solo cambia la copia en memoria de las reglas.
+const CUP_SHIFT_MS = Math.round(Number(process.env.CUP_SHIFT_DAYS ?? 0) * 86400000);
+let rulesText = readFileSync(process.env.RULES_PATH ?? 'firestore.rules', 'utf8');
+if (CUP_SHIFT_MS) {
+  const marker = 'toMillis() + 21600000)';
+  if (!rulesText.includes(marker)) throw new Error('No se encontró el inicio de semana de la Copa en las reglas');
+  rulesText = rulesText.replace(marker, `toMillis() + 21600000 - ${CUP_SHIFT_MS})`);
+}
+
 const env = await initializeTestEnvironment({
   projectId: 'demo-torre',
-  firestore: { rules: readFileSync(process.env.RULES_PATH ?? 'firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
+  firestore: { rules: rulesText, host: '127.0.0.1', port: 8080 },
 });
 
 const alice = env.authenticatedContext('alice').firestore();
@@ -17,6 +27,7 @@ const admin = env.authenticatedContext('boss', { email: ADMIN_EMAIL, email_verif
 // Mismo correo pero sin verificar (p. ej. alguien que lo escribió en un registro con contraseña)
 const fakeAdmin = env.authenticatedContext('fake', { email: ADMIN_EMAIL, email_verified: false }).firestore();
 const otherGoogle = env.authenticatedContext('carol', { email: 'carol@gmail.com', email_verified: true }).firestore();
+const carolDb = () => otherGoogle;
 
 let pass = 0;
 let fail = 0;
@@ -129,6 +140,10 @@ await no('ciudad: falta un campo', () => {
 await no('ciudad: era decimal', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', era: 1.5 })));
 await no('ciudad: nombre con HTML', () => setDoc(doc(bob, 'cities/bob'), city({ name: '<b>x</b>' })));
 await no('ciudad: un jugador no borra', () => deleteDoc(ca));
+await no('ciudad: copas mal escritas', () => setDoc(doc(carolDb(), 'cities/carol'), city({ name: 'Carol', cups: 'muchas' })));
+await ok('ciudad: con su vitrina y temporadas', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', cups: '2,0,1,1' })));
+await ok('ciudad: vitrina de una versión anterior (3 números)', () => setDoc(doc(carolDb(), 'cities/carol'), city({ name: 'Carol', cups: '1,0,0' })));
+await no('ciudad: vitrina con 5 números', () => setDoc(doc(fakeAdmin, 'cities/fake'), city({ name: 'Fake', cups: '1,1,1,1,1' })));
 
 console.log('league');
 const mondayOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
@@ -147,6 +162,58 @@ await no('liga: más del máximo', () => setDoc(doc(bob, `league/${thisMonday}/s
 await no('liga: puntos de otro', () => setDoc(doc(bob, `league/${thisMonday}/scores/alice`), lg(50)));
 await ok('liga: renombrar', () => updateDoc(lgA, { name: 'Alicia' }));
 await no('liga: un jugador no borra', () => deleteDoc(lgA));
+
+console.log('cup (Copa de Alcaldes)');
+// Misma cuenta que src/game/cup.ts: semanas de lunes a domingo en hora de Costa Rica (UTC-6)
+const CR = -6 * 3600000;
+// Con CUP_SHIFT_DAYS las reglas ven la semana desplazada: aquí se hace la misma cuenta
+const cupNow = Date.now() + CUP_SHIFT_MS;
+const cupWeekOf = (ms) => {
+  const d = new Date(ms + CR);
+  const m = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)));
+  return `${m.getUTCFullYear()}-${pad(m.getUTCMonth() + 1)}-${pad(m.getUTCDate())}`;
+};
+const cupWeek = cupWeekOf(cupNow);
+const [cy, cm, cd] = cupWeek.split('-').map(Number);
+const cupDay = Math.floor((cupNow - (Date.UTC(cy, cm - 1, cd) - CR)) / 86400000);
+const cupPhaseNow = cupDay < 5 ? 'signup' : cupDay < 6 ? 'groups' : 'final';
+const nextCup = cupWeekOf(cupNow + 7 * 86400000);
+console.log(`  (semana ${cupWeek}, fase de hoy: ${cupPhaseNow})`);
+const cupEntry = (extra = {}) => ({ name: 'Alice', tier: 9, gold: 0, silver: 0, bronze: 0, createdAt: serverTimestamp(), ...extra });
+const ceA = doc(alice, `cup/${cupWeek}/entries/alice`);
+const crA = doc(alice, `cup/${cupWeek}/results/alice`);
+await no('copa: inscribirse en la semana que viene', () => setDoc(doc(alice, `cup/${nextCup}/entries/alice`), cupEntry()));
+await no('copa: semana que no es lunes', () => setDoc(doc(alice, `cup/${notMonday}/entries/alice`), cupEntry()));
+await no('copa: inscribir a otro', () => setDoc(doc(bob, `cup/${cupWeek}/entries/alice`), cupEntry()));
+await no('copa: marcas sin estar inscrito', () => setDoc(doc(bob, `cup/${cupWeek}/results/bob`), { name: 'Bob', g1: 10, updatedAt: serverTimestamp() }));
+if (cupPhaseNow === 'signup') {
+  await no('copa: nivel imposible', () => setDoc(doc(bob, `cup/${cupWeek}/entries/bob`), { ...cupEntry({ tier: 999 }), name: 'Bob' }));
+  await no('copa: campo extra', () => setDoc(doc(bob, `cup/${cupWeek}/entries/bob`), { ...cupEntry({ hack: 1 }), name: 'Bob' }));
+  await ok('copa: inscribirse', () => setDoc(ceA, cupEntry()));
+  await ok('copa: lectura pública de inscritos', () => getDocs(collection(anon, `cup/${cupWeek}/entries`)));
+  await no('copa: cambiar el nivel tras inscribirse', () => updateDoc(ceA, { tier: 1 }));
+  await ok('copa: cambiar el nombre', () => updateDoc(ceA, { name: 'Alicia' }));
+  await no('copa: marcas de grupo antes del sábado', () => setDoc(crA, { name: 'Alice', g1: 10, updatedAt: serverTimestamp() }));
+  await no('copa: marca de la final antes del domingo', () => setDoc(crA, { name: 'Alice', f: 10, updatedAt: serverTimestamp() }));
+  await no('copa: un jugador no se borra', () => deleteDoc(ceA));
+  await ok('copa: el admin descalifica antes de los grupos', () => deleteDoc(doc(admin, `cup/${cupWeek}/entries/alice`)));
+} else {
+  await no('copa: inscribirse fuera de plazo', () => setDoc(ceA, cupEntry()));
+  // Con la inscripción cerrada, se crea a mano (sin reglas) para probar las marcas
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `cup/${cupWeek}/entries/alice`), cupEntry({ createdAt: Timestamp.now() })));
+  const slot = cupPhaseNow === 'groups' ? 'g1' : 'f';
+  const other = cupPhaseNow === 'groups' ? 'f' : 'g1';
+  await ok(`copa: subir marca del día (${slot})`, () => setDoc(crA, { name: 'Alice', [slot]: 30, updatedAt: serverTimestamp() }, { merge: true }));
+  await no('copa: subir otra vez antes de 5 s', () => setDoc(crA, { name: 'Alice', [slot]: 40, updatedAt: serverTimestamp() }, { merge: true }));
+  await new Promise((r) => setTimeout(r, 5500));
+  await no('copa: bajar la marca', () => setDoc(crA, { name: 'Alice', [slot]: 20, updatedAt: serverTimestamp() }, { merge: true }));
+  await no(`copa: marca de otro día (${other})`, () => setDoc(crA, { name: 'Alice', [other]: 20, updatedAt: serverTimestamp() }, { merge: true }));
+  await no('copa: marca imposible', () => setDoc(crA, { name: 'Alice', [slot]: 5001, updatedAt: serverTimestamp() }, { merge: true }));
+  await ok('copa: mejorar la marca', () => setDoc(crA, { name: 'Alice', [slot]: 45, updatedAt: serverTimestamp() }, { merge: true }));
+  await no('copa: el admin ya no borra inscripciones', () => deleteDoc(doc(admin, `cup/${cupWeek}/entries/alice`)));
+}
+await ok('copa: lectura pública de resultados', () => getDocs(collection(anon, `cup/${cupWeek}/results`)));
+await ok('copa: el admin borra marcas', () => deleteDoc(doc(admin, `cup/${cupWeek}/results/alice`)));
 
 console.log('suggestions');
 const suggestion = (db, uid, extra = {}) => {

@@ -20,7 +20,7 @@ interface Splash {
 
 let splashId = 0;
 
-function FireGameView({ onOver, onScore }: { onOver: (score: number) => void; onScore: (score: number) => void }) {
+export function FireGameView({ onOver, onScore }: { onOver: (score: number) => void; onScore: (score: number) => void }) {
   const game = useRef<FireGame>(newFire());
   const start = useRef(performance.now() + COUNTDOWN);
   const splashes = useRef<Splash[]>([]);

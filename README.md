@@ -21,6 +21,30 @@ Juego idle/clicker para móvil (PWA) con minijuegos. Está hecho con React, Vite
 
 Los tres retos diarios generan el mismo tablero para todos a partir de la fecha. El Plan verde siempre tiene una única solución. En Semáforo, un coche que espera demasiado en rojo pierde la paciencia y se lo salta, así que no se puede dejar el semáforo fijo.
 
+## Copa de Alcaldes (torneo semanal)
+
+Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
+
+- **Lunes a viernes: inscripción** gratuita en Juegos → Copa de Alcaldes. Desde el lunes se conocen las tres pruebas del sábado (minijuegos de arcade que rotan cada semana), así que se pueden practicar.
+- **Sábado: fase de grupos.** Al cerrar la inscripción, los inscritos se reparten en grupos de hasta 8 de nivel parecido. Todos los móviles calculan los mismos grupos, porque la lista ya no puede cambiar.
+  - Tres pruebas con 3 intentos cada una, sin gastar tickets. Cuenta el mejor intento.
+  - Cada prueba da puntos por puesto en el grupo (10, 8, 6, 5, 4, 3, 2, 1).
+  - El **rival directo** es quien va justo por delante, con una barra que compara los puntos.
+- **Domingo: final** entre los 2 primeros de cada grupo (4 si solo hay un grupo), con una prueba sorpresa y 3 intentos.
+- **Lunes: ceremonia** con podio y premios: gemas y tickets para todos los que juegan, más copas de oro, plata o bronce para el podio. Las copas se ven en la plaza de tu ciudad, en tu vitrina del Perfil y junto a tu nombre en la Copa.
+- **Preparación** (pestaña 🏋️ de la Copa):
+  - **Centro de entrenamiento**: se mejora con monedas (el coste depende de tu producción), hasta el nivel 5. Cada nivel da +2% en las marcas de la Copa, y los niveles 2 y 4 añaden un hueco de carta (de 1 a 3).
+  - **Cartas de ventaja**: 🎟️ intento extra, 🛡️ escudo (si el intento no mejora tu marca, no se gasta), ⚡ impulso (+15%) y ⭐ estrella (+30%, solo en la final).
+    - Se consiguen con el cofre del día, las misiones semanales, a veces con los retos diarios y al jugar cada Copa.
+    - Se equipan de lunes a viernes y se usan el fin de semana. Las que no se usan vuelven a la colección.
+  - **Afición**: con 3 días jugados entre semana tienes +1 intento en cada prueba del sábado; con 5, también en la final. Ese fin de semana tu ciudad se llena de gente con banderines.
+- **Pronósticos**: el sábado cualquiera (también los no inscritos) puede apostar 5, 10 o 25 💎 a quién ganará la Copa. Pagan ×5 si acierta el campeón, ×2 si sube al podio, y se recupera la apuesta si llega a la final.
+- **Temporadas de 4 semanas**:
+  - Cada Copa da puntos: jugar 5, puesto en el grupo hasta 20, finalista 30 y podio 50, 70 o 100.
+  - Al terminar, el 1º gana 100 💎 y una 🚩 bandera en su ayuntamiento; el 2º, 60 💎; el 3º, 40 💎; y del 4º al 10º, 15 💎.
+  - El **salón de la fama** guarda a los campeones de cada temporada y de cada Copa. Las Copas terminadas ya no cambian, así que su resumen se guarda en el dispositivo y no se vuelve a descargar.
+- Las reglas de Firestore no aceptan inscripciones ni marcas fuera de su día, y las marcas solo pueden subir. El administrador puede quitar las marcas de un tramposo (y su inscripción, antes del sábado).
+
 ## Visitar ciudades
 
 - Cada jugador publica una foto pública de su ciudad en `cities/{uid}`: nombre, era, edificios, monedas ganadas, estrellas y el tamaño de cada tipo de edificio. Se actualiza sola, como mucho una vez por minuto.
@@ -114,7 +138,7 @@ En la [consola de Firebase](https://console.firebase.google.com/project/game-f5f
 - **Bolsa**: tiene un límite de inversión, y sus ganancias no cuentan para estrellas ni rankings.
 
 ### Pruebas de las reglas
-`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 110 casos, permitidos y de ataque. Necesita Java instalado.
+`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 130 casos, permitidos y de ataque. Las ventanas de la Copa dependen del día, así que la prueba comprueba la fase del día en que se ejecuta. Con `CUP_SHIFT_DAYS=2.5` (o el número de días que haga falta) se simula el sábado o el domingo en una copia de las reglas en memoria. Necesita Java instalado.
 
 ### Pasos recomendados en la consola (una vez)
 1. **Restringir la API key**:
@@ -157,7 +181,9 @@ firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo
 | `daily/{AAAA-MM-DD}/scores/{uid}` | resultado del Apagón diario (un intento registrado) |
 | `roads/{AAAA-MM-DD}/scores/{uid}` | resultado de Conecta las calles (un intento registrado) |
 | `parks/{AAAA-MM-DD}/scores/{uid}` | resultado del Plan verde (un intento registrado) |
-| `cities/{uid}` | ciudad pública para las visitas (cualquiera la lee; solo su dueño la escribe) |
+| `cities/{uid}` | ciudad pública para las visitas, con su vitrina de copas y temporadas (cualquiera la lee; solo su dueño la escribe) |
+| `cup/{lunes}/entries/{uid}` | inscripción en la Copa de esa semana (solo de lunes a viernes) |
+| `cup/{lunes}/results/{uid}` | mejores marcas de la Copa: `g1`–`g3` el sábado y `f` el domingo |
 | `league/{lunes AAAA-MM-DD}/scores/{uid}` | puntos de liga de cada jugador en esa semana (solo suben, máximo 1000) |
 | `suggestions/{id}` | sugerencias de los jugadores (solo las lee el administrador) |
 | `suggestionMeta/{uid}` | hora del último envío de sugerencia (limita a una por minuto) |

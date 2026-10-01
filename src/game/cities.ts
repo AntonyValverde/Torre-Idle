@@ -11,6 +11,8 @@ export interface CitySnapshot {
   buildings: number;
   earned: number;
   stars: number;
+  /** Copas ganadas: "oro,plata,bronce,temporadas". */
+  cups: string;
 }
 
 /**
@@ -32,7 +34,15 @@ export function citySnapshot(s: GameState): CitySnapshot {
     buildings: Math.floor(totalBuildings(s)),
     earned: Math.floor(s.allTimeEarned),
     stars: Math.floor(s.stars),
+    cups: [s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons].map((n) => Math.min(99999, Math.floor(n))).join(','),
   };
+}
+
+/** Copas de una ciudad leída de la nube: oro, plata, bronce y temporadas (las versiones viejas no las tienen). */
+export function parseCups(v: unknown): [number, number, number, number] {
+  if (typeof v !== 'string' || !/^[0-9]{1,5}(,[0-9]{1,5}){2,3}$/.test(v)) return [0, 0, 0, 0];
+  const [g, s, b, t = 0] = v.split(',').map(Number);
+  return [g, s, b, t];
 }
 
 /** Valida una ciudad leída de la nube (puede venir de una versión vieja del juego). */

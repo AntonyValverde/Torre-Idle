@@ -3,6 +3,7 @@ import { maxTickets, ticketRegenMs } from '../game/economy';
 import { fmt, fmtClock, fmtTime } from '../game/format';
 import { STOCKS, saleValue, stockPrice } from '../game/stocks';
 import { useGame } from '../game/store';
+import { CupCard } from './cup/CupCard';
 
 export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro';
 
@@ -11,7 +12,7 @@ export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'me
 
 const NEW_TAG = <span className="new-tag">NUEVO</span>;
 
-export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
+export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup: () => void }) {
   const s = useGame((st) => st.s);
   const max = maxTickets(s);
   const today = dateKey(s.lastTick);
@@ -25,6 +26,8 @@ export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
 
   return (
     <div className="tab">
+      <CupCard onOpen={onCup} />
+
       <div className="ticket-banner">
         <span className="ticket-big">🎟️ {s.tickets}/{max}</span>
         <span className="muted">{s.tickets >= max ? 'Tickets llenos: ¡juega ya!' : `Próximo ticket en ${fmtClock(nextTicket)}`}</span>

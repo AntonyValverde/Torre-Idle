@@ -1,4 +1,5 @@
 import { dateKey, isNewDay } from '../game/clock';
+import { cupAlert } from './cup/CupCard';
 import {
   GEM_SHOP,
   LEGACY,
@@ -37,7 +38,8 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
     isNewDay(s.roads.last, today) ||
     isNewDay(s.parks.last, today) ||
     isNewDay(s.wheelLast, today) ||
-    s.tickets >= maxTickets(s);
+    s.tickets >= maxTickets(s) ||
+    cupAlert(s, s.lastTick);
   const claimable = claimableAchievements(s);
   const missions = claimableMissions(s) + (s.league.prev ? 1 : 0);
 

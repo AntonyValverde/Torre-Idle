@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { cityLink, type CitySnapshot } from '../game/cities';
+import { cityLink, parseCups, type CitySnapshot } from '../game/cities';
 import { now } from '../game/clock';
 import { currentUid, fetchCity, type PublicCity } from '../game/cloud';
 import { eraName } from '../game/economy';
@@ -63,7 +63,7 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
         {city && (
           <>
             <div className="scene-wrap visit-scene">
-              <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings }} />
+              <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings, cups: parseCups(city.cups) }} />
               <div className="scene-badge">
                 Era {city.era} · {eraName(city.era)}
               </div>
@@ -86,6 +86,18 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
                 <b>{fmt(city.stars)} ⭐</b>
               </div>
             </div>
+            {parseCups(city.cups).some((n) => n > 0) && (
+              <div className="card cup-showcase">
+                <b>Vitrina de la Copa de Alcaldes</b>
+                <div className="cup-showcase-row">
+                  {(['🏆', '🥈', '🥉', '🚩'] as const).map((e, i) => (
+                    <span key={e}>
+                      {e} <b>{parseCups(city.cups)[i]}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="hint">
               {mine ? 'Así ven tu ciudad los demás jugadores.' : 'Toca la ciudad para saludar 👋.'}
               {city.updatedAt ? ` Actualizada ${ago(city.updatedAt, t)}.` : ''}

@@ -5,6 +5,7 @@ import { saveCloud, submitDaily } from '../../game/cloud';
 import { fmt, fmtClock, fmtTime } from '../../game/format';
 import { useGame, type DailyReward } from '../../game/store';
 import { sfx, tone, vibrate } from '../../ui/haptics';
+import { CARDS } from '../../game/cup';
 import { GameScreen, Modal } from '../../ui/Modal';
 import { EMPTY, HOUSE, PARK, SIZE, cycle, dailyParks, isSolved, problems, type Cell } from './logic';
 
@@ -132,6 +133,11 @@ export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRan
               <li>+{result.gems} 💎</li>
               <li>+{fmt(result.coins)} 🪙</li>
               <li>🔥 Racha: {result.streak} {result.streak === 1 ? 'día' : 'días'}</li>
+              {result.card && (
+                <li className="rare">
+                  🃏 Carta de la Copa: {CARDS[result.card].emoji} {CARDS[result.card].name}
+                </li>
+              )}
             </ul>
             <p className="muted">Vuelve mañana para mantener la racha (más gemas cada día, hasta 7).</p>
             <div className="btn-row">

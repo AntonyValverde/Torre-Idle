@@ -48,7 +48,7 @@ function comboMult(combo: number) {
   return 1 + Math.floor(combo / 5);
 }
 
-function ThiefGame({ onOver, onScore }: { onOver: (score: number) => void; onScore: (score: number) => void }) {
+export function ThiefGame({ onOver, onScore }: { onOver: (score: number) => void; onScore: (score: number) => void }) {
   const game = useRef<Game>(newGame());
   const [, setFrame] = useState(0);
   const onOverRef = useRef(onOver);

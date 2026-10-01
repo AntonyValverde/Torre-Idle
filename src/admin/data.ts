@@ -2,6 +2,7 @@ import { collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, limit,
 import { db } from '../firebase';
 import { dateKey, now, weekKey } from '../game/clock';
 import { BOARDS, DAILY_KINDS, type Board, type DailyKind } from '../game/cloud';
+import { cupWeekKey } from '../game/cup';
 import { normalize } from '../game/state';
 import type { Player } from './metrics';
 
@@ -92,8 +93,13 @@ export async function leagueCount(): Promise<number> {
   return (await getCountFromServer(collection(need(), 'league', weekKey(), 'scores'))).data().count;
 }
 
+/** Inscritos en la Copa de esta semana. */
+export async function cupCount(): Promise<number> {
+  return (await getCountFromServer(collection(need(), 'cup', cupWeekKey(now()), 'entries'))).data().count;
+}
+
 export interface RankEntry {
-  board: Board | DailyKind | 'league';
+  board: Board | DailyKind | 'league' | 'cup';
   score: number;
 }
 
@@ -105,9 +111,16 @@ export async function rankingsOf(uid: string): Promise<RankEntry[]> {
     ...BOARDS.map((b) => [b, doc(d, 'leaderboards', b, 'scores', uid)] as [Board, ReturnType<typeof doc>]),
     ...DAILY_KINDS.map((k) => [k, doc(d, k, today, 'scores', uid)] as [DailyKind, ReturnType<typeof doc>]),
     ['league', doc(d, 'league', weekKey(), 'scores', uid)],
+    ['cup', doc(d, 'cup', cupWeekKey(now()), 'results', uid)],
   ];
   const snaps = await Promise.all(refs.map(([, r]) => getDoc(r)));
-  return snaps.flatMap((s, i) => (s.exists() ? [{ board: refs[i][0], score: Number(s.data().score ?? 0) }] : []));
+  return snaps.flatMap((s, i) => {
+    if (!s.exists()) return [];
+    const v = s.data();
+    // En la Copa no hay una sola puntuación: se muestra la suma de sus marcas
+    const score = refs[i][0] === 'cup' ? ['g1', 'g2', 'g3', 'f'].reduce((n, k) => n + Number(v[k] ?? 0), 0) : Number(v.score ?? 0);
+    return [{ board: refs[i][0], score }];
+  });
 }
 
 /** Quita a un jugador de todos los rankings (por trampas). Su partida no se toca. */
@@ -118,5 +131,8 @@ export async function removeFromRankings(uid: string) {
     ...BOARDS.map((b) => deleteDoc(doc(d, 'leaderboards', b, 'scores', uid))),
     ...DAILY_KINDS.map((k) => deleteDoc(doc(d, k, today, 'scores', uid))),
     deleteDoc(doc(d, 'league', weekKey(), 'scores', uid)),
+    // Copa: sus marcas siempre; la inscripción solo se puede borrar antes de que se formen los grupos
+    deleteDoc(doc(d, 'cup', cupWeekKey(now()), 'results', uid)),
   ]);
+  await deleteDoc(doc(d, 'cup', cupWeekKey(now()), 'entries', uid)).catch(() => {});
 }

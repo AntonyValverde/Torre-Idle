@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cityFromUrl, cityLayout, cityLink, citySnapshot, parseLayout } from './cities';
+import { cityFromUrl, cityLayout, cityLink, citySnapshot, parseCups, parseLayout } from './cities';
 import { now } from './clock';
 import { BUILDINGS, boostMultiplier } from './economy';
 import { newState, normalize } from './state';
@@ -22,7 +22,13 @@ describe('ciudades públicas', () => {
 
   it('la foto de la ciudad solo lleva lo que se ve al visitarla', () => {
     const s = { ...newState(0), name: 'Ana', era: 3, stars: 12.7, allTimeEarned: 1234.9, buildings: { casa: 10, tienda: 2 } };
-    expect(citySnapshot(s)).toEqual({ name: 'Ana', era: 3, layout: cityLayout(s.buildings), buildings: 12, earned: 1234, stars: 12 });
+    expect(citySnapshot(s)).toEqual({ name: 'Ana', era: 3, layout: cityLayout(s.buildings), buildings: 12, earned: 1234, stars: 12, cups: '0,0,0,0' });
+    expect(citySnapshot({ ...s, cup: { ...s.cup, gold: 2, bronze: 1, seasons: 1 } }).cups).toBe('2,0,1,1');
+    // Las ciudades publicadas antes de las temporadas traen solo tres números
+    expect(parseCups('2,0,1')).toEqual([2, 0, 1, 0]);
+    expect(parseCups('2,0,1,3')).toEqual([2, 0, 1, 3]);
+    expect(parseCups('<b>')).toEqual([0, 0, 0, 0]);
+    expect(parseCups(undefined)).toEqual([0, 0, 0, 0]);
   });
 
   it('el enlace para compartir lleva el UID y se lee al abrir el juego', () => {

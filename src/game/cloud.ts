@@ -25,8 +25,9 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { citySnapshot, parseLayout, type CitySnapshot } from './cities';
+import { citySnapshot, parseCups, parseLayout, type CitySnapshot } from './cities';
 import { dateKey, now, resyncFromDevice, setServerTime, weekKey } from './clock';
+import { cupWeekKey } from './cup';
 import { newState, normalize, type GameState } from './state';
 import { useGame } from './store';
 
@@ -373,11 +374,14 @@ export async function renameInLeaderboards(name: string) {
     ...BOARDS.map((b) => doc(d, 'leaderboards', b, 'scores', uid)),
     ...DAILY_KINDS.map((k) => doc(d, k, dateKey(), 'scores', uid)),
     doc(d, 'league', weekKey(), 'scores', uid),
+    doc(d, 'cup', cupWeekKey(now()), 'entries', uid),
+    doc(d, 'cup', cupWeekKey(now()), 'results', uid),
   ];
-  // updateDoc falla con "not-found" si no hay puntuación en ese ranking: eso es normal
+  // updateDoc falla con "not-found" si no hay puntuación en ese ranking: eso es normal.
+  // En la Copa, el nombre de los resultados solo se puede cambiar cada 5 s: tampoco cuenta como fallo.
   const results = await Promise.allSettled(refs.map((ref) => updateDoc(ref, { name })));
   cache.clear();
-  const failed = results.some((r) => r.status === 'rejected' && errCode(r.reason) !== 'not-found');
+  const failed = results.some((r, i) => r.status === 'rejected' && errCode(r.reason) !== 'not-found' && refs[i].path.split('/')[0] !== 'cup');
   if (failed) throw new Error('No se pudo actualizar el nombre en algún ranking');
   try {
     localStorage.setItem(RANKED_NAME_KEY, `${uid}:${name}`);
@@ -488,7 +492,7 @@ export interface PublicCity extends CitySnapshot {
 }
 
 export function citySignature(c: CitySnapshot): string {
-  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}`;
+  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}`;
 }
 
 /** Publica la ciudad del jugador (solo lo que se ve al visitarla). */
@@ -516,6 +520,7 @@ export async function fetchCity(uid: string): Promise<PublicCity | null> {
     buildings: n(x.buildings),
     earned: n(x.earned),
     stars: n(x.stars),
+    cups: parseCups(x.cups).join(','),
     updatedAt: x.updatedAt?.toMillis?.() ?? null,
   };
 }

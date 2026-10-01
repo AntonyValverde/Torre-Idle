@@ -159,7 +159,7 @@ service cloud.firestore {
     match /cities/{uid} {
       function validCity() {
         let d = incoming();
-        return d.keys().hasOnly(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'updatedAt'])
+        return d.keys().hasOnly(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'cups', 'updatedAt'])
           && d.keys().hasAll(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'updatedAt'])
           && validName(d.name)
           && d.era is int && d.era >= 1 && d.era <= 1000000
@@ -168,6 +168,8 @@ service cloud.firestore {
           && d.buildings is int && d.buildings >= 0 && d.buildings <= 1000000000
           && d.earned is number && d.earned >= 0
           && d.stars is number && d.stars >= 0
+          // Copa de Alcaldes: "oro,plata,bronce" o "oro,plata,bronce,temporadas" (opcional: versiones anteriores no lo envían)
+          && (!('cups' in d) || (d.cups is string && d.cups.matches('^[0-9]{1,5}(,[0-9]{1,5}){2,3}$')))
           && d.updatedAt == request.time;
       }
 
@@ -208,6 +210,89 @@ service cloud.firestore {
           && request.time > resource.data.updatedAt + duration.value(5, 's'))
         || (onlyChanged(['name']) && validName(incoming().name))
       );
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // Copa de Alcaldes: una por semana, identificada por su lunes, en hora de Costa Rica (UTC-6).
+    //   Lunes a viernes: inscripción. Sábado: grupos (g1, g2, g3). Domingo: final (f).
+    // Fuera de su horario no se puede escribir nada: así todos ven los mismos grupos y resultados.
+    // ------------------------------------------------------------------
+    function cupWeekOk(week) {
+      let p = week.split('-');
+      return week.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && timestamp.date(int(p[0]), int(p[1]), int(p[2])).dayOfWeek() == 1;
+    }
+
+    // Milisegundos desde el lunes a las 00:00 hora de Costa Rica (06:00 UTC)
+    function cupElapsed(week) {
+      let p = week.split('-');
+      return request.time.toMillis() - (timestamp.date(int(p[0]), int(p[1]), int(p[2])).toMillis() + 21600000);
+    }
+
+    function cupSignup(week) {
+      return cupElapsed(week) >= 0 && cupElapsed(week) < 432000000;
+    }
+
+    function cupGroups(week) {
+      return cupElapsed(week) >= 432000000 && cupElapsed(week) < 518400000;
+    }
+
+    function cupFinal(week) {
+      return cupElapsed(week) >= 518400000 && cupElapsed(week) < 604800000;
+    }
+
+    match /cup/{week}/entries/{uid} {
+      function validEntry() {
+        let d = incoming();
+        return d.keys().hasOnly(['name', 'tier', 'gold', 'silver', 'bronze', 'createdAt'])
+          && d.keys().hasAll(['name', 'tier', 'gold', 'silver', 'bronze', 'createdAt'])
+          && validName(d.name)
+          && d.tier is int && d.tier >= 0 && d.tier <= 400
+          && d.gold is int && d.gold >= 0 && d.gold <= 99999
+          && d.silver is int && d.silver >= 0 && d.silver <= 99999
+          && d.bronze is int && d.bronze >= 0 && d.bronze <= 99999
+          && d.createdAt == request.time;
+      }
+
+      allow read: if true;
+      allow create: if isOwner(uid) && cupWeekOk(week) && cupSignup(week) && validEntry();
+      // Después solo se puede cambiar el nombre (los grupos dependen del resto)
+      allow update: if isOwner(uid) && onlyChanged(['name']) && validName(incoming().name);
+      // El administrador puede descalificar solo antes de que se formen los grupos
+      allow delete: if isAdmin() && cupWeekOk(week) && cupSignup(week);
+    }
+
+    match /cup/{week}/results/{uid} {
+      function cupScore(d, k) {
+        return !(k in d) || (d[k] is int && d[k] >= 0 && d[k] <= 5000);
+      }
+
+      // Cada marca solo puede subir; si no cambia, da igual el día
+      function notDown(d, old, k) {
+        return d.get(k, 0) >= old.get(k, 0);
+      }
+
+      function same(d, old, k) {
+        return d.get(k, 0) == old.get(k, 0);
+      }
+
+      function validResult() {
+        let d = incoming();
+        let old = resource == null ? {} : resource.data;
+        return d.keys().hasOnly(['name', 'g1', 'g2', 'g3', 'f', 'updatedAt'])
+          && validName(d.name)
+          && d.updatedAt == request.time
+          && exists(/databases/$(database)/documents/cup/$(week)/entries/$(uid))
+          && cupScore(d, 'g1') && cupScore(d, 'g2') && cupScore(d, 'g3') && cupScore(d, 'f')
+          && notDown(d, old, 'g1') && notDown(d, old, 'g2') && notDown(d, old, 'g3') && notDown(d, old, 'f')
+          && (cupGroups(week) || (same(d, old, 'g1') && same(d, old, 'g2') && same(d, old, 'g3')))
+          && (cupFinal(week) || same(d, old, 'f'))
+          && (resource == null || request.time > resource.data.updatedAt + duration.value(5, 's'));
+      }
+
+      allow read: if true;
+      allow create, update: if isOwner(uid) && cupWeekOk(week) && validResult();
       allow delete: if isAdmin();
     }
 

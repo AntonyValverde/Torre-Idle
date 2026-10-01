@@ -131,6 +131,41 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
         </div>
       )}
 
+      <div className="card cup-showcase">
+        <b>🏆 Vitrina de la Copa de Alcaldes</b>
+        <div className="cup-showcase-row">
+          <span>
+            🏆 <b>{s.cup.gold}</b>
+          </span>
+          <span>
+            🥈 <b>{s.cup.silver}</b>
+          </span>
+          <span>
+            🥉 <b>{s.cup.bronze}</b>
+          </span>
+        </div>
+        <small className="muted">
+          {s.cup.played ? `Copas jugadas: ${s.cup.played} · Finales: ${s.cup.finals}` : 'Aún no has jugado ninguna Copa. Inscríbete en Juegos.'}
+        </small>
+        {s.cup.history.length > 0 && (
+          <ul className="cup-history">
+            {s.cup.history
+              .slice()
+              .reverse()
+              .map((h) => {
+                const [, m, d] = h.week.split('-').map(Number);
+                return (
+                  <li key={h.week}>
+                    <span>Semana del {d}/{m}</span>
+                    <span>{h.final ? `Final: ${h.final}º` : h.group ? `Grupo: ${h.group}º de ${h.size}` : 'Sin jugar'}</span>
+                    <span>+{h.gems} 💎</span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </div>
+
       {admin && googleUid && (
         <button className="game-card admin-card" onClick={onAdmin}>
           <span className="game-emoji">🛠️</span>

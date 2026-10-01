@@ -12,6 +12,7 @@ import {
   PLAYER_LIMIT,
   dailyParticipation,
   deleteSuggestion,
+  cupCount,
   leagueCount,
   loadPlayers,
   loadSuggestions,
@@ -43,6 +44,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [daily, setDaily] = useState<DailyCounts[] | null>(null);
   const [league, setLeague] = useState<number | null>(null);
+  const [cup, setCup] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
   const wrap = useRef<HTMLDivElement>(null);
@@ -54,12 +56,19 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
 
   const load = useCallback(async () => {
     setError(null);
-    const [p, s, d, l] = await Promise.allSettled([loadPlayers(), loadSuggestions(), dailyParticipation(lastDays(now(), 7)), leagueCount()]);
+    const [p, s, d, l, c] = await Promise.allSettled([
+      loadPlayers(),
+      loadSuggestions(),
+      dailyParticipation(lastDays(now(), 7)),
+      leagueCount(),
+      cupCount(),
+    ]);
     if (p.status === 'fulfilled') setPlayers(p.value);
     if (s.status === 'fulfilled') setSuggestions(s.value);
     if (d.status === 'fulfilled') setDaily(d.value);
     if (l.status === 'fulfilled') setLeague(l.value);
-    const failed = [p, s, d, l].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    if (c.status === 'fulfilled') setCup(c.value);
+    const failed = [p, s, d, l, c].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
     if (failed) {
       console.warn('Panel de administración', failed.reason);
       setError(errorText(failed.reason));
@@ -88,7 +97,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         {error && <p className="empty">{error}</p>}
-        {tab === 'summary' && <SummaryView players={players} daily={daily} league={league} suggestionsNew={fresh} />}
+        {tab === 'summary' && <SummaryView players={players} daily={daily} league={league} cup={cup} suggestionsNew={fresh} />}
         {tab === 'players' && <PlayersView players={players} />}
         {tab === 'suggestions' && <SuggestionsView items={suggestions} onChange={setSuggestions} />}
       </div>
@@ -104,11 +113,13 @@ function SummaryView({
   players,
   daily,
   league,
+  cup,
   suggestionsNew,
 }: {
   players: Player[] | null;
   daily: DailyCounts[] | null;
   league: number | null;
+  cup: number | null;
   suggestionsNew: number;
 }) {
   const sum = useMemo(() => (players ? summarize(players, now()) : null), [players]);
@@ -145,6 +156,10 @@ function SummaryView({
         <div>
           <small>En la liga (semana)</small>
           <b>{league ?? '…'}</b>
+        </div>
+        <div>
+          <small>Inscritos en la Copa</small>
+          <b>{cup ?? '…'}</b>
         </div>
         <div>
           <small>Misiones hechas</small>
@@ -341,6 +356,7 @@ const BOARD_LABEL: Record<string, string> = {
   roads: '🛣️ Calles (hoy)',
   parks: '🌳 Plan verde (hoy)',
   league: '🏆 Liga (semana)',
+  cup: '🏆 Copa (semana)',
 };
 
 function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {

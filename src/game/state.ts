@@ -1,5 +1,6 @@
 import { MISSION_BY_ID, newLeague, newMissions, type LeagueState, type MissionSlot, type MissionsState } from './missions';
 import { isNameAllowed, randomName, sanitizeName } from './names';
+import { CARD_IDS, HISTORY_MAX, TRAINING_MAX, newCup, type CardId, type CupState } from './cup';
 
 export interface Boost {
   k: string;
@@ -75,6 +76,8 @@ export interface GameState {
   /** Misiones completadas desde siempre (para el logro). */
   missionsDone: number;
   league: LeagueState;
+  /** Copa de Alcaldes: inscripción, intentos, mejores marcas y trofeos. */
+  cup: CupState;
   createdAt: number;
 }
 
@@ -126,7 +129,63 @@ export function newState(t: number): GameState {
     missions: newMissions(),
     missionsDone: 0,
     league: newLeague(),
+    cup: newCup(),
     createdAt: t,
+  };
+}
+
+function cupState(v: Partial<CupState> | undefined): CupState {
+  const base = newCup();
+  if (!v || typeof v !== 'object') return base;
+  const slotsOf = (x: unknown) => {
+    const r = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
+    return { g1: Math.max(0, num(r.g1, 0)), g2: Math.max(0, num(r.g2, 0)), g3: Math.max(0, num(r.g3, 0)), f: Math.max(0, num(r.f, 0)) };
+  };
+  const str = (x: unknown) => (typeof x === 'string' ? x : null);
+  const cards = (x: unknown) => {
+    const r = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
+    const out = { ...base.cards };
+    for (const id of CARD_IDS) out[id] = Math.max(0, Math.floor(num(r[id], 0)));
+    return out;
+  };
+  const pick = v.pick && typeof v.pick === 'object' ? v.pick : null;
+  return {
+    week: str(v.week),
+    prev: str(v.prev),
+    used: slotsOf(v.used),
+    best: slotsOf(v.best),
+    bonus: slotsOf(v.bonus),
+    training: Math.max(0, Math.min(TRAINING_MAX, Math.floor(num(v.training, 0)))),
+    cards: cards(v.cards),
+    loadout: Array.isArray(v.loadout) ? v.loadout.filter((x): x is CardId => (CARD_IDS as string[]).includes(x)).slice(0, 3) : [],
+    activity: {
+      week: str(v.activity?.week),
+      days: Math.max(0, Math.floor(num(v.activity?.days, 0))) & 31,
+    },
+    pick:
+      pick && typeof pick.week === 'string' && typeof pick.uid === 'string'
+        ? { week: pick.week, uid: pick.uid, name: typeof pick.name === 'string' ? pick.name : '???', stake: Math.max(0, num(pick.stake, 0)) }
+        : null,
+    seasons: Math.max(0, num(v.seasons, 0)),
+    seasonClaimed: Math.floor(num(v.seasonClaimed, -1)),
+    claimed: str(v.claimed),
+    gold: Math.max(0, num(v.gold, 0)),
+    silver: Math.max(0, num(v.silver, 0)),
+    bronze: Math.max(0, num(v.bronze, 0)),
+    finals: Math.max(0, num(v.finals, 0)),
+    played: Math.max(0, num(v.played, 0)),
+    history: Array.isArray(v.history)
+      ? v.history
+          .filter((h) => h && typeof h.week === 'string')
+          .slice(-HISTORY_MAX)
+          .map((h) => ({
+            week: h.week,
+            group: typeof h.group === 'number' ? h.group : null,
+            size: num(h.size, 0),
+            final: typeof h.final === 'number' ? h.final : null,
+            gems: num(h.gems, 0),
+          }))
+      : [],
   };
 }
 
@@ -239,6 +298,7 @@ export function normalize(raw: unknown, t: number): GameState {
     missions: missionsState(r.missions),
     missionsDone: num(r.missionsDone, 0),
     league: leagueState(r.league),
+    cup: cupState(r.cup),
     createdAt: num(r.createdAt, t),
   };
 }

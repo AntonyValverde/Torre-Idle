@@ -30,6 +30,41 @@ import {
   tapValue,
   type RareDef,
 } from './economy';
+import {
+  CARDS,
+  HISTORY_MAX,
+  PICK_STAKES,
+  TRAINING_MAX,
+  attemptsFor,
+  cardSlots,
+  cupRewards,
+  cupScoreOf,
+  randomCard,
+  registeredFor,
+  returnCards,
+  seasonReward,
+  trackActivity,
+  trainingCost,
+  type CardId,
+  type CupOutcome,
+  type CupReward,
+  type CupSlot,
+} from './cup';
+
+export interface CupClaim extends CupReward {
+  card: CardId | null;
+}
+
+/** Afición de la Copa: cuenta los días jugados entre semana. */
+function withActivity(s: GameState, t: number): GameState {
+  const cup = trackActivity(s.cup, t);
+  return cup === s.cup ? s : { ...s, cup };
+}
+
+/** Carta de la Copa como premio extra (de misiones, cofre o retos diarios). */
+function withCard(s: GameState, card: CardId): GameState {
+  return { ...s, cup: { ...s.cup, cards: { ...s.cup.cards, [card]: s.cup.cards[card] + 1 } } };
+}
 import { DECREE_BY_ID, pickDecrees, type DecreeId } from './events';
 import { fmt } from './format';
 import { isNameAllowed, sanitizeName } from './names';
@@ -81,6 +116,8 @@ export interface DailyReward {
   coins: number;
   gems: number;
   streak: number;
+  /** Carta de la Copa de regalo (a veces). */
+  card?: CardId;
 }
 
 export interface ThiefReward {
@@ -132,6 +169,25 @@ interface GameStore {
   claimChest(): string | null;
   /** Cobra el premio de la liga de la semana anterior. */
   claimLeague(): { division: Division; points: number } | null;
+  /** Marca la inscripción en la Copa de esa semana. */
+  cupRegister(week: string): void;
+  /** Gasta un intento de una prueba de la Copa; false si no quedan. */
+  cupAttempt(slot: CupSlot): boolean;
+  /**
+   * Guarda el resultado de un intento: aplica el entrenamiento y la carta usada, y con el escudo
+   * devuelve el intento si no mejoró. Devuelve la marca que cuenta y la mejor.
+   */
+  cupScore(slot: CupSlot, raw: number, card?: CardId | null): { score: number; best: number; improved: boolean; refunded: boolean };
+  /** Gasta una carta equipada. La de intento extra suma el intento en esa prueba. */
+  cupUseCard(card: CardId, slot: CupSlot): boolean;
+  cupEquip(card: CardId): boolean;
+  cupUnequip(index: number): void;
+  /** Sube de nivel el centro de entrenamiento; devuelve el coste o 0 si no se pudo. */
+  cupTrain(): number;
+  cupPredict(week: string, uid: string, name: string, stake: number): boolean;
+  /** Cobra los premios de una Copa terminada (una sola vez), con el pronóstico si lo hubo. */
+  cupClaim(week: string, outcome: CupOutcome, pickGems?: number): CupClaim | null;
+  seasonClaim(season: number, rank: number): { gems: number; flag: boolean } | null;
   rewardGolden(): string;
   offerDecree(): void;
   chooseDecree(id: DecreeId): string;
@@ -182,8 +238,11 @@ function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: strin
     gems: s.gems + gems,
     [key]: { last: date, streak, bestStreak: Math.max(rec.bestStreak, streak) },
   };
-  const next = addPoints(bump(bump(done, key), 'puzzle'), PUZZLE_POINTS);
-  return { next, reward: { coins, gems, streak } };
+  let next = addPoints(bump(bump(done, key), 'puzzle'), PUZZLE_POINTS);
+  // A veces regala una carta para la Copa
+  const card = Math.random() < 0.35 ? randomCard(Math.random) : undefined;
+  if (card) next = withCard(next, card);
+  return { next, reward: { coins, gems, streak, card } };
 }
 
 export const useGame = create<GameStore>((set, get) => ({
@@ -198,7 +257,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const report = offlineGain(state, (t - state.lastTick) / 1000);
     // Si la partida viene "del futuro" (reloj adelantado), no se retrocede: se espera a que llegue esa hora.
     const lastTick = Math.max(state.lastTick, t);
-    let s: GameState = syncPeriods({ ...state, lastTick, ...regenTickets(state, lastTick) }, lastTick);
+    let s: GameState = withActivity(syncPeriods({ ...state, lastTick, ...regenTickets(state, lastTick) }, lastTick), lastTick);
     const showReport = report.seconds >= 60 && report.earned > 0;
     // Ausencias de menos de un minuto: se cobran sin ventana
     if (!showReport && report.earned > 0) s = addCoins(s, report.earned);
@@ -220,7 +279,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const seconds = Math.min(offlineCapSeconds(s), prev.seconds + r.seconds);
       const added = Math.max(0, seconds - prev.seconds);
       const earned = r.seconds > 0 ? r.earned * (added / r.seconds) : 0;
-      const base = syncPeriods({ ...s, boosts, lastTick: t, ...regenTickets(s, t) }, t);
+      const base = withActivity(syncPeriods({ ...s, boosts, lastTick: t, ...regenTickets(s, t) }, t), t);
       if (!offline && seconds < 60) {
         // Ausencias cortas: se cobran directamente, sin ventana
         set({ s: addCoins(base, earned) });
@@ -231,7 +290,7 @@ export const useGame = create<GameStore>((set, get) => ({
     }
     const auto = autoTapsPerSec(s);
     const gain = productionPerSec(s, t) * dt + (auto > 0 ? tapValue(s, t) * auto * dt : 0);
-    set({ s: syncPeriods({ ...addCoins(s, gain), boosts, lastTick: t, ...regenTickets(s, t) }, t) });
+    set({ s: withActivity(syncPeriods({ ...addCoins(s, gain), boosts, lastTick: t, ...regenTickets(s, t) }, t), t) });
   },
 
   tap() {
@@ -604,26 +663,31 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ s: next });
       return `+${DAILY_REWARD.gems} 💎 · +${DAILY_REWARD.tickets} 🎟️ · +${DAILY_REWARD.points} pts de liga`;
     }
-    next = addPoints({ ...next, gems: next.gems + WEEKLY_REWARD.gems }, WEEKLY_REWARD.points);
+    const card = randomCard(Math.random);
+    next = withCard(addPoints({ ...next, gems: next.gems + WEEKLY_REWARD.gems }, WEEKLY_REWARD.points), card);
     set({ s: next });
-    return `+${WEEKLY_REWARD.gems} 💎 · +${WEEKLY_REWARD.points} pts de liga`;
+    return `+${WEEKLY_REWARD.gems} 💎 · +${WEEKLY_REWARD.points} pts de liga · ${CARDS[card].emoji} carta de la Copa`;
   },
 
   claimChest() {
     const { s } = get();
     if (!chestReady(s)) return null;
     const t = now();
-    const next = addPoints(
-      {
-        ...s,
-        missions: { ...s.missions, chest: true },
-        gems: s.gems + CHEST_REWARD.gems,
-        boosts: addBoost(s, t, 'cofre', CHEST_REWARD.boost, CHEST_REWARD.boostSeconds),
-      },
-      CHEST_REWARD.points,
+    const card = randomCard(Math.random);
+    const next = withCard(
+      addPoints(
+        {
+          ...s,
+          missions: { ...s.missions, chest: true },
+          gems: s.gems + CHEST_REWARD.gems,
+          boosts: addBoost(s, t, 'cofre', CHEST_REWARD.boost, CHEST_REWARD.boostSeconds),
+        },
+        CHEST_REWARD.points,
+      ),
+      card,
     );
     set({ s: next });
-    return `+${CHEST_REWARD.gems} 💎 · ⚡ Producción x${CHEST_REWARD.boost} ${CHEST_REWARD.boostSeconds / 60} min · +${CHEST_REWARD.points} pts de liga`;
+    return `+${CHEST_REWARD.gems} 💎 · ⚡ Producción x${CHEST_REWARD.boost} ${CHEST_REWARD.boostSeconds / 60} min · +${CHEST_REWARD.points} pts de liga · ${CARDS[card].emoji} carta de la Copa`;
   },
 
   claimLeague() {
@@ -640,6 +704,123 @@ export const useGame = create<GameStore>((set, get) => ({
       },
     });
     return { division, points: prev.points };
+  },
+
+  cupRegister(week) {
+    const { s } = get();
+    set({ s: { ...s, cup: registeredFor(s.cup, week) } });
+  },
+
+  cupAttempt(slot) {
+    const { s } = get();
+    if (!s.cup.week || s.cup.used[slot] >= attemptsFor(s.cup, s.cup.week, slot)) return false;
+    set({ s: { ...s, cup: { ...s.cup, used: { ...s.cup.used, [slot]: s.cup.used[slot] + 1 } } } });
+    return true;
+  },
+
+  cupScore(slot, raw, card = null) {
+    const { s } = get();
+    const score = cupScoreOf(raw, s.cup.training, card);
+    const old = s.cup.best[slot];
+    const best = Math.max(old, score);
+    const improved = best > old;
+    // El escudo devuelve el intento si no sirvió para mejorar
+    const refunded = card === 'shield' && !improved && s.cup.used[slot] > 0;
+    if (improved || refunded) {
+      set({
+        s: {
+          ...s,
+          cup: {
+            ...s.cup,
+            best: { ...s.cup.best, [slot]: best },
+            used: refunded ? { ...s.cup.used, [slot]: s.cup.used[slot] - 1 } : s.cup.used,
+          },
+        },
+      });
+    }
+    return { score, best, improved, refunded };
+  },
+
+  cupUseCard(card, slot) {
+    const { s } = get();
+    const i = s.cup.loadout.indexOf(card);
+    if (i < 0 || (CARDS[card].finalOnly && slot !== 'f')) return false;
+    const loadout = s.cup.loadout.filter((_, k) => k !== i);
+    const bonus = card === 'extra' ? { ...s.cup.bonus, [slot]: s.cup.bonus[slot] + 1 } : s.cup.bonus;
+    set({ s: { ...s, cup: { ...s.cup, loadout, bonus } } });
+    return true;
+  },
+
+  cupEquip(card) {
+    const { s } = get();
+    const c = s.cup;
+    if ((c.cards[card] ?? 0) < 1 || c.loadout.length >= cardSlots(c.training)) return false;
+    set({ s: { ...s, cup: { ...c, cards: { ...c.cards, [card]: c.cards[card] - 1 }, loadout: [...c.loadout, card] } } });
+    return true;
+  },
+
+  cupUnequip(index) {
+    const { s } = get();
+    const c = s.cup;
+    const card = c.loadout[index];
+    if (!card) return;
+    set({ s: { ...s, cup: { ...c, cards: returnCards(c.cards, [card]), loadout: c.loadout.filter((_, k) => k !== index) } } });
+  },
+
+  cupTrain() {
+    const { s } = get();
+    if (s.cup.training >= TRAINING_MAX) return 0;
+    const cost = trainingCost(s.cup.training, productionPerSec(s, now(), false));
+    if (s.coins < cost) return 0;
+    set({ s: { ...s, coins: s.coins - cost, cup: { ...s.cup, training: s.cup.training + 1 } } });
+    return cost;
+  },
+
+  cupPredict(week, uid, name, stake) {
+    const { s } = get();
+    if (s.cup.pick?.week === week || s.gems < stake || !PICK_STAKES.includes(stake)) return false;
+    set({ s: { ...s, gems: s.gems - stake, cup: { ...s.cup, pick: { week, uid, name, stake } } } });
+    return true;
+  },
+
+  cupClaim(week, outcome, pickGems = 0) {
+    const { s } = get();
+    const c = s.cup;
+    if (c.claimed === week || c.history.some((h) => h.week === week)) return null;
+    const reward = cupRewards(outcome);
+    const lines = reward.lines.slice();
+    const pick = c.pick?.week === week ? c.pick : null;
+    if (pick) lines.push(pickGems > 0 ? `Pronóstico (${pick.name}): +${pickGems} 💎` : `Pronóstico (${pick.name}): esta vez no hubo suerte`);
+    // Una carta para la próxima Copa por haber jugado
+    const card = outcome.played ? randomCard(Math.random) : null;
+    if (card) lines.push(`Carta para la próxima Copa: ${CARDS[card].emoji} ${CARDS[card].name}`);
+    const gems = reward.gems + pickGems;
+    const record = { week, group: outcome.groupRank, size: outcome.groupSize, final: outcome.finalRank, gems };
+    const cup = {
+      ...c,
+      claimed: week,
+      prev: c.prev === week ? null : c.prev,
+      pick: pick ? null : c.pick,
+      cards: card ? { ...c.cards, [card]: c.cards[card] + 1 } : c.cards,
+      gold: c.gold + (reward.trophy === 'gold' ? 1 : 0),
+      silver: c.silver + (reward.trophy === 'silver' ? 1 : 0),
+      bronze: c.bronze + (reward.trophy === 'bronze' ? 1 : 0),
+      finals: c.finals + (outcome.finalist ? 1 : 0),
+      played: c.played + (outcome.played ? 1 : 0),
+      history: [...c.history, record].slice(-HISTORY_MAX),
+    };
+    set({ s: { ...s, gems: s.gems + gems, tickets: s.tickets + reward.tickets, cup } });
+    return { ...reward, gems, lines, card };
+  },
+
+  seasonClaim(season, rank) {
+    const { s } = get();
+    if (season <= s.cup.seasonClaimed) return null;
+    const r = seasonReward(rank);
+    const gems = r?.gems ?? 0;
+    const flag = !!r?.flag;
+    set({ s: { ...s, gems: s.gems + gems, cup: { ...s.cup, seasonClaimed: season, seasons: s.cup.seasons + (flag ? 1 : 0) } } });
+    return { gems, flag };
   },
 
   setName(name) {

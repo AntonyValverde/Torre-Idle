@@ -21,6 +21,7 @@ import { WheelScreen } from './minigames/wheel/WheelScreen';
 import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
 import { CityVisit } from './ui/CityVisit';
+import { CupScreen } from './ui/cup/CupScreen';
 import { useDecreeScheduler } from './ui/DecreeCard';
 import { GamesTab, TICKET_GAMES, type GameId } from './ui/GamesTab';
 import { GoldenBalloon } from './ui/GoldenBalloon';
@@ -46,6 +47,7 @@ export default function App() {
   const [admin, setAdmin] = useState(false);
   // Ciudad que se está visitando (desde el ranking, el perfil o un enlace ?ciudad=…)
   const [visit, setVisit] = useState<string | null>(() => cityFromUrl());
+  const [cupOpen, setCupOpen] = useState(false);
   const tabRef = useRef(tab);
   useEffect(() => {
     tabRef.current = tab;
@@ -146,7 +148,7 @@ export default function App() {
       <main className="content" key={tab}>
         {tab === 'city' && <CityTab />}
         {tab === 'upgrades' && <UpgradesTab />}
-        {tab === 'games' && <GamesTab onPlay={play} />}
+        {tab === 'games' && <GamesTab onPlay={play} onCup={() => setCupOpen(true)} />}
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
         {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} onVisit={setVisit} />}
       </main>
@@ -165,13 +167,14 @@ export default function App() {
       {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
       {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
       {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
+      {cupOpen && !game && <CupScreen onClose={() => setCupOpen(false)} onVisit={setVisit} />}
       {visit && !game && !admin && <CityVisit uid={visit} onClose={closeVisit} />}
       {admin && (
         <Suspense fallback={<div className="game-screen splash"><div className="spinner" /></div>}>
           <AdminPanel onClose={() => setAdmin(false)} />
         </Suspense>
       )}
-      {!game && !admin && !visit && <OfflineModal />}
+      {!game && !admin && !visit && !cupOpen && <OfflineModal />}
       {!game && updateReady && (
         <button className="update-banner" onClick={applyUpdate}>
           🔄 Nueva versión disponible · <b>Actualizar</b>

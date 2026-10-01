@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { cityLayout } from '../game/cities';
 import { now } from '../game/clock';
+import { FANS_GROUPS, activeDays, cupPhase } from '../game/cup';
+import type { GameState } from '../game/state';
 import { BUILDINGS, eraHue, isBoosted, isTapBoosted } from '../game/economy';
 import { fmt } from '../game/format';
 import { useGame } from '../game/store';
@@ -109,6 +111,12 @@ interface Drop {
 }
 
 const XMAS_LIGHTS = ['#ff4d4d', '#3dff8a', '#ffd24a', '#5ab8ff'];
+
+/** ¿Está la afición en la calle? Inscrito en la Copa de este fin de semana y con 3 días jugados entre semana. */
+function fansOut(s: GameState): boolean {
+  const info = cupPhase(s.lastTick);
+  return info.phase !== 'signup' && s.cup.week === info.week && activeDays(s.cup, info.week) >= FANS_GROUPS;
+}
 
 // ---------- Cielo según la hora real ----------
 
@@ -343,6 +351,8 @@ export interface CityVisitView {
   layout: string;
   era: number;
   buildings: number;
+  /** Copas ganadas: oro, plata, bronce y temporadas. */
+  cups?: [number, number, number, number];
 }
 
 export function CityScene({ visit }: { visit?: CityVisitView }) {
@@ -554,6 +564,94 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
       ctx.fill();
     }
 
+    /** Vitrina de la Copa de Alcaldes junto al ayuntamiento: una copa por tipo ganado, con su número. */
+    function drawTrophies(t: number, night: number, cups: [number, number, number]) {
+      const kinds = ([
+        ['#ffc93c', '#fff1a8', cups[0]],
+        ['#c9d3e6', '#ffffff', cups[1]],
+        ['#d98a4a', '#ffd2a8', cups[2]],
+      ] as const).filter((k) => k[2] > 0);
+      if (!kinds.length) return;
+      const gy = groundY();
+      // Un poco más grandes que la escala de los edificios para que se vean bien en el móvil
+      const s = scale * 1.6;
+      const x0 = W / 2 + 56 * scale;
+      // Pedestal
+      ctx.fillStyle = night > 0.5 ? '#8f86b8' : '#d8cfb8';
+      ctx.fillRect(x0 - 3 * s, gy - 7 * s, kinds.length * 13 * s + 6 * s, 7 * s);
+      kinds.forEach(([body, shine, n], i) => {
+        const cx = x0 + 3.5 * s + i * 13 * s;
+        const base = gy - 7 * s;
+        // Brillo que late suavemente
+        ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t / 500 + i);
+        ctx.fillStyle = shine;
+        ctx.beginPath();
+        ctx.arc(cx, base - 9 * s, 8 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = body;
+        ctx.fillRect(cx - 3 * s, base - 2 * s, 6 * s, 2 * s);
+        ctx.fillRect(cx - 1 * s, base - 6 * s, 2 * s, 4 * s);
+        ctx.beginPath();
+        ctx.moveTo(cx - 5 * s, base - 15 * s);
+        ctx.lineTo(cx + 5 * s, base - 15 * s);
+        ctx.lineTo(cx + 2.5 * s, base - 6 * s);
+        ctx.lineTo(cx - 2.5 * s, base - 6 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = body;
+        ctx.lineWidth = 1.2 * s;
+        ctx.beginPath();
+        ctx.arc(cx - 5 * s, base - 12 * s, 2.2 * s, Math.PI / 2, (Math.PI * 3) / 2);
+        ctx.arc(cx + 5 * s, base - 12 * s, 2.2 * s, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+        if (n > 1) {
+          ctx.font = `800 ${Math.max(9, 8 * s)}px 'Baloo 2', system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(20,10,50,.8)';
+          ctx.strokeText(`×${n}`, cx, base - 18 * s);
+          ctx.fillStyle = '#fff';
+          ctx.fillText(`×${n}`, cx, base - 18 * s);
+        }
+      });
+    }
+
+    /** Estandartes de campeón de temporada colgados del frontón del ayuntamiento. */
+    function drawSeasonBanners(t: number, n: number) {
+      const gy = groundY();
+      const k = scale * 1.3;
+      const cx = W / 2;
+      const count = Math.min(2, n);
+      for (let i = 0; i < count; i++) {
+        const x = cx + (i === 0 ? -30 : 23) * scale;
+        const top = gy - 57 * scale;
+        const sway = Math.sin(t / 600 + i) * 1.2 * k;
+        ctx.fillStyle = '#c4202f';
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x + 7 * k, top);
+        ctx.lineTo(x + 7 * k + sway, top + 22 * k);
+        ctx.lineTo(x + 3.5 * k + sway, top + 18 * k);
+        ctx.lineTo(x + sway, top + 22 * k);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath();
+        ctx.arc(x + 3.5 * k + sway * 0.5, top + 8 * k, 2 * k, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (n > 2) {
+        ctx.font = `800 ${Math.max(9, 8 * k)}px 'Baloo 2', system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(20,10,50,.8)';
+        ctx.strokeText(`🚩×${n}`, cx, gy - 116 * scale);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`🚩×${n}`, cx, gy - 116 * scale);
+      }
+    }
+
     function drawHalloween(night: number) {
       const gy = groundY();
       for (const fx of [0.1, 0.32, 0.68, 0.9]) {
@@ -574,7 +672,7 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
     }
 
     /** Peatones por la acera; con lluvia llevan paraguas. */
-    function drawWalkers(dt: number, want: number, t: number) {
+    function drawWalkers(dt: number, want: number, t: number, flags: boolean) {
       while (walkers.length < want) {
         walkers.push({
           x: Math.random() * W,
@@ -588,7 +686,7 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
       const gy = groundY();
       const s = scale;
       const umbrella = weather === 'rain' || weather === 'storm';
-      for (const w of walkers) {
+      walkers.forEach((w, i) => {
         w.x += w.dir * w.speed * dt;
         if (w.x > W + 10) w.x = -10;
         if (w.x < -10) w.x = W + 10;
@@ -613,8 +711,19 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
           ctx.arc(w.x, gy - 13 * s, 5 * s, Math.PI, 0);
           ctx.fill();
           ctx.fillRect(w.x - 0.4 * s, gy - 13 * s, 0.8 * s, 4 * s);
+        } else if (flags && i % 2 === 0) {
+          // Afición de la Copa: banderín ondeando
+          ctx.fillStyle = '#e8e2d0';
+          ctx.fillRect(w.x + 1.6 * s, gy - 22 * s, 0.9 * s, 14 * s);
+          ctx.fillStyle = i % 4 === 0 ? '#ffc93c' : `hsl(${eraHue(useGame.getState().s.era)} 85% 60%)`;
+          const wave = Math.sin(t / 160 + w.phase) * 1.6 * s;
+          ctx.beginPath();
+          ctx.moveTo(w.x + 2.5 * s, gy - 22 * s);
+          ctx.lineTo(w.x + 11 * s, gy - 19.5 * s + wave);
+          ctx.lineTo(w.x + 2.5 * s, gy - 16.5 * s);
+          ctx.fill();
         }
-      }
+      });
     }
 
     function drawPrecipitation(dt: number) {
@@ -823,6 +932,9 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
       // Edificios (cache) y ayuntamiento
       ctx.drawImage(cache, 0, 0, W, H);
       drawHall(t, night, boosted, era);
+      const cups = v ? (v.cups ?? [0, 0, 0, 0]) : ([s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons] as const);
+      drawTrophies(t, night, [cups[0], cups[1], cups[2]]);
+      if (cups[3] > 0) drawSeasonBanners(t, cups[3]);
       if (season === 'christmas' || season === 'newyear') drawChristmas(t, night);
 
       // Luces de las antenas
@@ -838,7 +950,11 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
 
       // Peatones: más cuanto más grande es la ciudad; pocos de noche y nadie en plena tormenta
       const people = Math.min(10, Math.floor(Math.log2(total + 1) * 1.2));
-      drawWalkers(dt, weather === 'storm' ? 1 : Math.round(people * (night > 0.7 ? 0.4 : 1)), t);
+      // El fin de semana de la Copa, la afición sale a la calle (más gente y con banderines)
+      const fans = !v && fansOut(s);
+      const crowd = fans ? Math.min(14, people + 4) : people;
+      // (la afición no se va a dormir: de noche también sale, salvo con tormenta)
+      drawWalkers(dt, weather === 'storm' ? 1 : Math.round(crowd * (night > 0.7 && !fans ? 0.4 : 1)), t, fans);
       if (season === 'halloween') drawHalloween(night);
       if (weather === 'snow') {
         ctx.fillStyle = 'rgba(245,248,255,.9)';

@@ -2553,6 +2553,519 @@ small {
   }
 }
 
+/* ---------- Copa de Alcaldes ---------- */
+
+.game-card.cup-card {
+  background: linear-gradient(135deg, #b8860b, #7a2a9f 70%);
+  border: 1px solid #ffd76a;
+  box-shadow: 0 0 22px rgba(255, 201, 60, 0.25);
+}
+
+.game-card.cup-card .game-cost {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #2a1400;
+}
+
+.cup-wrap {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cup-wrap > * {
+  flex-shrink: 0;
+}
+
+.cup-play {
+  height: 100%;
+}
+
+.cup-hero {
+  background: linear-gradient(160deg, hsl(45 60% 22%), hsl(var(--hue) 40% 16%));
+  border-color: #b8913a;
+}
+
+.cup-hero-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cup-hero-top > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.cup-hero-emoji {
+  font-size: 2.6rem;
+  filter: drop-shadow(0 0 10px rgba(255, 201, 60, 0.6));
+}
+
+.cup-timeline {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.cup-timeline li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.cup-timeline li.on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(255, 194, 61, 0.14);
+}
+
+.cup-timeline li.done {
+  opacity: 0.6;
+}
+
+.cup-timeline li.done b::before {
+  content: '✓ ';
+}
+
+.game-card.cup-pending {
+  background: linear-gradient(135deg, #ff5ea8, #ffb938);
+  color: #2a0a1a;
+  animation: glowPulse 1.6s ease-in-out infinite;
+}
+
+.cup-surprise {
+  border-style: dashed;
+}
+
+.cup-rules {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cup-events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cup-event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.cup-event-emoji {
+  font-size: 1.9rem;
+}
+
+.cup-event-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cup-event .btn {
+  flex: 0 0 auto;
+}
+
+.cup-rival-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cup-rival .good {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.cup-rival .warn {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.cup-rival-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.cup-rival-bar .me {
+  background: linear-gradient(90deg, #3ddc97, #2aa8d0);
+  transition: width 0.4s;
+}
+
+.cup-rival-bar .them {
+  background: linear-gradient(90deg, #ff7a3d, #ff4d6d);
+  transition: width 0.4s;
+}
+
+.cup-rival-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.cup-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cup-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  font-size: 0.85rem;
+}
+
+.cup-table th {
+  color: var(--muted);
+  font-weight: 700;
+  text-align: left;
+  padding: 0 6px;
+}
+
+.cup-table td {
+  background: var(--card);
+  padding: 8px 6px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.cup-table td:first-child {
+  border-left: 1px solid var(--line);
+  border-radius: 12px 0 0 12px;
+  font-weight: 800;
+  text-align: center;
+  width: 28px;
+}
+
+.cup-table td:last-child {
+  border-right: 1px solid var(--line);
+  border-radius: 0 12px 12px 0;
+}
+
+.cup-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cup-table td.win {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.cup-table tr {
+  cursor: pointer;
+}
+
+.cup-table tr.qualifies td:first-child {
+  background: rgba(61, 220, 151, 0.2);
+  color: var(--good);
+}
+
+.cup-table tr.me td {
+  border-color: var(--accent);
+  background: hsl(var(--hue) 34% 20%);
+}
+
+.cup-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.cup-trophies {
+  margin-left: 4px;
+  font-size: 0.75rem;
+}
+
+.cup-final {
+  border-color: var(--accent);
+}
+
+.cup-ceremony p {
+  font-size: 0.9rem;
+}
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
+  gap: 6px;
+  width: 100%;
+  margin: 6px 0;
+}
+
+.podium-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.podium-step b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.podium-medal {
+  font-size: 1.8rem;
+}
+
+.podium-block {
+  width: 100%;
+  border-radius: 10px 10px 4px 4px;
+  font-weight: 800;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4px;
+  color: #2a1400;
+}
+
+.podium-step.p1 .podium-block {
+  height: 70px;
+  background: linear-gradient(180deg, #ffd76a, #c89b2a);
+}
+
+.podium-step.p2 .podium-block {
+  height: 50px;
+  background: linear-gradient(180deg, #e6ebf5, #9aa6bd);
+}
+
+.podium-step.p3 .podium-block {
+  height: 36px;
+  background: linear-gradient(180deg, #f0b07a, #a8643a);
+}
+
+.cup-showcase-row {
+  display: flex;
+  justify-content: space-around;
+  font-size: 1.4rem;
+}
+
+.cup-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+}
+
+.cup-history li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.cup-event {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.cup-event-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cup-cards-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 40px;
+}
+
+.cup-cards-inline .chip {
+  font-size: 0.75rem;
+  padding: 3px 9px;
+}
+
+.cup-pick {
+  border-color: #8a6ad9;
+  background: linear-gradient(160deg, hsl(265 40% 20%), var(--card));
+}
+
+.cup-pick-list,
+.cup-pick-stakes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cup-pick-list {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.cup-pick-stakes .btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.cup-prep {
+  border-color: #3a9a7a;
+  background: linear-gradient(160deg, hsl(160 35% 18%), var(--card));
+}
+
+.cup-prep-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cup-prep-head > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.cup-prep-emoji {
+  font-size: 2.2rem;
+}
+
+.cup-days {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.cup-day {
+  text-align: center;
+  padding: 6px 0;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.cup-day.on {
+  background: linear-gradient(180deg, #3ddc97, #2a9a6a);
+  color: #062a1a;
+  border-color: #3ddc97;
+}
+
+.cup-day.today {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.cup-loadout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.cup-slot {
+  min-height: 64px;
+  border-radius: 14px;
+  border: 2px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.cup-slot.full {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(255, 194, 61, 0.1);
+}
+
+.cup-slot.full span {
+  font-size: 1.6rem;
+}
+
+.cup-collection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cup-card-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.cup-card-item > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cup-card-item .btn {
+  flex: 0 0 auto;
+}
+
+.cup-card-emoji {
+  font-size: 1.8rem;
+}
+
+.cup-tabs button {
+  padding: 7px 4px;
+  font-size: 0.82rem;
+}
+
+.cup-season-prizes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+}
+
+.good {
+  color: var(--good);
+  font-weight: 700;
+}
+
 /* ---------- Selector del ranking ---------- */
 
 .rank-groups button {

@@ -14,7 +14,16 @@ type Phase = 'watch' | 'play' | 'fail';
 const NOTES = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880, 1047, 1175];
 const LEAD_MS = 700;
 
-function MemoryGame({ onOver, onScore }: { onOver: (rounds: number) => void; onScore: (rounds: number) => void }) {
+export function MemoryGame({
+  onOver,
+  onScore,
+  showPrize = true,
+}: {
+  onOver: (rounds: number) => void;
+  onScore: (rounds: number) => void;
+  /** En la Copa no se ganan tickets: no se muestra el premio. */
+  showPrize?: boolean;
+}) {
   const [seq, setSeq] = useState(() => firstSequence(Math.random));
   const [round, setRound] = useState(0);
   const [phase, setPhase] = useState<Phase>('watch');
@@ -106,10 +115,17 @@ function MemoryGame({ onOver, onScore }: { onOver: (rounds: number) => void; onS
             {phase === 'watch' ? 0 : pos}/{seq.length}
           </b>
         </div>
-        <div>
-          <small>Premio</small>
-          <b className={prize > 0 ? 'hot' : ''}>🎟️ {prize}</b>
-        </div>
+        {showPrize ? (
+          <div>
+            <small>Premio</small>
+            <b className={prize > 0 ? 'hot' : ''}>🎟️ {prize}</b>
+          </div>
+        ) : (
+          <div>
+            <small>Superadas</small>
+            <b>{round}</b>
+          </div>
+        )}
       </div>
       <p className={`hint${phase === 'play' ? ' strong' : ''}`}>{status}</p>
       <div className="facade">
@@ -126,7 +142,11 @@ function MemoryGame({ onOver, onScore }: { onOver: (rounds: number) => void; onS
         </div>
         <div className="facade-door" />
       </div>
-      <p className="hint">Cada ronda la secuencia suma una ventana. Desde la ronda 5 recuperas tickets (hasta 4, sin pasar del máximo).</p>
+      <p className="hint">
+        {showPrize
+          ? 'Cada ronda la secuencia suma una ventana. Desde la ronda 5 recuperas tickets (hasta 4, sin pasar del máximo).'
+          : 'Cada ronda la secuencia suma una ventana. Cuentan las rondas superadas.'}
+      </p>
     </div>
   );
 }
