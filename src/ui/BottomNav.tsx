@@ -11,6 +11,7 @@ import {
   maxTickets,
   pendingStars,
 } from '../game/economy';
+import { claimableMissions } from '../game/missions';
 import { useGame } from '../game/store';
 
 export type TabId = 'city' | 'upgrades' | 'games' | 'ranking' | 'profile';
@@ -32,11 +33,17 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
     affordableShopItems(LEGACY, (id) => legacyLevel(s, id), availableStars(s));
   const today = dateKey(s.lastTick);
   const gamesAlert =
-    isNewDay(s.daily.last, today) || isNewDay(s.roads.last, today) || isNewDay(s.wheelLast, today) || s.tickets >= maxTickets(s);
+    isNewDay(s.daily.last, today) ||
+    isNewDay(s.roads.last, today) ||
+    isNewDay(s.parks.last, today) ||
+    isNewDay(s.wheelLast, today) ||
+    s.tickets >= maxTickets(s);
   const claimable = claimableAchievements(s);
+  const missions = claimableMissions(s) + (s.league.prev ? 1 : 0);
 
   const badge = (id: TabId) => {
     if (id === 'city' && decree && tab !== 'city') return <span className="badge dot">📜</span>;
+    if (id === 'city' && missions > 0) return <span className="badge">{missions > 9 ? '9+' : missions}</span>;
     if (id === 'upgrades' && pendingStars(s) > 0 && affordable === 0) return <span className="badge dot">⭐</span>;
     if (id === 'upgrades' && affordable > 0) return <span className="badge">{affordable > 9 ? '9+' : affordable}</span>;
     if (id === 'games' && gamesAlert) return <span className="badge dot">!</span>;

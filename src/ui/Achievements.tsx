@@ -21,12 +21,14 @@ export function Achievements() {
     const reached = achievementReached(a, s);
     const target = a.threshold(claimed);
     const prevT = claimed > 0 ? a.threshold(claimed - 1) : 0;
-    const value = a.stat(s);
-    const pct = reached > claimed ? 100 : Math.max(0, Math.min(100, ((value - prevT) / (target - prevT)) * 100));
+    const value = Math.max(0, a.stat(s));
+    // Logro con niveles finitos ya completado
+    const maxed = !Number.isFinite(target);
+    const pct = reached > claimed || maxed ? 100 : Math.max(0, Math.min(100, ((value - prevT) / (target - prevT)) * 100));
     let gems = 0;
     for (let k = claimed; k < reached; k++) gems += achievementGems(k);
-    return { a, claimed, reached, target, value, pct, gems };
-  }).sort((x, y) => Number(y.reached > y.claimed) - Number(x.reached > x.claimed) || y.pct - x.pct);
+    return { a, claimed, reached, target, value, pct, gems, order: maxed ? -1 : pct };
+  }).sort((x, y) => Number(y.reached > y.claimed) - Number(x.reached > x.claimed) || y.order - x.order);
 
   return (
     <>
@@ -47,9 +49,7 @@ export function Achievements() {
                 <small>{a.desc(target)}</small>
                 <div className="ms-bar">
                   <div style={{ width: `${pct}%` }} />
-                  <span>
-                    {fmt(Math.min(value, target))}/{fmt(target)}
-                  </span>
+                  <span>{Number.isFinite(target) ? `${fmt(Math.min(value, target))}/${fmt(target)}` : 'Completado'}</span>
                 </div>
               </div>
               {ready ? (
@@ -65,7 +65,7 @@ export function Achievements() {
                   <small>Reclamar</small>+{gems} 💎
                 </button>
               ) : (
-                <span className="ach-lock">{Math.floor(pct)}%</span>
+                <span className="ach-lock">{Number.isFinite(target) ? `${Math.floor(pct)}%` : '✅'}</span>
               )}
             </li>
           );

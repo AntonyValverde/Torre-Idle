@@ -22,6 +22,8 @@ import { useGame } from '../game/store';
 import { CityScene } from './CityScene';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
+import { MissionsCard } from './MissionsCard';
+import { SEASON_LABEL, WEATHER_LABEL, seasonAt, weatherAt } from './weather';
 
 const AMOUNTS = [1, 10, -1] as const;
 
@@ -34,6 +36,7 @@ export function CityTab() {
   const discount = costDiscount(s);
   const auto = autoTapsPerSec(s);
   const festival = isTapBoosted(s, t);
+  const season = seasonAt(t);
 
   // Primer edificio bloqueado por era: se muestra como teaser de la próxima era
   const nextEraBuilding = BUILDINGS.find((_, i) => isBuildingEraLocked(s, i));
@@ -45,12 +48,18 @@ export function CityTab() {
         <div className="scene-badge">
           Era {s.era} · {eraName(s.era)}
         </div>
+        <div className="scene-badge scene-weather">
+          {WEATHER_LABEL[weatherAt(t)]}
+          {season && ` · ${SEASON_LABEL[season]}`}
+        </div>
         <div className="scene-stats">
           <span>👆 {fmt(tapValue(s, t))}</span>
           {auto > 0 && <span>🤖 {auto}/s</span>}
           {festival && <span className="hot">🎉 x{s.tapBoostMult} {fmtClock(s.tapBoostUntil - t)}</span>}
         </div>
       </div>
+
+      <MissionsCard />
 
       <DecreeCard />
 

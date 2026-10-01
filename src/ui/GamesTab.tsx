@@ -4,10 +4,12 @@ import { fmt, fmtClock, fmtTime } from '../game/format';
 import { STOCKS, saleValue, stockPrice } from '../game/stocks';
 import { useGame } from '../game/store';
 
-export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory';
+export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro';
 
 /** Juegos que cuestan un ticket al entrar. */
-export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory'];
+export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro'];
+
+const NEW_TAG = <span className="new-tag">NUEVO</span>;
 
 export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
   const s = useGame((st) => st.s);
@@ -15,6 +17,7 @@ export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
   const today = dateKey(s.lastTick);
   const dailyDone = !isNewDay(s.daily.last, today);
   const roadsDone = !isNewDay(s.roads.last, today);
+  const parksDone = !isNewDay(s.parks.last, today);
   const wheelFree = isNewDay(s.wheelLast, today);
   const nextTicket = ticketRegenMs(s) - (s.lastTick - s.ticketTime);
   const untilTomorrow = fmtTime(msUntilTomorrow(s.lastTick) / 1000);
@@ -55,6 +58,18 @@ export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
         <span className="game-cost">{roadsDone ? '✅' : 'GRATIS'}</span>
       </button>
 
+      <button className={`game-card parks${parksDone ? ' done' : ''}`} onClick={() => onPlay('parks')}>
+        <span className="game-emoji">🌳</span>
+        <div className="game-info">
+          <b>Plan verde {NEW_TAG}</b>
+          <small>Reparte casas y parques: mitad y mitad en cada fila y columna, sin tres iguales seguidos.</small>
+          <small className="game-meta">
+            🔥 Racha {s.parks.streak} · {parksDone ? `Nuevo en ${untilTomorrow}` : '¡Disponible!'}
+          </small>
+        </div>
+        <span className="game-cost">{parksDone ? '✅' : 'GRATIS'}</span>
+      </button>
+
       <button className={`game-card fortune${wheelFree ? '' : ' done'}`} onClick={() => onPlay('wheel')}>
         <span className="game-emoji">🎡</span>
         <div className="game-info">
@@ -69,6 +84,26 @@ export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
         <h2>Arcade</h2>
         <small className="muted">1 🎟️ por partida</small>
       </div>
+
+      <button className="game-card fire" disabled={s.tickets < 1} onClick={() => onPlay('fire')}>
+        <span className="game-emoji">🚒</span>
+        <div className="game-info">
+          <b>Bomberos {NEW_TAG}</b>
+          <small>Apaga los incendios antes de que se extiendan. ¡Cuida el agua!</small>
+          <small className="game-meta">🏆 Récord: {s.fireBest}</small>
+        </div>
+        <span className="game-cost">🎟️1</span>
+      </button>
+
+      <button className="game-card metro" disabled={s.tickets < 1} onClick={() => onPlay('metro')}>
+        <span className="game-emoji">🚇</span>
+        <div className="game-info">
+          <b>Metro {NEW_TAG}</b>
+          <small>Traza líneas entre estaciones y lleva a cada viajero a su destino. Gana un boost.</small>
+          <small className="game-meta">🏆 Récord: {s.metroBest} viajeros</small>
+        </div>
+        <span className="game-cost">🎟️1</span>
+      </button>
 
       <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('thief')}>
         <span className="game-emoji">🦹</span>

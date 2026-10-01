@@ -2,18 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { now } from '../game/clock';
 import { eraName, totalAchievements, totalBuildings } from '../game/economy';
 import { fmt } from '../game/format';
+import { citySnapshot } from '../game/cities';
+import { DAILY_KINDS } from '../game/cloud';
 import { useGame } from '../game/store';
+import { CityVisit } from '../ui/CityVisit';
 import { GameScreen, Modal } from '../ui/Modal';
 import { BarList, ColumnChart } from './charts';
 import {
   PLAYER_LIMIT,
   dailyParticipation,
   deleteSuggestion,
+  leagueCount,
   loadPlayers,
   loadSuggestions,
   rankingsOf,
   removeFromRankings,
   setSuggestionStatus,
+  type DailyCounts,
   type RankEntry,
   type Suggestion,
   type SuggestionStatus,
@@ -36,7 +41,8 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('summary');
   const [players, setPlayers] = useState<Player[] | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
-  const [daily, setDaily] = useState<{ date: string; daily: number; roads: number }[] | null>(null);
+  const [daily, setDaily] = useState<DailyCounts[] | null>(null);
+  const [league, setLeague] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
   const wrap = useRef<HTMLDivElement>(null);
@@ -48,11 +54,12 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
 
   const load = useCallback(async () => {
     setError(null);
-    const [p, s, d] = await Promise.allSettled([loadPlayers(), loadSuggestions(), dailyParticipation(lastDays(now(), 7))]);
+    const [p, s, d, l] = await Promise.allSettled([loadPlayers(), loadSuggestions(), dailyParticipation(lastDays(now(), 7)), leagueCount()]);
     if (p.status === 'fulfilled') setPlayers(p.value);
     if (s.status === 'fulfilled') setSuggestions(s.value);
     if (d.status === 'fulfilled') setDaily(d.value);
-    const failed = [p, s, d].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    if (l.status === 'fulfilled') setLeague(l.value);
+    const failed = [p, s, d, l].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
     if (failed) {
       console.warn('Panel de administración', failed.reason);
       setError(errorText(failed.reason));
@@ -81,7 +88,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         {error && <p className="empty">{error}</p>}
-        {tab === 'summary' && <SummaryView players={players} daily={daily} suggestionsNew={fresh} />}
+        {tab === 'summary' && <SummaryView players={players} daily={daily} league={league} suggestionsNew={fresh} />}
         {tab === 'players' && <PlayersView players={players} />}
         {tab === 'suggestions' && <SuggestionsView items={suggestions} onChange={setSuggestions} />}
       </div>
@@ -96,10 +103,12 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
 function SummaryView({
   players,
   daily,
+  league,
   suggestionsNew,
 }: {
   players: Player[] | null;
-  daily: { date: string; daily: number; roads: number }[] | null;
+  daily: DailyCounts[] | null;
+  league: number | null;
   suggestionsNew: number;
 }) {
   const sum = useMemo(() => (players ? summarize(players, now()) : null), [players]);
@@ -133,6 +142,18 @@ function SummaryView({
           <small>Sugerencias nuevas</small>
           <b>{suggestionsNew}</b>
         </div>
+        <div>
+          <small>En la liga (semana)</small>
+          <b>{league ?? '…'}</b>
+        </div>
+        <div>
+          <small>Misiones hechas</small>
+          <b>{fmt(sum.missionsDone)}</b>
+        </div>
+        <div>
+          <small>Cofres hoy</small>
+          <b>{fmt(sum.chestsToday)}</b>
+        </div>
       </div>
       {sum.total >= PLAYER_LIMIT && <p className="hint">Se muestran las {PLAYER_LIMIT} partidas guardadas más recientes.</p>}
 
@@ -163,6 +184,7 @@ function SummaryView({
                 <th>Día</th>
                 <th className="num">🌃 Apagón</th>
                 <th className="num">🛣️ Calles</th>
+                <th className="num">🌳 Verde</th>
               </tr>
             </thead>
             <tbody>
@@ -174,6 +196,7 @@ function SummaryView({
                     <td>{shortDate(d.date)}</td>
                     <td className="num">{d.daily}</td>
                     <td className="num">{d.roads}</td>
+                    <td className="num">{d.parks}</td>
                   </tr>
                 ))}
             </tbody>
@@ -226,7 +249,7 @@ function SummaryView({
               ))}
             </tbody>
           </table>
-          <small className="muted">Apagón y Calles: mejor racha. Rueda: giros.</small>
+          <small className="muted">Apagón, Calles y Plan verde: mejor racha. Rueda: giros.</small>
         </div>
       )}
 
@@ -312,14 +335,19 @@ const BOARD_LABEL: Record<string, string> = {
   thief: '🦹 Ladrón',
   traffic: '🚦 Semáforo',
   memory: '🧠 Memoria',
+  fire: '🚒 Bomberos',
+  metro: '🚇 Metro',
   daily: '🌃 Apagón (hoy)',
   roads: '🛣️ Calles (hoy)',
+  parks: '🌳 Plan verde (hoy)',
+  league: '🏆 Liga (semana)',
 };
 
 function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {
   const toast = useGame((st) => st.toast);
   const [ranks, setRanks] = useState<RankEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
   const s = p.s;
   const t = now();
 
@@ -367,35 +395,46 @@ function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {
     ['Último guardado', p.savedAt ? `${new Date(p.savedAt).toLocaleString('es')} (${ago(p.savedAt, t)})` : 'nunca'],
   ];
 
+  if (cityOpen) return <CityVisit uid={p.uid} city={citySnapshot(s)} onClose={() => setCityOpen(false)} />;
+
   return (
     <Modal onBackdrop={onClose}>
       <div className="admin-detail">
-        <h2>{p.name}</h2>
-        <button className="link-btn" onClick={copyUid}>
-          UID: {p.uid.slice(0, 10)}… (copiar)
-        </button>
-        <b>En los rankings</b>
-        {ranks === null ? (
-          <small className="muted">Cargando…</small>
-        ) : ranks.length === 0 ? (
-          <small className="muted">No aparece en ningún ranking</small>
-        ) : (
-          <ul className="admin-chips">
-            {ranks.map((r) => (
-              <li key={r.board}>
-                {BOARD_LABEL[r.board] ?? r.board}: {r.board === 'daily' || r.board === 'roads' ? 'jugado' : fmt(r.score)}
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="btn-row">
-          <button className="btn" onClick={onClose}>
-            Cerrar
+        {/* Cabecera fija: nombre, rankings y acciones; los datos de la partida se desplazan debajo */}
+        <div className="admin-detail-head">
+          <div className="admin-detail-title">
+            <h2>{p.name}</h2>
+            <button className="icon-btn" onClick={onClose} aria-label="Cerrar">
+              ✕
+            </button>
+          </div>
+          <button className="link-btn" onClick={copyUid}>
+            UID: {p.uid.slice(0, 10)}… (copiar)
           </button>
-          <button className="btn danger" onClick={remove} disabled={busy || !ranks?.length}>
-            Quitar de rankings
-          </button>
+          <b>En los rankings</b>
+          {ranks === null ? (
+            <small className="muted">Cargando…</small>
+          ) : ranks.length === 0 ? (
+            <small className="muted">No aparece en ningún ranking</small>
+          ) : (
+            <ul className="admin-chips">
+              {ranks.map((r) => (
+                <li key={r.board}>
+                  {BOARD_LABEL[r.board] ?? r.board}: {(DAILY_KINDS as string[]).includes(r.board) ? 'jugado' : fmt(r.score)}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="btn-row">
+            <button className="btn" onClick={() => setCityOpen(true)}>
+              🏙️ Ver ciudad
+            </button>
+            <button className="btn danger" onClick={remove} disabled={busy || !ranks?.length}>
+              Quitar de rankings
+            </button>
+          </div>
         </div>
+        <div className="admin-detail-body">
         <table className="admin-table">
           <tbody>
             {rows.map(([k, v]) => (
@@ -412,6 +451,7 @@ function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </Modal>
   );

@@ -1,3 +1,4 @@
+import { MISSION_BY_ID, newLeague, newMissions, type LeagueState, type MissionSlot, type MissionsState } from './missions';
 import { isNameAllowed, randomName, sanitizeName } from './names';
 
 export interface Boost {
@@ -53,16 +54,27 @@ export interface GameState {
   trafficBest: number;
   /** Récord de rondas completadas en Memoria de ventanas. */
   memoryBest: number;
+  /** Récord de puntos en Bomberos. */
+  fireBest: number;
+  /** Récord de viajeros llevados en Metro. */
+  metroBest: number;
   /** Apagón diario. */
   daily: DailyRecord;
   /** Conecta las calles (segundo puzzle diario). */
   roads: DailyRecord;
+  /** Plan verde (tercer puzzle diario). */
+  parks: DailyRecord;
   /** Día del último giro gratis de la rueda. */
   wheelLast: string | null;
   wheelSpins: number;
   /** Acciones en bolsa: u = unidades, c = monedas invertidas (para calcular ganancias). */
   stocks: Record<string, Holding>;
   stockProfit: number;
+  /** Misiones diarias y semanales activas. */
+  missions: MissionsState;
+  /** Misiones completadas desde siempre (para el logro). */
+  missionsDone: number;
+  league: LeagueState;
   createdAt: number;
 }
 
@@ -102,13 +114,46 @@ export function newState(t: number): GameState {
     thiefBest: 0,
     trafficBest: 0,
     memoryBest: 0,
+    fireBest: 0,
+    metroBest: 0,
     daily: { last: null, streak: 0, bestStreak: 0 },
     roads: { last: null, streak: 0, bestStreak: 0 },
+    parks: { last: null, streak: 0, bestStreak: 0 },
     wheelLast: null,
     wheelSpins: 0,
     stocks: {},
     stockProfit: 0,
+    missions: newMissions(),
+    missionsDone: 0,
+    league: newLeague(),
     createdAt: t,
+  };
+}
+
+function slots(v: unknown): MissionSlot[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x) => x && typeof x.id === 'string' && MISSION_BY_ID.has(x.id))
+    .map((x) => ({ id: x.id, p: Math.max(0, num(x.p, 0)), c: x.c === true }));
+}
+
+function missionsState(v: Partial<MissionsState> | undefined): MissionsState {
+  return {
+    day: typeof v?.day === 'string' ? v.day : null,
+    daily: slots(v?.daily),
+    chest: v?.chest === true,
+    week: typeof v?.week === 'string' ? v.week : null,
+    weekly: slots(v?.weekly),
+  };
+}
+
+function leagueState(v: Partial<LeagueState> | undefined): LeagueState {
+  const prev = v?.prev;
+  return {
+    week: typeof v?.week === 'string' ? v.week : null,
+    points: Math.max(0, num(v?.points, 0)),
+    prev: prev && typeof prev.week === 'string' && Number.isFinite(prev.points) ? { week: prev.week, points: prev.points } : null,
+    best: Math.floor(num(v?.best, -1)),
   };
 }
 
@@ -182,12 +227,18 @@ export function normalize(raw: unknown, t: number): GameState {
     thiefBest: num(r.thiefBest, 0),
     trafficBest: num(r.trafficBest, 0),
     memoryBest: num(r.memoryBest, 0),
+    fireBest: num(r.fireBest, 0),
+    metroBest: num(r.metroBest, 0),
     wheelLast: typeof r.wheelLast === 'string' ? r.wheelLast : null,
     wheelSpins: num(r.wheelSpins, 0),
     stocks: holdings(r.stocks),
     stockProfit: num(r.stockProfit, 0),
     daily: dailyRecord(r.daily),
     roads: dailyRecord(r.roads),
+    parks: dailyRecord(r.parks),
+    missions: missionsState(r.missions),
+    missionsDone: num(r.missionsDone, 0),
+    league: leagueState(r.league),
     createdAt: num(r.createdAt, t),
   };
 }

@@ -3,6 +3,7 @@ import { track } from '../../firebase';
 import { submitScore } from '../../game/cloud';
 import { fmt, fmtTime } from '../../game/format';
 import { useGame, type StackReward } from '../../game/store';
+import { celebrate } from '../../ui/celebrate';
 import { sfx } from '../../ui/haptics';
 import { GameScreen, Modal } from '../../ui/Modal';
 import { TrafficGame } from './TrafficGame';
@@ -22,6 +23,7 @@ export function TrafficScreen({ onClose }: { onClose: () => void }) {
     if (reward.newBest && score > 0) submitScore('traffic', score, store.s.name).catch(() => {});
     track('minigame_end', { game: 'traffic', score });
     sfx(reward.newBest ? 'win' : 'buy');
+    if (reward.newBest) celebrate(4);
     setResult({ score, reward });
   };
 

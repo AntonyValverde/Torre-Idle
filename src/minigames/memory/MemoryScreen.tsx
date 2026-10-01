@@ -3,6 +3,7 @@ import { track } from '../../firebase';
 import { submitScore } from '../../game/cloud';
 import { fmt } from '../../game/format';
 import { useGame, type MemoryReward } from '../../game/store';
+import { celebrate } from '../../ui/celebrate';
 import { sfx, tone, vibrate } from '../../ui/haptics';
 import { GameScreen, Modal } from '../../ui/Modal';
 import { CELLS, COLS, extend, firstSequence, flashMs, memoryTickets } from './logic';
@@ -145,6 +146,7 @@ export function MemoryScreen({ onClose }: { onClose: () => void }) {
     if (reward.newBest && rounds > 0) submitScore('memory', rounds, store.s.name).catch(() => {});
     track('minigame_end', { game: 'memory', score: rounds });
     sfx(reward.newBest ? 'win' : 'buy');
+    if (reward.newBest) celebrate(4);
     setResult({ rounds, reward });
   };
 

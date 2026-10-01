@@ -12,6 +12,7 @@ import {
 import {
   collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   limit,
@@ -20,10 +21,12 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { dateKey, now, resyncFromDevice, setServerTime } from './clock';
+import { citySnapshot, parseLayout, type CitySnapshot } from './cities';
+import { dateKey, now, resyncFromDevice, setServerTime, weekKey } from './clock';
 import { newState, normalize, type GameState } from './state';
 import { useGame } from './store';
 
@@ -257,6 +260,10 @@ export function startAutoSave(): () => void {
   let lastCloud = Date.now();
   let lastCity = 0;
   let lastCityScore = 0;
+  let lastLeague = 0;
+  let leagueSent = '';
+  let lastCityDoc = 0;
+  let citySent = '';
 
   const flush = () => {
     const s = useGame.getState().s;
@@ -277,6 +284,24 @@ export function startAutoSave(): () => void {
       lastCity = t;
       lastCityScore = cityScore;
       submitScore('city', cityScore, s.name).catch(() => {});
+    }
+    // Liga: sube los puntos de la semana cuando cambian (las reglas admiten una subida cada 5 s)
+    const lg = s.league;
+    const sig = `${lg.week}:${lg.points}`;
+    if (lg.week && lg.points > 0 && sig !== leagueSent && t - lastLeague >= 6000) {
+      lastLeague = t;
+      // Si se rechaza (p. ej. otro dispositivo ya subió más), no se reintenta hasta que cambien los puntos
+      const done = () => (leagueSent = sig);
+      submitLeague(lg.week, lg.points, s.name).then(done, (e) => errCode(e) === 'permission-denied' && done());
+    }
+    // Ciudad pública: cuando cambia lo que se ve (como mucho una vez por minuto)
+    const citySig = citySignature(citySnapshot(s));
+    if (citySig !== citySent && t - lastCityDoc >= 60_000) {
+      lastCityDoc = t;
+      publishCity(s).then(
+        (sent) => sent && (citySent = citySig),
+        (e) => errCode(e) === 'permission-denied' && (citySent = citySig),
+      );
     }
   }, 5000);
 
@@ -299,11 +324,12 @@ export function startAutoSave(): () => void {
 // Rankings
 // =====================================================================
 
-export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory';
-export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory'];
+export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro';
+export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory', 'fire', 'metro'];
 
-/** Colección de cada reto diario en Firestore: `daily` (Apagón) y `roads` (Conecta las calles). */
-export type DailyKind = 'daily' | 'roads';
+/** Colección de cada reto diario en Firestore: `daily` (Apagón), `roads` (Conecta las calles) y `parks` (Plan verde). */
+export type DailyKind = 'daily' | 'roads' | 'parks';
+export const DAILY_KINDS: DailyKind[] = ['daily', 'roads', 'parks'];
 
 export interface ScoreEntry {
   uid: string;
@@ -343,10 +369,10 @@ export async function renameInLeaderboards(name: string) {
   const uid = currentUid();
   if (!uid || !db) return;
   const d = db;
-  const daily: DailyKind[] = ['daily', 'roads'];
   const refs = [
     ...BOARDS.map((b) => doc(d, 'leaderboards', b, 'scores', uid)),
-    ...daily.map((k) => doc(d, k, dateKey(), 'scores', uid)),
+    ...DAILY_KINDS.map((k) => doc(d, k, dateKey(), 'scores', uid)),
+    doc(d, 'league', weekKey(), 'scores', uid),
   ];
   // updateDoc falla con "not-found" si no hay puntuación en ese ranking: eso es normal
   const results = await Promise.allSettled(refs.map((ref) => updateDoc(ref, { name })));
@@ -415,6 +441,83 @@ export async function fetchDailyTop(date: string, kind: DailyKind = 'daily', n =
     const snap = await getDocs(query(collection(d, kind, date, 'scores'), orderBy('score', 'asc'), limit(n)));
     return snap.docs.map((x) => cleanEntry(x.id, x.data()));
   });
+}
+
+// =====================================================================
+// Liga semanal
+// =====================================================================
+
+/** Sube los puntos de liga de la semana (su lunes, AAAA-MM-DD). Solo pueden subir. */
+export async function submitLeague(week: string, points: number, name: string) {
+  const uid = currentUid();
+  if (!uid || !db) return;
+  cache.delete(`league:${week}`);
+  await setDoc(doc(db, 'league', week, 'scores', uid), { name, score: Math.floor(points), updatedAt: serverTimestamp() });
+}
+
+export async function fetchLeagueTop(week: string, n = 50): Promise<ScoreEntry[]> {
+  const d = db;
+  if (!d) return [];
+  return cached(`league:${week}`, async () => {
+    await ensureUser();
+    const snap = await getDocs(query(collection(d, 'league', week, 'scores'), orderBy('score', 'desc'), limit(n)));
+    return snap.docs.map((x) => cleanEntry(x.id, x.data()));
+  });
+}
+
+/** Posición en la liga: cuántos tienen más puntos (una consulta de recuento, no descarga documentos). */
+export async function leaguePosition(week: string, points: number): Promise<{ position: number; total: number } | null> {
+  const d = db;
+  if (!d || points <= 0) return null;
+  await ensureUser();
+  const col = collection(d, 'league', week, 'scores');
+  const [above, total] = await Promise.all([
+    getCountFromServer(query(col, where('score', '>', points))),
+    getCountFromServer(col),
+  ]);
+  return { position: above.data().count + 1, total: total.data().count };
+}
+
+// =====================================================================
+// Ciudades públicas (para visitar la ciudad de otros)
+// =====================================================================
+
+export interface PublicCity extends CitySnapshot {
+  uid: string;
+  updatedAt: number | null;
+}
+
+export function citySignature(c: CitySnapshot): string {
+  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}`;
+}
+
+/** Publica la ciudad del jugador (solo lo que se ve al visitarla). */
+export async function publishCity(s: GameState): Promise<boolean> {
+  const uid = currentUid();
+  if (!uid || !db) return false;
+  await setDoc(doc(db, 'cities', uid), { ...citySnapshot(s), updatedAt: serverTimestamp() });
+  return true;
+}
+
+export async function fetchCity(uid: string): Promise<PublicCity | null> {
+  const d = db;
+  if (!d) return null;
+  await ensureUser();
+  const snap = await getDoc(doc(d, 'cities', uid));
+  const x = snap.data();
+  const layout = parseLayout(x?.layout);
+  if (!x || !layout) return null;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    uid,
+    name: typeof x.name === 'string' ? x.name.slice(0, 20) : '???',
+    era: Math.max(1, Math.floor(n(x.era))),
+    layout,
+    buildings: n(x.buildings),
+    earned: n(x.earned),
+    stars: n(x.stars),
+    updatedAt: x.updatedAt?.toMillis?.() ?? null,
+  };
 }
 
 // =====================================================================

@@ -8,23 +8,43 @@ Juego idle/clicker para móvil (PWA) con minijuegos. Está hecho con React, Vite
 |---|---|---|
 | 🌃 **Apagón diario**: enciende todas las ventanas | Gratis, uno al día | Gemas, racha y ranking del día |
 | 🛣️ **Conecta las calles**: gira tramos hasta unir las casas con el ayuntamiento | Gratis, uno al día | Gemas, racha y ranking del día |
+| 🌳 **Plan verde**: reparte casas y parques (mitad y mitad en cada fila y columna, sin tres iguales seguidos) | Gratis, uno al día | Gemas, racha y ranking del día |
 | 🎡 **Rueda de la fortuna** | 1 giro gratis al día, luego 🎟️ | Monedas, gemas, boosts o edificios raros |
 | 🦹 **Atrapa al ladrón**: 30 s de reflejos | 🎟️ | Monedas y gemas |
 | 🏗️ **Stack Tower**: apila pisos | 🎟️ | Monedas y boost de producción |
 | 🚦 **Semáforo**: cambia el semáforo sin que choquen los coches | 🎟️ | Monedas y boost de producción (se multiplica con el de Stack) |
 | 🧠 **Memoria de ventanas**: repite la secuencia de luces | 🎟️ | Monedas y hasta 4 🎟️ (sin pasar del máximo) |
+| 🚒 **Bomberos**: apaga incendios antes de que se propaguen, con agua limitada | 🎟️ | Monedas y gemas |
+| 🚇 **Metro**: traza hasta 3 líneas entre estaciones y lleva a cada viajero a su destino | 🎟️ | Monedas y boost de producción (fuente propia) |
 | 🧱 **Fusión** (tipo 2048) | 🎟️ | Gemas y edificios raros |
 | 📈 **Bolsa de la ciudad** | Libre | Ganancias que no cuentan para estrellas ni rankings |
 
-Los dos retos diarios generan el mismo tablero para todos a partir de la fecha. En Semáforo, un coche que espera demasiado en rojo pierde la paciencia y se lo salta, así que no se puede dejar el semáforo fijo.
+Los tres retos diarios generan el mismo tablero para todos a partir de la fecha. El Plan verde siempre tiene una única solución. En Semáforo, un coche que espera demasiado en rojo pierde la paciencia y se lo salta, así que no se puede dejar el semáforo fijo.
+
+## Visitar ciudades
+
+- Cada jugador publica una foto pública de su ciudad en `cities/{uid}`: nombre, era, edificios, monedas ganadas, estrellas y el tamaño de cada tipo de edificio. Se actualiza sola, como mucho una vez por minuto.
+- En cualquier ranking, al tocar a un jugador se abre su ciudad, dibujada con el mismo clima y la misma hora. Tocarla no recauda; solo saluda.
+- En Logros → Perfil → **Tu ciudad** puedes ver cómo la ven los demás y compartir un enlace (`?ciudad=UID`) que abre tu ciudad directamente.
+- El panel de administración también puede abrir la ciudad de cualquier jugador.
+
+## Misiones y liga semanal
+
+- **Misiones diarias**: 3 al día, iguales para todos (una de ciudad, una de minijuego y una libre). Cada una da 💎, 🎟️ y puntos de liga. Completar las tres abre el **cofre del día** (gemas, boost x2 de 15 min y más puntos).
+- **Misiones semanales**: 3 por semana, más largas y con más premio.
+- **Liga semanal**: ranking que se reinicia cada lunes. Los puntos salen solo de misiones y retos diarios, así que un jugador nuevo compite en igualdad con uno veterano. Al terminar la semana se cobra el premio de la división alcanzada: 🥉 Bronce, 🥈 Plata (150), 🥇 Oro (300) o 💎 Diamante (450).
 
 ## Progresión (sin final)
 
-- **Ciudad animada**: se dibuja en canvas a partir de tus edificios y sigue la hora real (día, atardecer y noche).
+- **Ciudad viva**:
+  - Se dibuja en canvas a partir de tus edificios y sigue la hora real (día, atardecer y noche).
+  - El clima (despejado, nublado, lluvia, tormenta o nieve) es el mismo para todos a la misma hora y cambia según el mes.
+  - Hay peatones (con paraguas si llueve) y fechas especiales: 🎄 Navidad, 🎆 Año Nuevo y 🎃 Halloween.
+  - Hay fuegos artificiales al refundar, al abrir el cofre del día, al cobrar la liga o al batir un récord.
 - **16 edificios**. Los 6 últimos se desbloquean en eras avanzadas.
 - **Hitos infinitos**: cada edificio produce x2 al llegar a 25, 50, 100… y después cada 100, sin límite.
 - **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado, que tiene niveles infinitos.
-- **Logros infinitos**: 15 categorías sin nivel máximo. Cada logro da +2% de producción y gemas.
+- **Logros**: 20 categorías, casi todas sin nivel máximo. Cada logro da +2% de producción y gemas.
 - **Decretos del consejo**: cada pocos minutos eliges entre dos ventajas (festival, lotería, horas extra…).
 - **Boosts combinables**: fuentes distintas se multiplican entre sí; la misma fuente solo se alarga.
 - Los números usan K, M, B… y luego aa, ab, ac… hasta ~1e308.
@@ -94,7 +114,7 @@ En la [consola de Firebase](https://console.firebase.google.com/project/game-f5f
 - **Bolsa**: tiene un límite de inversión, y sus ganancias no cuentan para estrellas ni rankings.
 
 ### Pruebas de las reglas
-`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 76 casos, permitidos y de ataque. Necesita Java instalado.
+`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 110 casos, permitidos y de ataque. Necesita Java instalado.
 
 ### Pasos recomendados en la consola (una vez)
 1. **Restringir la API key**:
@@ -121,8 +141,8 @@ El juego corre en el navegador del jugador, así que alguien con conocimientos p
 ```
 src/
   game/          economía, estado, store (zustand), reloj del servidor, nube y rankings
-  minigames/     stack/ y traffic/ (canvas), merge/ (2048), daily/ (Apagón), roads/ (Calles),
-                 memory/, thief/, wheel/, stocks/
+  minigames/     stack/, traffic/ y metro/ (canvas), merge/ (2048), daily/ (Apagón), roads/ (Calles),
+                 parks/ (Plan verde), memory/, thief/, fire/ (Bomberos), wheel/, stocks/
   ui/            pestañas, barra superior, modales, globo dorado, sugerencias
   admin/         panel de administración (métricas, jugadores, sugerencias)
 firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo suben
@@ -133,9 +153,12 @@ firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo
 | Ruta | Contenido |
 |---|---|
 | `users/{uid}` | partida guardada (solo la lee y escribe su dueño) |
-| `leaderboards/{stack\|merge\|city\|stars\|thief\|traffic\|memory}/scores/{uid}` | mejor puntuación de cada jugador |
+| `leaderboards/{stack\|merge\|city\|stars\|thief\|traffic\|memory\|fire\|metro}/scores/{uid}` | mejor puntuación de cada jugador |
 | `daily/{AAAA-MM-DD}/scores/{uid}` | resultado del Apagón diario (un intento registrado) |
 | `roads/{AAAA-MM-DD}/scores/{uid}` | resultado de Conecta las calles (un intento registrado) |
+| `parks/{AAAA-MM-DD}/scores/{uid}` | resultado del Plan verde (un intento registrado) |
+| `cities/{uid}` | ciudad pública para las visitas (cualquiera la lee; solo su dueño la escribe) |
+| `league/{lunes AAAA-MM-DD}/scores/{uid}` | puntos de liga de cada jugador en esa semana (solo suben, máximo 1000) |
 | `suggestions/{id}` | sugerencias de los jugadores (solo las lee el administrador) |
 | `suggestionMeta/{uid}` | hora del último envío de sugerencia (limita a una por minuto) |
 

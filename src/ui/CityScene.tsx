@@ -1,9 +1,13 @@
 import { useEffect, useRef } from 'react';
+import { cityLayout } from '../game/cities';
+import { now } from '../game/clock';
 import { BUILDINGS, eraHue, isBoosted, isTapBoosted } from '../game/economy';
 import { fmt } from '../game/format';
 import { useGame } from '../game/store';
 import { mulberry32 } from '../minigames/rng';
+import { celebrating } from './celebrate';
 import { sfx, vibrate } from './haptics';
+import { seasonAt, weatherAt, type Season, type Weather } from './weather';
 
 // ---------- Aspecto de cada edificio en la escena ----------
 
@@ -72,6 +76,40 @@ interface Car {
   hue: number;
 }
 
+interface Walker {
+  x: number;
+  dir: number;
+  speed: number;
+  hue: number;
+  phase: number;
+}
+
+interface Rocket {
+  x: number;
+  y: number;
+  vy: number;
+  top: number;
+  hue: number;
+}
+
+interface Spark {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  hue: number;
+}
+
+interface Drop {
+  x: number;
+  y: number;
+  v: number;
+  phase: number;
+}
+
+const XMAS_LIGHTS = ['#ff4d4d', '#3dff8a', '#ffd24a', '#5ab8ff'];
+
 // ---------- Cielo según la hora real ----------
 
 const SKY: [number, string, string][] = [
@@ -116,16 +154,10 @@ function nightAt(hour: number): number {
   return (hour - 16.5) / 4;
 }
 
-function layoutKey(buildings: Record<string, number>): string {
-  return BUILDINGS.map((b) => {
-    const n = buildings[b.id] ?? 0;
-    return n ? Math.min(4, 1 + Math.floor(Math.log2(n))) : 0;
-  }).join(',');
-}
-
 /** Coloca los edificios alrededor del ayuntamiento: los más altos cerca del centro. */
 function buildLayout(key: string, W: number, scale: number): Structure[] {
-  const counts = key.split(',').map(Number);
+  // Una ciudad de otra versión del juego puede traer más tipos de edificio de los que sabemos dibujar
+  const counts = key.split(',').map(Number).slice(0, SPECS.length);
   const items: { tier: number; seed: number }[] = [];
   counts.forEach((c, tier) => {
     for (let k = 0; k < c; k++) items.push({ tier, seed: tier * 7919 + k * 104729 + 17 });
@@ -306,8 +338,19 @@ function drawStructure(ctx: CanvasRenderingContext2D, st: Structure, groundY: nu
 
 // ---------- Componente ----------
 
-export function CityScene() {
+/** Ciudad de otro jugador: se dibuja con sus edificios y su era, sin recaudar al tocar. */
+export interface CityVisitView {
+  layout: string;
+  era: number;
+  buildings: number;
+}
+
+export function CityScene({ visit }: { visit?: CityVisitView }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const visitRef = useRef(visit);
+  useEffect(() => {
+    visitRef.current = visit;
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -324,7 +367,16 @@ export function CityScene() {
     let cacheAt = 0;
 
     const stars = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random() * 0.62, r: Math.random() * 1.3 + 0.3, tw: Math.random() * 6 }));
-    const clouds = Array.from({ length: 3 }, (_, i) => ({ x: Math.random(), y: 0.12 + i * 0.1, s: 0.7 + Math.random() * 0.6, v: 0.004 + Math.random() * 0.006 }));
+    // Hasta 7 nubes: con buen tiempo solo se dibujan las 3 primeras
+    const clouds = Array.from({ length: 7 }, (_, i) => ({ x: Math.random(), y: 0.08 + (i % 4) * 0.08, s: 0.7 + Math.random() * 0.6, v: 0.004 + Math.random() * 0.006 }));
+    const drops: Drop[] = Array.from({ length: 160 }, () => ({ x: Math.random(), y: Math.random(), v: 0.8 + Math.random() * 0.5, phase: Math.random() * 6 }));
+    const walkers: Walker[] = [];
+    const rockets: Rocket[] = [];
+    const sparks: Spark[] = [];
+    let flash = 0;
+    let weather: Weather = 'clear';
+    let season: Season = null;
+    let weatherAtMs = -Infinity;
     const far = Array.from({ length: 26 }, (_, i) => ({ x: i / 26 + Math.random() * 0.02, w: 0.03 + Math.random() * 0.05, h: 0.15 + Math.random() * 0.22 }));
     const coins: Coin[] = [];
     const texts: FloatText[] = [];
@@ -360,7 +412,7 @@ export function CityScene() {
       cacheAt = performance.now();
     }
 
-    function drawHall(t: number, night: number, boosted: boolean) {
+    function drawHall(t: number, night: number, boosted: boolean, era: number) {
       const gy = groundY();
       const k = scale * (1 + pulse * 0.07);
       const cx = W / 2;
@@ -402,7 +454,7 @@ export function CityScene() {
       ctx.fill();
       ctx.fillStyle = shade;
       ctx.fillRect(cx - 1 * k, gy - 106 * k, 2 * k, 14 * k);
-      const hue = eraHue(useGame.getState().s.era);
+      const hue = eraHue(era);
       ctx.fillStyle = `hsl(${hue} 85% 60%)`;
       const wave = Math.sin(t / 250) * 2 * k;
       ctx.beginPath();
@@ -410,6 +462,194 @@ export function CityScene() {
       ctx.lineTo(cx + 15 * k, gy - 102 * k + wave);
       ctx.lineTo(cx + 1 * k, gy - 97 * k);
       ctx.fill();
+    }
+
+    // El clima se recalcula cada pocos segundos (con la hora de confianza: es el mismo para todos)
+    function updateWeather(t: number) {
+      if (t - weatherAtMs < 5000) return;
+      weatherAtMs = t;
+      const ms = now();
+      weather = weatherAt(ms);
+      season = seasonAt(ms);
+    }
+
+    function drawFireworks(dt: number, launch: boolean) {
+      const gy = groundY();
+      if (launch && Math.random() < dt * 2.8) {
+        rockets.push({
+          x: W * (0.15 + Math.random() * 0.7),
+          y: gy,
+          vy: -(260 + Math.random() * 120) * scale,
+          top: H * (0.12 + Math.random() * 0.25),
+          hue: Math.floor(Math.random() * 360),
+        });
+      }
+      for (let i = rockets.length - 1; i >= 0; i--) {
+        const r = rockets[i];
+        r.y += r.vy * dt;
+        ctx.fillStyle = `hsl(${r.hue} 90% 75%)`;
+        ctx.fillRect(r.x - 1, r.y, 2 * scale, 5 * scale);
+        if (r.y <= r.top) {
+          for (let k = 0; k < 36; k++) {
+            const a = (k / 36) * Math.PI * 2;
+            const v = (60 + Math.random() * 70) * scale;
+            sparks.push({ x: r.x, y: r.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1 + Math.random() * 0.5, hue: r.hue + Math.random() * 40 });
+          }
+          rockets.splice(i, 1);
+        }
+      }
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const p = sparks[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          sparks.splice(i, 1);
+          continue;
+        }
+        p.vy += 90 * scale * dt;
+        p.vx *= 1 - dt * 0.8;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        ctx.globalAlpha = Math.min(1, p.life);
+        ctx.fillStyle = `hsl(${p.hue % 360} 95% 65%)`;
+        ctx.fillRect(p.x, p.y, 2.2 * scale, 2.2 * scale);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawChristmas(t: number, night: number) {
+      const gy = groundY();
+      // Guirnaldas de luces en los tejados de la fila de delante
+      ctx.globalAlpha = 0.55 + night * 0.45;
+      for (const st of structures) {
+        if (st.back) continue;
+        const y = gy - st.h - 1.5 * scale;
+        let i = 0;
+        for (let x = st.x + 3 * scale; x < st.x + st.w - 2 * scale; x += 7 * scale, i++) {
+          ctx.fillStyle = XMAS_LIGHTS[(i + Math.floor(t / 450)) % XMAS_LIGHTS.length];
+          ctx.fillRect(x, y, 2.2 * scale, 2.2 * scale);
+        }
+      }
+      ctx.globalAlpha = 1;
+      // Árbol junto al ayuntamiento
+      const tx = W / 2 - 64 * scale;
+      ctx.fillStyle = '#5a3a1e';
+      ctx.fillRect(tx - 2 * scale, gy - 8 * scale, 4 * scale, 8 * scale);
+      ctx.fillStyle = '#1f7a3a';
+      for (let k = 0; k < 3; k++) {
+        const w = (16 - k * 4) * scale;
+        const y0 = gy - (6 + k * 9) * scale;
+        ctx.beginPath();
+        ctx.moveTo(tx - w, y0);
+        ctx.lineTo(tx, y0 - 14 * scale);
+        ctx.lineTo(tx + w, y0);
+        ctx.fill();
+      }
+      for (let k = 0; k < 6; k++) {
+        ctx.fillStyle = XMAS_LIGHTS[(k + Math.floor(t / 600)) % XMAS_LIGHTS.length];
+        ctx.fillRect(tx + Math.sin(k * 2.1) * 9 * scale * (1 - k / 8), gy - (8 + k * 4) * scale, 2 * scale, 2 * scale);
+      }
+      ctx.fillStyle = '#ffd24a';
+      ctx.beginPath();
+      ctx.arc(tx, gy - 34 * scale, 2.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawHalloween(night: number) {
+      const gy = groundY();
+      for (const fx of [0.1, 0.32, 0.68, 0.9]) {
+        const x = fx * W;
+        const r = 4 * scale;
+        ctx.fillStyle = '#ff8a1e';
+        ctx.beginPath();
+        ctx.ellipse(x, gy - r, r * 1.2, r, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3a7a2a';
+        ctx.fillRect(x - 0.6 * scale, gy - r * 2 - 2 * scale, 1.4 * scale, 2.5 * scale);
+        if (night > 0.3) {
+          ctx.fillStyle = `rgba(255,230,120,${night})`;
+          ctx.fillRect(x - 2 * scale, gy - r - 1 * scale, 1.4 * scale, 1.4 * scale);
+          ctx.fillRect(x + 0.8 * scale, gy - r - 1 * scale, 1.4 * scale, 1.4 * scale);
+        }
+      }
+    }
+
+    /** Peatones por la acera; con lluvia llevan paraguas. */
+    function drawWalkers(dt: number, want: number, t: number) {
+      while (walkers.length < want) {
+        walkers.push({
+          x: Math.random() * W,
+          dir: Math.random() < 0.5 ? 1 : -1,
+          speed: (10 + Math.random() * 12) * scale,
+          hue: Math.floor(Math.random() * 360),
+          phase: Math.random() * 6,
+        });
+      }
+      if (walkers.length > want) walkers.length = want;
+      const gy = groundY();
+      const s = scale;
+      const umbrella = weather === 'rain' || weather === 'storm';
+      for (const w of walkers) {
+        w.x += w.dir * w.speed * dt;
+        if (w.x > W + 10) w.x = -10;
+        if (w.x < -10) w.x = W + 10;
+        const step = Math.sin(t / 140 + w.phase);
+        ctx.strokeStyle = '#1a1530';
+        ctx.lineWidth = 1.2 * s;
+        ctx.beginPath();
+        ctx.moveTo(w.x, gy - 4 * s);
+        ctx.lineTo(w.x + step * 1.8 * s, gy);
+        ctx.moveTo(w.x, gy - 4 * s);
+        ctx.lineTo(w.x - step * 1.8 * s, gy);
+        ctx.stroke();
+        ctx.fillStyle = `hsl(${w.hue} 55% 55%)`;
+        ctx.fillRect(w.x - 1.6 * s, gy - 9 * s, 3.2 * s, 5.2 * s);
+        ctx.fillStyle = '#f1c9a0';
+        ctx.beginPath();
+        ctx.arc(w.x, gy - 10.6 * s, 1.7 * s, 0, Math.PI * 2);
+        ctx.fill();
+        if (umbrella) {
+          ctx.fillStyle = `hsl(${(w.hue + 180) % 360} 70% 55%)`;
+          ctx.beginPath();
+          ctx.arc(w.x, gy - 13 * s, 5 * s, Math.PI, 0);
+          ctx.fill();
+          ctx.fillRect(w.x - 0.4 * s, gy - 13 * s, 0.8 * s, 4 * s);
+        }
+      }
+    }
+
+    function drawPrecipitation(dt: number) {
+      if (weather === 'rain' || weather === 'storm') {
+        const n = weather === 'storm' ? drops.length : 90;
+        ctx.strokeStyle = 'rgba(190,210,255,.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < n; i++) {
+          const d = drops[i];
+          d.y += d.v * dt * 1.6;
+          d.x -= dt * 0.08;
+          if (d.y > 1) {
+            d.y -= 1.05;
+            d.x = Math.random();
+          }
+          if (d.x < 0) d.x += 1;
+          const x = d.x * W;
+          const y = d.y * H;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - 2 * scale, y + 9 * scale);
+        }
+        ctx.stroke();
+      } else if (weather === 'snow') {
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        for (let i = 0; i < 80; i++) {
+          const d = drops[i];
+          d.y += d.v * dt * 0.12;
+          if (d.y > 1) {
+            d.y -= 1.05;
+            d.x = Math.random();
+          }
+          ctx.fillRect((d.x + Math.sin(d.y * 12 + d.phase) * 0.01) * W, d.y * H, 2 * scale, 2 * scale);
+        }
+      }
     }
 
     function spawnCoins(x: number, y: number, n: number, gold: boolean) {
@@ -424,6 +664,13 @@ export function CityScene() {
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
+      if (visitRef.current) {
+        // De visita no se recauda: solo se saluda
+        texts.push({ x, y: y - 10, text: ['👋', '❤️', '✨', '🎉'][Math.floor(Math.random() * 4)], life: 1, crit: false });
+        if (texts.length > 16) texts.shift();
+        vibrate(5);
+        return;
+      }
       const { amount, crit } = useGame.getState().tap();
       spawnCoins(x, y, crit ? 14 : 4, crit);
       texts.push({ x, y: y - 10, text: `${crit ? '¡CRÍTICO! ' : '+'}${fmt(amount)}`, life: 1, crit });
@@ -441,13 +688,18 @@ export function CityScene() {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
       const { s } = useGame.getState();
+      const v = visitRef.current;
+      const era = v ? v.era : s.era;
       const date = new Date();
       const hour = date.getHours() + date.getMinutes() / 60;
       const night = nightAt(hour);
-      const boosted = isBoosted(s, s.lastTick);
-      const festival = isTapBoosted(s, s.lastTick);
+      const boosted = !v && isBoosted(s, s.lastTick);
+      const festival = !v && isTapBoosted(s, s.lastTick);
+      updateWeather(t);
+      const wet = weather === 'rain' || weather === 'storm';
+      const overcast = wet || weather === 'snow';
 
-      const k = layoutKey(s.buildings);
+      const k = v ? v.layout : cityLayout(s.buildings);
       if (k !== key) {
         key = k;
         structures = buildLayout(k, W, scale);
@@ -457,7 +709,7 @@ export function CityScene() {
       }
 
       // Tráfico según el tamaño de la ciudad
-      const total = BUILDINGS.reduce((n, b) => n + (s.buildings[b.id] ?? 0), 0);
+      const total = v ? v.buildings : BUILDINGS.reduce((n, b) => n + (s.buildings[b.id] ?? 0), 0);
       const wantCars = Math.min(8, Math.floor(Math.log2(total + 1)));
       while (cars.length < wantCars) {
         const dir = Math.random() < 0.5 ? 1 : -1;
@@ -477,22 +729,36 @@ export function CityScene() {
       sky.addColorStop(1, bottom);
       ctx.fillStyle = sky;
       ctx.fillRect(-10, -10, W + 20, H + 20);
-      ctx.fillStyle = `hsla(${eraHue(s.era)} 70% 50% / .12)`;
+      ctx.fillStyle = `hsla(${eraHue(era)} 70% 50% / .12)`;
       ctx.fillRect(-10, -10, W + 20, H + 20);
+      // Cielo cubierto según el clima
+      const tint = weather === 'storm' ? 0.42 : weather === 'rain' ? 0.3 : weather === 'cloudy' ? 0.16 : weather === 'snow' ? 0.14 : 0;
+      if (tint) {
+        ctx.fillStyle = weather === 'snow' ? `rgba(205,215,240,${tint})` : `rgba(55,58,80,${tint})`;
+        ctx.fillRect(-10, -10, W + 20, H + 20);
+      }
+      if (season === 'halloween') {
+        ctx.fillStyle = 'rgba(120,40,160,.1)';
+        ctx.fillRect(-10, -10, W + 20, H + 20);
+      }
 
-      // Estrellas
-      if (night > 0.05) {
+      // Estrellas (las tapan las nubes)
+      const starsVisible = weather === 'clear' ? 1 : weather === 'cloudy' ? 0.4 : 0;
+      if (night > 0.05 && starsVisible > 0) {
         for (const st of stars) {
-          ctx.globalAlpha = night * (0.5 + 0.5 * Math.sin(t / 700 + st.tw));
+          ctx.globalAlpha = night * starsVisible * (0.5 + 0.5 * Math.sin(t / 700 + st.tw));
           ctx.fillStyle = '#fff';
           ctx.fillRect(st.x * W, st.y * H, st.r, st.r);
         }
         ctx.globalAlpha = 1;
       }
 
-      // Sol o luna
+      // Sol o luna (tapados con lluvia o nieve, a medias si está nublado)
       const dayPos = (hour - 6) / 14;
-      if (dayPos > 0 && dayPos < 1 && night < 0.9) {
+      ctx.globalAlpha = overcast ? 0 : weather === 'cloudy' ? 0.5 : 1;
+      if (overcast) {
+        // nada que dibujar
+      } else if (dayPos > 0 && dayPos < 1 && night < 0.9) {
         const sx = W * (0.1 + dayPos * 0.8);
         const sy = H * (0.45 - Math.sin(dayPos * Math.PI) * 0.32);
         const g = ctx.createRadialGradient(sx, sy, 2, sx, sy, 40 * scale);
@@ -511,6 +777,7 @@ export function CityScene() {
         ctx.arc(W * 0.82 + 5 * scale, H * 0.16 - 3 * scale, 11 * scale, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
 
       // Aurora cuando hay boost
       if (boosted) {
@@ -525,11 +792,16 @@ export function CityScene() {
         }
       }
 
-      // Nubes
-      for (const c of clouds) {
-        c.x += c.v * dt;
+      // Nubes: más y más oscuras con mal tiempo
+      const cloudCount = weather === 'clear' ? 3 : weather === 'cloudy' ? 5 : clouds.length;
+      for (let i = 0; i < clouds.length; i++) {
+        const c = clouds[i];
+        c.x += c.v * dt * (weather === 'storm' ? 3 : 1);
         if (c.x > 1.2) c.x = -0.2;
-        ctx.fillStyle = `rgba(255,255,255,${0.1 + (1 - night) * 0.35})`;
+        if (i >= cloudCount) continue;
+        ctx.fillStyle = overcast
+          ? `rgba(${weather === 'snow' ? '225,230,245' : '120,124,150'},${0.45 + (1 - night) * 0.25})`
+          : `rgba(255,255,255,${0.1 + (1 - night) * 0.35})`;
         const cx = c.x * W;
         const cy = c.y * H;
         const r = 16 * scale * c.s;
@@ -545,9 +817,13 @@ export function CityScene() {
       ctx.fillStyle = `rgba(20,14,60,${0.35 + night * 0.25})`;
       for (const f of far) ctx.fillRect(f.x * W, gy - f.h * H, f.w * W, f.h * H);
 
+      // Fuegos artificiales: al celebrar algo y la noche de Año Nuevo (detrás de los edificios)
+      drawFireworks(dt, celebrating(t) || (season === 'newyear' && night > 0.4));
+
       // Edificios (cache) y ayuntamiento
       ctx.drawImage(cache, 0, 0, W, H);
-      drawHall(t, night, boosted);
+      drawHall(t, night, boosted, era);
+      if (season === 'christmas' || season === 'newyear') drawChristmas(t, night);
 
       // Luces de las antenas
       if (Math.floor(t / 700) % 2 === 0) {
@@ -560,8 +836,17 @@ export function CityScene() {
         }
       }
 
+      // Peatones: más cuanto más grande es la ciudad; pocos de noche y nadie en plena tormenta
+      const people = Math.min(10, Math.floor(Math.log2(total + 1) * 1.2));
+      drawWalkers(dt, weather === 'storm' ? 1 : Math.round(people * (night > 0.7 ? 0.4 : 1)), t);
+      if (season === 'halloween') drawHalloween(night);
+      if (weather === 'snow') {
+        ctx.fillStyle = 'rgba(245,248,255,.9)';
+        ctx.fillRect(-10, gy - 1.5 * scale, W + 20, 2 * scale);
+      }
+
       // Calle
-      ctx.fillStyle = '#1b1838';
+      ctx.fillStyle = wet ? '#232046' : '#1b1838';
       ctx.fillRect(-10, gy, W + 20, H - gy + 10);
       ctx.fillStyle = 'rgba(255,255,255,.25)';
       for (let x = ((t / 40) % 24) - 24; x < W; x += 24) ctx.fillRect(x, gy + 14 * scale, 12 * scale, 1.5 * scale);
@@ -579,6 +864,15 @@ export function CityScene() {
           const hx = car.dir > 0 ? car.x + 14 * scale : car.x - 12 * scale;
           ctx.fillRect(hx, cy + 1 * scale, 12 * scale, 3 * scale);
         }
+      }
+
+      // Lluvia o nieve por delante de todo, y relámpagos en las tormentas
+      drawPrecipitation(dt);
+      if (weather === 'storm' && Math.random() < dt / 6) flash = 1;
+      flash = Math.max(0, flash - dt * 3);
+      if (flash > 0) {
+        ctx.fillStyle = `rgba(235,240,255,${flash * 0.35})`;
+        ctx.fillRect(-10, -10, W + 20, H + 20);
       }
 
       // Confeti durante el festival
@@ -633,7 +927,7 @@ export function CityScene() {
       }
       ctx.globalAlpha = 1;
 
-      if (s.taps < 15) {
+      if (!v && s.taps < 15) {
         ctx.font = `700 ${15 * Math.max(scale, 0.9)}px 'Baloo 2', system-ui, sans-serif`;
         ctx.fillStyle = `rgba(255,255,255,${0.6 + Math.sin(t / 250) * 0.3})`;
         ctx.fillText('👆 ¡Toca la ciudad para recaudar!', W / 2, gy - 125 * scale);
@@ -651,5 +945,11 @@ export function CityScene() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="city-scene" aria-label="Tu ciudad: toca para recaudar monedas" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="city-scene"
+      aria-label={visit ? 'Ciudad de otro jugador' : 'Tu ciudad: toca para recaudar monedas'}
+    />
+  );
 }

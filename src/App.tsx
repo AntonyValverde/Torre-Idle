@@ -5,9 +5,13 @@ import { eraHue } from './game/economy';
 import { newState } from './game/state';
 import { claimTab } from './game/tabLock';
 import { useGame } from './game/store';
+import { cityFromUrl } from './game/cities';
 import { DailyScreen } from './minigames/daily/DailyScreen';
+import { FireScreen } from './minigames/fire/FireScreen';
 import { MemoryScreen } from './minigames/memory/MemoryScreen';
 import { MergeScreen } from './minigames/merge/MergeScreen';
+import { MetroScreen } from './minigames/metro/MetroScreen';
+import { ParksScreen } from './minigames/parks/ParksScreen';
 import { RoadsScreen } from './minigames/roads/RoadsScreen';
 import { StackScreen } from './minigames/stack/StackScreen';
 import { StockScreen } from './minigames/stocks/StockScreen';
@@ -16,6 +20,7 @@ import { TrafficScreen } from './minigames/traffic/TrafficScreen';
 import { WheelScreen } from './minigames/wheel/WheelScreen';
 import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
+import { CityVisit } from './ui/CityVisit';
 import { useDecreeScheduler } from './ui/DecreeCard';
 import { GamesTab, TICKET_GAMES, type GameId } from './ui/GamesTab';
 import { GoldenBalloon } from './ui/GoldenBalloon';
@@ -37,8 +42,10 @@ export default function App() {
   const applyUpdate = useUpdate((u) => u.apply);
   const [tab, setTab] = useState<TabId>('city');
   const [game, setGame] = useState<GameId | null>(null);
-  const [rankingBoard, setRankingBoard] = useState<BoardTab>('daily');
+  const [rankingBoard, setRankingBoard] = useState<BoardTab>('league');
   const [admin, setAdmin] = useState(false);
+  // Ciudad que se está visitando (desde el ranking, el perfil o un enlace ?ciudad=…)
+  const [visit, setVisit] = useState<string | null>(() => cityFromUrl());
   const tabRef = useRef(tab);
   useEffect(() => {
     tabRef.current = tab;
@@ -102,6 +109,12 @@ export default function App() {
     setTab('ranking');
   };
 
+  const closeVisit = () => {
+    setVisit(null);
+    // Quita ?ciudad=… de la barra de direcciones para que al recargar no vuelva a abrirse
+    if (cityFromUrl()) history.replaceState(null, '', location.pathname);
+  };
+
   if (otherTab) {
     return (
       <div className="splash">
@@ -134,8 +147,8 @@ export default function App() {
         {tab === 'city' && <CityTab />}
         {tab === 'upgrades' && <UpgradesTab />}
         {tab === 'games' && <GamesTab onPlay={play} />}
-        {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} />}
-        {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} />}
+        {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
+        {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} onVisit={setVisit} />}
       </main>
       <BottomNav tab={tab} onTab={setTab} />
 
@@ -149,12 +162,16 @@ export default function App() {
       {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
       {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
       {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
+      {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
+      {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
+      {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
+      {visit && !game && !admin && <CityVisit uid={visit} onClose={closeVisit} />}
       {admin && (
         <Suspense fallback={<div className="game-screen splash"><div className="spinner" /></div>}>
           <AdminPanel onClose={() => setAdmin(false)} />
         </Suspense>
       )}
-      {!game && !admin && <OfflineModal />}
+      {!game && !admin && !visit && <OfflineModal />}
       {!game && updateReady && (
         <button className="update-banner" onClick={applyUpdate}>
           🔄 Nueva versión disponible · <b>Actualizar</b>

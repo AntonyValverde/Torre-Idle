@@ -75,6 +75,10 @@ await ok('semáforo', () => setDoc(doc(bob, 'leaderboards/traffic/scores/bob'), 
 await no('semáforo imposible', () => setDoc(doc(alice, 'leaderboards/traffic/scores/alice'), { name: 'Alice', score: 5001, updatedAt: serverTimestamp() }));
 await ok('memoria', () => setDoc(doc(bob, 'leaderboards/memory/scores/bob'), { name: 'Bob', score: 12, updatedAt: serverTimestamp() }));
 await no('memoria imposible', () => setDoc(doc(alice, 'leaderboards/memory/scores/alice'), { name: 'Alice', score: 501, updatedAt: serverTimestamp() }));
+await ok('bomberos', () => setDoc(doc(bob, 'leaderboards/fire/scores/bob'), { name: 'Bob', score: 140, updatedAt: serverTimestamp() }));
+await no('bomberos imposible', () => setDoc(doc(alice, 'leaderboards/fire/scores/alice'), { name: 'Alice', score: 5001, updatedAt: serverTimestamp() }));
+await ok('metro', () => setDoc(doc(bob, 'leaderboards/metro/scores/bob'), { name: 'Bob', score: 75, updatedAt: serverTimestamp() }));
+await no('metro decimal', () => setDoc(doc(alice, 'leaderboards/metro/scores/alice'), { name: 'Alice', score: 7.5, updatedAt: serverTimestamp() }));
 await new Promise((r) => setTimeout(r, 5500));
 await ok('récord mayor tras 5 s', () => setDoc(la, { name: 'Alice', score: 20, updatedAt: serverTimestamp() }));
 
@@ -98,6 +102,51 @@ await ok('calles: resultado de hoy', () => setDoc(ra, entry(20, 9000)));
 await no('calles: reescribir resultado', () => setDoc(ra, entry(10, 9000)));
 await ok('calles: lectura pública', () => getDoc(doc(anon, `roads/${today}/scores/alice`)));
 await ok('calles: renombrar', () => updateDoc(ra, { name: 'Alicia' }));
+
+console.log('parks (Plan verde)');
+const pa = doc(alice, `parks/${today}/scores/alice`);
+await no('plan verde: día futuro', () => setDoc(doc(alice, `parks/${future}/scores/alice`), entry(30, 12000)));
+await no('plan verde: demasiado rápido', () => setDoc(pa, entry(30, 3000)));
+await ok('plan verde: resultado de hoy', () => setDoc(pa, entry(30, 12000)));
+await no('plan verde: reescribir resultado', () => setDoc(pa, entry(25, 12000)));
+await ok('plan verde: lectura pública', () => getDoc(doc(anon, `parks/${today}/scores/alice`)));
+await no('plan verde: un jugador no borra', () => deleteDoc(pa));
+
+console.log('cities (ciudades públicas)');
+const ca = doc(alice, 'cities/alice');
+const city = (extra = {}) => ({ name: 'Alice', era: 2, layout: '4,4,3,2,1,0,0,0,0,0,0,0,0,0,0,0', buildings: 120, earned: 1.5e9, stars: 3, updatedAt: serverTimestamp(), ...extra });
+await ok('ciudad: publicar la mía', () => setDoc(ca, city()));
+await ok('ciudad: cualquiera la visita', () => getDoc(doc(anon, 'cities/alice')));
+await no('ciudad: actualizar antes de 30 s', () => setDoc(ca, city({ buildings: 130 })));
+await no('ciudad: publicar la de otro', () => setDoc(doc(bob, 'cities/alice'), city({ name: 'Bob' })));
+await no('ciudad: plano mal formado', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', layout: '<img src=x>' })));
+await no('ciudad: tamaño de edificio imposible', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', layout: '9,9,9' })));
+await no('ciudad: campo extra', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', admin: true })));
+await no('ciudad: falta un campo', () => {
+  const { stars, ...rest } = city({ name: 'Bob' });
+  return setDoc(doc(bob, 'cities/bob'), rest);
+});
+await no('ciudad: era decimal', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', era: 1.5 })));
+await no('ciudad: nombre con HTML', () => setDoc(doc(bob, 'cities/bob'), city({ name: '<b>x</b>' })));
+await no('ciudad: un jugador no borra', () => deleteDoc(ca));
+
+console.log('league');
+const mondayOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+const thisMonday = key(mondayOf(new Date()));
+const lastMonday = key(new Date(mondayOf(new Date()).getTime() - 7 * 86400000));
+const notMonday = key(new Date(mondayOf(new Date()).getTime() + 2 * 86400000));
+const lg = (score) => ({ name: 'Alice', score, updatedAt: serverTimestamp() });
+const lgA = doc(alice, `league/${thisMonday}/scores/alice`);
+await ok('liga: puntos de esta semana', () => setDoc(lgA, lg(30)));
+await ok('liga: lectura pública', () => getDoc(doc(anon, `league/${thisMonday}/scores/alice`)));
+await no('liga: bajar puntos', () => setDoc(lgA, lg(20)));
+await no('liga: subir antes de 5 s', () => setDoc(lgA, lg(40)));
+await no('liga: semana pasada', () => setDoc(doc(alice, `league/${lastMonday}/scores/alice`), lg(30)));
+await no('liga: fecha que no es lunes', () => setDoc(doc(alice, `league/${notMonday}/scores/alice`), lg(30)));
+await no('liga: más del máximo', () => setDoc(doc(bob, `league/${thisMonday}/scores/bob`), { ...lg(1001), name: 'Bob' }));
+await no('liga: puntos de otro', () => setDoc(doc(bob, `league/${thisMonday}/scores/alice`), lg(50)));
+await ok('liga: renombrar', () => updateDoc(lgA, { name: 'Alicia' }));
+await no('liga: un jugador no borra', () => deleteDoc(lgA));
 
 console.log('suggestions');
 const suggestion = (db, uid, extra = {}) => {
@@ -152,6 +201,9 @@ await no('el admin no modifica partidas', () => setDoc(doc(admin, 'users/alice')
 await no('un jugador no borra su récord', () => deleteDoc(doc(alice, 'leaderboards/stack/scores/alice')));
 await ok('el admin quita a alguien del ranking', () => deleteDoc(doc(admin, 'leaderboards/stack/scores/alice')));
 await ok('el admin quita un resultado diario', () => deleteDoc(doc(admin, `roads/${today}/scores/alice`)));
+await ok('el admin quita a alguien de la liga', () => deleteDoc(doc(admin, `league/${thisMonday}/scores/alice`)));
+await ok('el admin quita un resultado del plan verde', () => deleteDoc(doc(admin, `parks/${today}/scores/alice`)));
+await ok('el admin borra una ciudad pública', () => deleteDoc(doc(admin, 'cities/alice')));
 
 console.log('otros');
 await no('colección inventada', () => setDoc(doc(alice, 'admin/config'), { x: 1 }));

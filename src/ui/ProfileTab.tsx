@@ -6,10 +6,11 @@ import { fmt } from '../game/format';
 import { NAME_MAX } from '../game/names';
 import { useGame } from '../game/store';
 import { Achievements } from './Achievements';
+import { shareCity } from './CityVisit';
 import { isSoundOn, setSoundOn } from './haptics';
 import { SuggestionBox } from './SuggestionBox';
 
-export function ProfileTab({ onAdmin }: { onAdmin: () => void }) {
+export function ProfileTab({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: string) => void }) {
   const s = useGame((st) => st.s);
   const [section, setSection] = useState<'ach' | 'profile'>('ach');
   const claimable = claimableAchievements(s);
@@ -24,12 +25,12 @@ export function ProfileTab({ onAdmin }: { onAdmin: () => void }) {
           👤 Perfil
         </button>
       </div>
-      {section === 'ach' ? <Achievements /> : <Profile onAdmin={onAdmin} />}
+      {section === 'ach' ? <Achievements /> : <Profile onAdmin={onAdmin} onVisit={onVisit} />}
     </div>
   );
 }
 
-function Profile({ onAdmin }: { onAdmin: () => void }) {
+function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: string) => void }) {
   const s = useGame((st) => st.s);
   const setName = useGame((st) => st.setName);
   const toast = useGame((st) => st.toast);
@@ -115,6 +116,21 @@ function Profile({ onAdmin }: { onAdmin: () => void }) {
         )}
       </div>
 
+      {cloudEnabled && account && (
+        <div className="card">
+          <b>🏙️ Tu ciudad</b>
+          <p className="muted">Los demás pueden visitarla desde el ranking o con tu enlace.</p>
+          <div className="btn-row">
+            <button className="btn" onClick={() => onVisit(account.uid)}>
+              👀 Ver cómo la ven
+            </button>
+            <button className="btn primary" onClick={() => shareCity(account.uid, s.name)}>
+              🔗 Compartir
+            </button>
+          </div>
+        </div>
+      )}
+
       {admin && googleUid && (
         <button className="game-card admin-card" onClick={onAdmin}>
           <span className="game-emoji">🛠️</span>
@@ -194,6 +210,18 @@ function Profile({ onAdmin }: { onAdmin: () => void }) {
         <div>
           <small>Racha de calles</small>
           <b>🔥 {s.roads.bestStreak}</b>
+        </div>
+        <div>
+          <small>Racha plan verde</small>
+          <b>🔥 {s.parks.bestStreak}</b>
+        </div>
+        <div>
+          <small>Mejor bombero</small>
+          <b>{s.fireBest}</b>
+        </div>
+        <div>
+          <small>Mejor metro</small>
+          <b>{s.metroBest}</b>
         </div>
       </div>
     </>

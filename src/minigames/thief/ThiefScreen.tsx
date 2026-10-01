@@ -3,6 +3,7 @@ import { track } from '../../firebase';
 import { submitScore } from '../../game/cloud';
 import { fmt } from '../../game/format';
 import { useGame, type ThiefReward } from '../../game/store';
+import { celebrate } from '../../ui/celebrate';
 import { sfx, tone, vibrate } from '../../ui/haptics';
 import { GameScreen, Modal } from '../../ui/Modal';
 
@@ -208,6 +209,7 @@ export function ThiefScreen({ onClose }: { onClose: () => void }) {
     if (reward.newBest && score > 0) submitScore('thief', score, store.s.name).catch(() => {});
     track('minigame_end', { game: 'thief', score });
     sfx(reward.newBest ? 'win' : 'buy');
+    if (reward.newBest) celebrate(4);
     setResult({ score, reward });
   };
 

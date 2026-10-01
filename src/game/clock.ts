@@ -67,6 +67,19 @@ export function isNewDay(last: string | null, today: string): boolean {
   return !last || today > last;
 }
 
+/** La semana se identifica por su lunes (AAAA-MM-DD), en hora local. */
+export function weekKey(ms: number = now()): string {
+  const d = new Date(ms);
+  const sinceMonday = (d.getDay() + 6) % 7;
+  return dateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - sinceMonday, 12).getTime());
+}
+
+export function msUntilNextWeek(ms: number = now()): number {
+  const d = new Date(ms);
+  const sinceMonday = (d.getDay() + 6) % 7;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - sinceMonday + 7).getTime() - ms;
+}
+
 export function msUntilTomorrow(ms: number = now()): number {
   const d = new Date(ms);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - ms;

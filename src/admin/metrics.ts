@@ -30,11 +30,14 @@ export interface GameAdoption {
 export const GAMES: GameAdoption[] = [
   { id: 'daily', label: '🌃 Apagón', played: (s) => s.daily.last !== null, best: (s) => s.daily.bestStreak },
   { id: 'roads', label: '🛣️ Calles', played: (s) => s.roads.last !== null, best: (s) => s.roads.bestStreak },
+  { id: 'parks', label: '🌳 Plan verde', played: (s) => s.parks.last !== null, best: (s) => s.parks.bestStreak },
   { id: 'wheel', label: '🎡 Rueda', played: (s) => s.wheelSpins > 0, best: (s) => s.wheelSpins },
   { id: 'thief', label: '🦹 Ladrón', played: (s) => s.thiefBest > 0, best: (s) => s.thiefBest },
   { id: 'stack', label: '🏗️ Stack', played: (s) => s.stackBest > 0, best: (s) => s.stackBest },
   { id: 'traffic', label: '🚦 Semáforo', played: (s) => s.trafficBest > 0, best: (s) => s.trafficBest },
   { id: 'memory', label: '🧠 Memoria', played: (s) => s.memoryBest > 0, best: (s) => s.memoryBest },
+  { id: 'fire', label: '🚒 Bomberos', played: (s) => s.fireBest > 0, best: (s) => s.fireBest },
+  { id: 'metro', label: '🚇 Metro', played: (s) => s.metroBest > 0, best: (s) => s.metroBest },
   { id: 'merge', label: '🧱 Fusión', played: (s) => s.mergeBest > 0, best: (s) => s.mergeBest },
   { id: 'stocks', label: '📈 Bolsa', played: (s) => s.stockProfit !== 0 || Object.keys(s.stocks).length > 0 },
 ];
@@ -64,6 +67,10 @@ export interface Summary {
   gemsInCirculation: number;
   avgAchievements: number;
   avgBuildings: number;
+  /** Misiones completadas por todos los jugadores. */
+  missionsDone: number;
+  /** Jugadores que hoy abrieron el cofre de las tres misiones diarias. */
+  chestsToday: number;
   signups: Bucket[];
   lastSeen: Bucket[];
   eras: Bucket[];
@@ -114,6 +121,8 @@ export function summarize(players: Player[], nowMs: number): Summary {
     gemsInCirculation: players.reduce((n, p) => n + p.s.gems, 0),
     avgAchievements: total ? players.reduce((n, p) => n + totalAchievements(p.s), 0) / total : 0,
     avgBuildings: total ? players.reduce((n, p) => n + totalBuildings(p.s), 0) / total : 0,
+    missionsDone: players.reduce((n, p) => n + p.s.missionsDone, 0),
+    chestsToday: players.filter((p) => p.s.missions.day === dateKey(nowMs) && p.s.missions.chest).length,
     signups: days.map((d) => ({ label: d, value: byDay.get(d)! })),
     lastSeen,
     eras,

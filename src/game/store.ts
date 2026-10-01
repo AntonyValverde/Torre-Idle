@@ -34,6 +34,20 @@ import { DECREE_BY_ID, pickDecrees, type DecreeId } from './events';
 import { fmt } from './format';
 import { isNameAllowed, sanitizeName } from './names';
 import { memoryTickets } from '../minigames/memory/logic';
+import {
+  CHEST_REWARD,
+  DAILY_REWARD,
+  DIVISIONS,
+  PUZZLE_POINTS,
+  WEEKLY_REWARD,
+  addPoints,
+  bump,
+  chestReady,
+  divisionOf,
+  isDone,
+  syncPeriods,
+  type Division,
+} from './missions';
 import { newState, type GameState } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import { WHEEL, pickSegment } from './wheel';
@@ -108,8 +122,16 @@ interface GameStore {
   rewardMerge(score: number, maxTile: number): MergeReward;
   completeDaily(date: string, moves: number, par: number): DailyReward | null;
   completeRoads(date: string, moves: number, par: number): DailyReward | null;
+  completeParks(date: string, moves: number, par: number): DailyReward | null;
   rewardTraffic(score: number): StackReward;
   rewardMemory(rounds: number): MemoryReward;
+  rewardFire(score: number): ThiefReward;
+  rewardMetro(score: number): StackReward;
+  /** Reclama una misión completada; devuelve el texto del premio o null. */
+  claimMission(kind: 'daily' | 'weekly', index: number): string | null;
+  claimChest(): string | null;
+  /** Cobra el premio de la liga de la semana anterior. */
+  claimLeague(): { division: Division; points: number } | null;
   rewardGolden(): string;
   offerDecree(): void;
   chooseDecree(id: DecreeId): string;
@@ -148,18 +170,19 @@ function addCoins(s: GameState, amount: number): GameState {
   };
 }
 
-/** Completa un reto diario (Apagón o Calles): un premio por día, con racha y gemas extra dentro del par. */
-function finishDaily(s: GameState, key: 'daily' | 'roads', date: string, moves: number, par: number) {
+/** Completa un reto diario (Apagón, Calles o Plan verde): un premio por día, con racha y gemas extra dentro del par. */
+function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: string, moves: number, par: number) {
   const rec = s[key];
   if (!isNewDay(rec.last, date)) return null;
   const streak = rec.last === prevDateKey(date) ? rec.streak + 1 : 1;
   const gems = 3 + Math.min(streak, 7) + (moves <= par ? 2 : 0);
   const coins = Math.round(Math.max(100, productionPerSec(s, now(), false) * 120));
-  const next: GameState = {
+  const done: GameState = {
     ...addCoins(s, coins),
     gems: s.gems + gems,
     [key]: { last: date, streak, bestStreak: Math.max(rec.bestStreak, streak) },
   };
+  const next = addPoints(bump(bump(done, key), 'puzzle'), PUZZLE_POINTS);
   return { next, reward: { coins, gems, streak } };
 }
 
@@ -175,7 +198,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const report = offlineGain(state, (t - state.lastTick) / 1000);
     // Si la partida viene "del futuro" (reloj adelantado), no se retrocede: se espera a que llegue esa hora.
     const lastTick = Math.max(state.lastTick, t);
-    let s: GameState = { ...state, lastTick, ...regenTickets(state, lastTick) };
+    let s: GameState = syncPeriods({ ...state, lastTick, ...regenTickets(state, lastTick) }, lastTick);
     const showReport = report.seconds >= 60 && report.earned > 0;
     // Ausencias de menos de un minuto: se cobran sin ventana
     if (!showReport && report.earned > 0) s = addCoins(s, report.earned);
@@ -197,7 +220,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const seconds = Math.min(offlineCapSeconds(s), prev.seconds + r.seconds);
       const added = Math.max(0, seconds - prev.seconds);
       const earned = r.seconds > 0 ? r.earned * (added / r.seconds) : 0;
-      const base = { ...s, boosts, lastTick: t, ...regenTickets(s, t) };
+      const base = syncPeriods({ ...s, boosts, lastTick: t, ...regenTickets(s, t) }, t);
       if (!offline && seconds < 60) {
         // Ausencias cortas: se cobran directamente, sin ventana
         set({ s: addCoins(base, earned) });
@@ -208,14 +231,14 @@ export const useGame = create<GameStore>((set, get) => ({
     }
     const auto = autoTapsPerSec(s);
     const gain = productionPerSec(s, t) * dt + (auto > 0 ? tapValue(s, t) * auto * dt : 0);
-    set({ s: { ...addCoins(s, gain), boosts, lastTick: t, ...regenTickets(s, t) } });
+    set({ s: syncPeriods({ ...addCoins(s, gain), boosts, lastTick: t, ...regenTickets(s, t) }, t) });
   },
 
   tap() {
     const { s } = get();
     const crit = Math.random() < critChance(s);
     const amount = tapValue(s, now()) * (crit ? 10 : 1);
-    set({ s: { ...addCoins(s, amount), taps: s.taps + 1 } });
+    set({ s: bump({ ...addCoins(s, amount), taps: s.taps + 1 }, 'tap') });
     return { amount, crit };
   },
 
@@ -231,7 +254,7 @@ export const useGame = create<GameStore>((set, get) => ({
     // "Máx" usa logaritmos: por redondeo puede pasarse por una unidad
     while (amount < 0 && n > 0 && cost > s.coins) cost = buildingCost(def, owned, --n, discount);
     if (n <= 0 || cost > s.coins) return false;
-    set({ s: { ...s, coins: s.coins - cost, buildings: { ...s.buildings, [id]: owned + n } } });
+    set({ s: bump({ ...s, coins: s.coins - cost, buildings: { ...s.buildings, [id]: owned + n } }, 'build', n) });
     return true;
   },
 
@@ -239,7 +262,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const u = UPGRADE_BY_ID.get(id);
     if (!u || s.upgrades.includes(id) || !u.unlocked(s) || s.coins < u.cost) return;
-    set({ s: { ...s, coins: s.coins - u.cost, upgrades: [...s.upgrades, id] } });
+    set({ s: bump({ ...s, coins: s.coins - u.cost, upgrades: [...s.upgrades, id] }, 'upgrade') });
   },
 
   buyGemItem(id) {
@@ -288,7 +311,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const seconds = Math.min(900, score * 15);
     let next = { ...addCoins(s, coins), stackBest: Math.max(s.stackBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'stack', mult, seconds) };
-    set({ s: next });
+    set({ s: bump(bump(next, 'arcade'), 'stack', score) });
     return { coins, mult, seconds, newBest: score > s.stackBest };
   },
 
@@ -299,15 +322,14 @@ export const useGame = create<GameStore>((set, get) => ({
     const gems =
       maxTile >= 4096 ? 25 : maxTile >= 2048 ? 15 : maxTile >= 1024 ? 8 : maxTile >= 512 ? 4 : maxTile >= 256 ? 2 : maxTile >= 128 ? 1 : 0;
     const newRare = RARE.filter((r) => maxTile >= r.tile && !s.rare.includes(r.id));
-    set({
-      s: {
-        ...addCoins(s, coins),
-        gems: s.gems + gems,
-        rare: [...s.rare, ...newRare.map((r) => r.id)],
-        mergeBest: Math.max(s.mergeBest, score),
-        mergeBestTile: Math.max(s.mergeBestTile, maxTile),
-      },
-    });
+    const next: GameState = {
+      ...addCoins(s, coins),
+      gems: s.gems + gems,
+      rare: [...s.rare, ...newRare.map((r) => r.id)],
+      mergeBest: Math.max(s.mergeBest, score),
+      mergeBestTile: Math.max(s.mergeBestTile, maxTile),
+    };
+    set({ s: bump(bump(next, 'arcade'), 'merge', maxTile) });
     return { coins, gems, newRare, newBest: score > s.mergeBest };
   },
 
@@ -325,6 +347,36 @@ export const useGame = create<GameStore>((set, get) => ({
     return r.reward;
   },
 
+  completeParks(date, moves, par) {
+    const r = finishDaily(get().s, 'parks', date, moves, par);
+    if (!r) return null;
+    set({ s: r.next });
+    return r.reward;
+  },
+
+  rewardFire(score) {
+    const { s } = get();
+    const pps = productionPerSec(s, now(), false);
+    const coins = Math.round(score * Math.max(15, pps * 4));
+    const gems = score >= 400 ? 6 : score >= 250 ? 4 : score >= 120 ? 2 : score >= 60 ? 1 : 0;
+    set({ s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score) });
+    return { coins, gems, newBest: score > s.fireBest };
+  },
+
+  rewardMetro(score) {
+    const { s } = get();
+    const t = now();
+    const pps = productionPerSec(s, t, false);
+    const coins = Math.round(score * Math.max(25, pps * 8));
+    const mult = score >= 150 ? 4 : score >= 100 ? 3 : score >= 50 ? 2 : score >= 20 ? 1.5 : 1;
+    const seconds = Math.min(900, score * 12);
+    // Fuente propia ('metro'): se multiplica con los boosts de Stack y Semáforo
+    let next = { ...addCoins(s, coins), metroBest: Math.max(s.metroBest, score) };
+    if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'metro', mult, seconds) };
+    set({ s: bump(bump(next, 'arcade'), 'metro', score) });
+    return { coins, mult, seconds, newBest: score > s.metroBest };
+  },
+
   rewardTraffic(score) {
     const { s } = get();
     const t = now();
@@ -335,7 +387,7 @@ export const useGame = create<GameStore>((set, get) => ({
     // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
     let next = { ...addCoins(s, coins), trafficBest: Math.max(s.trafficBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'semaforo', mult, seconds) };
-    set({ s: next });
+    set({ s: bump(bump(next, 'arcade'), 'traffic', score) });
     return { coins, mult, seconds, newBest: score > s.trafficBest };
   },
 
@@ -345,7 +397,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const won = memoryTickets(rounds);
     // Los tickets ganados no pasan del máximo: Memoria rellena, no permite acumular sin fin
     const tickets = Math.max(s.tickets, Math.min(maxTickets(s), s.tickets + won));
-    set({ s: { ...addCoins(s, coins), tickets, memoryBest: Math.max(s.memoryBest, rounds) } });
+    set({ s: bump(bump({ ...addCoins(s, coins), tickets, memoryBest: Math.max(s.memoryBest, rounds) }, 'arcade'), 'memory', rounds) });
     return { coins, tickets: tickets - s.tickets, lost: won - (tickets - s.tickets), newBest: rounds > s.memoryBest };
   },
 
@@ -353,7 +405,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const coins = Math.round(Math.max(50, productionPerSec(s, now(), false) * 90));
     const gem = Math.random() < 0.1 ? 1 : 0;
-    set({ s: { ...addCoins(s, coins), gems: s.gems + gem, balloons: s.balloons + 1 } });
+    set({ s: bump({ ...addCoins(s, coins), gems: s.gems + gem, balloons: s.balloons + 1 }, 'balloon') });
     return gem ? `+${fmt(coins)} 🪙 y +1 💎` : `+${fmt(coins)} 🪙`;
   },
 
@@ -404,7 +456,7 @@ export const useGame = create<GameStore>((set, get) => ({
         msg += ': +2 💎';
         break;
     }
-    set({ s: next, decree: null });
+    set({ s: bump(next, 'decree'), decree: null });
     return msg;
   },
 
@@ -417,7 +469,7 @@ export const useGame = create<GameStore>((set, get) => ({
     if (reached <= claimed) return 0;
     let gems = 0;
     for (let k = claimed; k < reached; k++) gems += achievementGems(k);
-    set({ s: { ...s, gems: s.gems + gems, achievements: { ...s.achievements, [id]: reached } } });
+    set({ s: bump({ ...s, gems: s.gems + gems, achievements: { ...s.achievements, [id]: reached } }, 'achievement', reached - claimed) });
     return gems;
   },
 
@@ -491,7 +543,7 @@ export const useGame = create<GameStore>((set, get) => ({
         break;
       }
     }
-    set({ s: next });
+    set({ s: bump(next, 'wheel') });
     return { index, message, free };
   },
 
@@ -500,7 +552,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const pps = productionPerSec(s, now(), false);
     const coins = Math.round(score * Math.max(20, pps * 4));
     const gems = score >= 150 ? 6 : score >= 100 ? 4 : score >= 60 ? 2 : score >= 30 ? 1 : 0;
-    set({ s: { ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) } });
+    set({ s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) }, 'arcade'), 'thief', score) });
     return { coins, gems, newBest: score > s.thiefBest };
   },
 
@@ -537,6 +589,57 @@ export const useGame = create<GameStore>((set, get) => ({
     // solo lleva su propio balance neto, que también baja con las pérdidas.
     set({ s: { ...s, coins: capped(s.coins + value), stockProfit: s.stockProfit + profit, stocks } });
     return { value, profit };
+  },
+
+  claimMission(kind, index) {
+    const { s } = get();
+    const list = kind === 'daily' ? s.missions.daily : s.missions.weekly;
+    const slot = list[index];
+    if (!slot || slot.c || !isDone(slot)) return null;
+    const claimed = list.map((x, i) => (i === index ? { ...x, c: true } : x));
+    const missions = kind === 'daily' ? { ...s.missions, daily: claimed } : { ...s.missions, weekly: claimed };
+    let next: GameState = { ...s, missions, missionsDone: s.missionsDone + 1 };
+    if (kind === 'daily') {
+      next = addPoints({ ...next, gems: next.gems + DAILY_REWARD.gems, tickets: next.tickets + DAILY_REWARD.tickets }, DAILY_REWARD.points);
+      set({ s: next });
+      return `+${DAILY_REWARD.gems} 💎 · +${DAILY_REWARD.tickets} 🎟️ · +${DAILY_REWARD.points} pts de liga`;
+    }
+    next = addPoints({ ...next, gems: next.gems + WEEKLY_REWARD.gems }, WEEKLY_REWARD.points);
+    set({ s: next });
+    return `+${WEEKLY_REWARD.gems} 💎 · +${WEEKLY_REWARD.points} pts de liga`;
+  },
+
+  claimChest() {
+    const { s } = get();
+    if (!chestReady(s)) return null;
+    const t = now();
+    const next = addPoints(
+      {
+        ...s,
+        missions: { ...s.missions, chest: true },
+        gems: s.gems + CHEST_REWARD.gems,
+        boosts: addBoost(s, t, 'cofre', CHEST_REWARD.boost, CHEST_REWARD.boostSeconds),
+      },
+      CHEST_REWARD.points,
+    );
+    set({ s: next });
+    return `+${CHEST_REWARD.gems} 💎 · ⚡ Producción x${CHEST_REWARD.boost} ${CHEST_REWARD.boostSeconds / 60} min · +${CHEST_REWARD.points} pts de liga`;
+  },
+
+  claimLeague() {
+    const { s } = get();
+    const prev = s.league.prev;
+    if (!prev) return null;
+    const division = divisionOf(prev.points);
+    set({
+      s: {
+        ...s,
+        gems: s.gems + division.gems,
+        tickets: s.tickets + division.tickets,
+        league: { ...s.league, prev: null, best: Math.max(s.league.best, DIVISIONS.indexOf(division)) },
+      },
+    });
+    return { division, points: prev.points };
   },
 
   setName(name) {

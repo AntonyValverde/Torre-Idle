@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { track } from '../firebase';
+import { celebrate } from './celebrate';
 import { saveCloud, submitScore } from '../game/cloud';
 import {
   BUILDINGS,
@@ -168,6 +169,7 @@ function Legacy() {
     setConfirm(false);
     if (!gained) return;
     const ns = useGame.getState().s;
+    celebrate(10);
     sfx('win');
     vibrate([30, 50, 30, 50, 80]);
     st.toast(`🌅 ¡Bienvenido a la era ${ns.era}: ${eraName(ns.era)}! +${gained} ⭐`);
