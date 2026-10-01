@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:rules": "npx -y firebase-tools emulators:exec --only firestore --project demo-torre \"node tests/firestore.rules.test.mjs\"",
+    "emulators": "npx -y firebase-tools emulators:start --only firestore,auth --project game-f5ffa",
+    "test:rules":"npx -y firebase-tools emulators:exec --only firestore --project demo-torre \"node tests/firestore.rules.test.mjs\"",
     "icons": "pwa-assets-generator --preset minimal-2023 public/icon.svg"
   },
   "dependencies": {

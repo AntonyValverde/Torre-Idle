@@ -1,6 +1,6 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { GoogleAuthProvider, connectAuthEmulator, getAuth, linkWithCredential, type Auth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore';
 import { getAnalytics, isSupported, logEvent, type Analytics } from 'firebase/analytics';
 import { ReCaptchaV3Provider, initializeAppCheck } from 'firebase/app-check';
 
@@ -32,6 +32,15 @@ if (cloudEnabled) {
   }
   auth = getAuth(app);
   db = getFirestore(app);
+  // Solo en desarrollo con VITE_EMULATORS=1: usa los emuladores locales (no toca la base de datos real)
+  if (import.meta.env.DEV && import.meta.env.VITE_EMULATORS === '1') {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    const a = auth;
+    // Simula vincular una cuenta de Google (el emulador acepta credenciales sin firmar)
+    (window as unknown as Record<string, unknown>).__emuGoogle = (email: string) =>
+      linkWithCredential(a.currentUser!, GoogleAuthProvider.credential(JSON.stringify({ sub: email, email, email_verified: true })));
+  }
 } else {
   console.warn('Firebase no configurado: faltan variables VITE_FIREBASE_*. Solo guardado local.');
 }

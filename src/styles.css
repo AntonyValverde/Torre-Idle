@@ -2096,6 +2096,236 @@ small {
   padding: 8px 4px;
 }
 
+/* ---------- Sugerencias ---------- */
+
+.suggestion-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 84px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 8px 12px;
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.suggestion-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.suggestion-foot small {
+  font-size: 0.72rem;
+}
+
+/* ---------- Panel de administración ---------- */
+
+.game-card.admin-card {
+  background: linear-gradient(135deg, #3a3f52, #1d2233);
+}
+
+.admin-wrap {
+  --chart: #c47f1a;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Sin esto, los elementos con scroll propio (filtros) se encogen hasta desaparecer */
+.admin-wrap > * {
+  flex-shrink: 0;
+}
+
+.link-btn {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 2px 0;
+  align-self: flex-start;
+}
+
+.btn.danger {
+  background: linear-gradient(180deg, #d9455f, #a32640);
+  border: 0;
+  color: #fff;
+}
+
+.chart-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: pan-y;
+}
+
+.chart-bar {
+  fill: var(--chart);
+}
+
+.chart-bar.on {
+  fill: #d98f2a;
+}
+
+.chart-value {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font);
+}
+
+.admin-tip {
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bar-list li {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.bar-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  min-height: 18px;
+}
+
+.bar-fill {
+  height: 12px;
+  background: var(--chart);
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-table th {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.admin-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-search {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 9px 12px;
+}
+
+.ranking li.clickable {
+  cursor: pointer;
+}
+
+.ranking .val small {
+  font-weight: 600;
+}
+
+.admin-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 78vh;
+  overflow-y: auto;
+}
+
+.admin-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-chips li {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.card.suggestion .suggestion-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.suggestion-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.suggestion .ua {
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* ---------- Animaciones ---------- */
 
 @keyframes popUp {

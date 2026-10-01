@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { cloudEnabled } from '../firebase';
-import { authErrorMessage, linkGoogle, onAccountChange, renameInLeaderboards, saveCloud, type AccountInfo } from '../game/cloud';
+import { authErrorMessage, checkAdmin, linkGoogle, onAccountChange, renameInLeaderboards, saveCloud, type AccountInfo } from '../game/cloud';
 import { claimableAchievements, eraName, totalBuildings } from '../game/economy';
 import { fmt } from '../game/format';
 import { NAME_MAX } from '../game/names';
 import { useGame } from '../game/store';
 import { Achievements } from './Achievements';
 import { isSoundOn, setSoundOn } from './haptics';
+import { SuggestionBox } from './SuggestionBox';
 
-export function ProfileTab() {
+export function ProfileTab({ onAdmin }: { onAdmin: () => void }) {
   const s = useGame((st) => st.s);
   const [section, setSection] = useState<'ach' | 'profile'>('ach');
   const claimable = claimableAchievements(s);
@@ -23,12 +24,12 @@ export function ProfileTab() {
           👤 Perfil
         </button>
       </div>
-      {section === 'ach' ? <Achievements /> : <Profile />}
+      {section === 'ach' ? <Achievements /> : <Profile onAdmin={onAdmin} />}
     </div>
   );
 }
 
-function Profile() {
+function Profile({ onAdmin }: { onAdmin: () => void }) {
   const s = useGame((st) => st.s);
   const setName = useGame((st) => st.setName);
   const toast = useGame((st) => st.toast);
@@ -36,8 +37,19 @@ function Profile() {
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [linking, setLinking] = useState(false);
   const [sound, setSound] = useState(isSoundOn());
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => onAccountChange(setAccount), []);
+
+  // Solo las cuentas de Google pueden ser administrador: el resto ni lo comprueba
+  const googleUid = account?.googleEmail != null ? account.uid : null;
+  useEffect(() => {
+    let alive = true;
+    if (googleUid) checkAdmin().then((ok) => alive && setAdmin(ok));
+    return () => {
+      alive = false;
+    };
+  }, [googleUid]);
 
   const saveName = () => {
     const error = setName(name);
@@ -102,6 +114,18 @@ function Profile() {
           </>
         )}
       </div>
+
+      {admin && googleUid && (
+        <button className="game-card admin-card" onClick={onAdmin}>
+          <span className="game-emoji">🛠️</span>
+          <div className="game-info">
+            <b>Panel de administración</b>
+            <small>Métricas, jugadores y sugerencias</small>
+          </div>
+        </button>
+      )}
+
+      {cloudEnabled && <SuggestionBox />}
 
       <div className="card">
         <label className="toggle">

@@ -20,6 +20,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { dateKey, now, resyncFromDevice, setServerTime } from './clock';
@@ -414,6 +415,56 @@ export async function fetchDailyTop(date: string, kind: DailyKind = 'daily', n =
     const snap = await getDocs(query(collection(d, kind, date, 'scores'), orderBy('score', 'asc'), limit(n)));
     return snap.docs.map((x) => cleanEntry(x.id, x.data()));
   });
+}
+
+// =====================================================================
+// Sugerencias y administración
+// =====================================================================
+
+export type SuggestionKind = 'idea' | 'bug' | 'otro';
+export const SUGGESTION_MIN = 5;
+export const SUGGESTION_MAX = 1000;
+
+/**
+ * Envía una sugerencia. Va en un lote con `suggestionMeta/{uid}`, que guarda la hora del último
+ * envío: las reglas solo aceptan uno por minuto.
+ */
+export async function sendSuggestion(kind: SuggestionKind, text: string, s: GameState): Promise<void> {
+  const d = db;
+  const user = d ? await ensureUser() : null;
+  if (!d || !user) throw new Error('Sin conexión');
+  const batch = writeBatch(d);
+  batch.set(doc(collection(d, 'suggestions')), {
+    uid: user.uid,
+    name: s.name,
+    kind,
+    text: text.trim().slice(0, SUGGESTION_MAX),
+    era: s.era,
+    ua: navigator.userAgent.slice(0, 200),
+    status: 'nuevo',
+    createdAt: serverTimestamp(),
+  });
+  batch.set(doc(d, 'suggestionMeta', user.uid), { lastAt: serverTimestamp() });
+  try {
+    await batch.commit();
+  } catch (e) {
+    if (errCode(e) === 'permission-denied') throw new Error('Espera un minuto antes de enviar otra sugerencia');
+    throw e;
+  }
+}
+
+/**
+ * ¿Es el administrador? Lo deciden las reglas de Firestore (no el cliente): solo el administrador
+ * puede leer `admin/access`, así que basta con intentarlo.
+ */
+export async function checkAdmin(): Promise<boolean> {
+  if (!db || !auth?.currentUser) return false;
+  try {
+    await getDoc(doc(db, 'admin', 'access'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // =====================================================================

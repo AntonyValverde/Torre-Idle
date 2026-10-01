@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { track } from './firebase';
 import { completeGoogleRedirect, loadBestState, loadLocal, saveLocal, startAutoSave, syncRankingName } from './game/cloud';
 import { eraHue } from './game/economy';
@@ -27,6 +27,9 @@ import { TopBar } from './ui/TopBar';
 import { UpgradesTab } from './ui/UpgradesTab';
 import { useUpdate } from './ui/update';
 
+// El panel solo se descarga si lo abre el administrador
+const AdminPanel = lazy(() => import('./admin/AdminPanel'));
+
 export default function App() {
   const ready = useGame((st) => st.ready);
   const era = useGame((st) => st.s.era);
@@ -35,6 +38,7 @@ export default function App() {
   const [tab, setTab] = useState<TabId>('city');
   const [game, setGame] = useState<GameId | null>(null);
   const [rankingBoard, setRankingBoard] = useState<BoardTab>('daily');
+  const [admin, setAdmin] = useState(false);
   const tabRef = useRef(tab);
   useEffect(() => {
     tabRef.current = tab;
@@ -131,7 +135,7 @@ export default function App() {
         {tab === 'upgrades' && <UpgradesTab />}
         {tab === 'games' && <GamesTab onPlay={play} />}
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} />}
-        {tab === 'profile' && <ProfileTab />}
+        {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} />}
       </main>
       <BottomNav tab={tab} onTab={setTab} />
 
@@ -145,7 +149,12 @@ export default function App() {
       {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
       {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
       {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
-      {!game && <OfflineModal />}
+      {admin && (
+        <Suspense fallback={<div className="game-screen splash"><div className="spinner" /></div>}>
+          <AdminPanel onClose={() => setAdmin(false)} />
+        </Suspense>
+      )}
+      {!game && !admin && <OfflineModal />}
       {!game && updateReady && (
         <button className="update-banner" onClick={applyUpdate}>
           🔄 Nueva versión disponible · <b>Actualizar</b>

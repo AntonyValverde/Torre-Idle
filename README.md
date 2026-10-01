@@ -40,6 +40,19 @@ npm run build    # build de producción en dist/
 
 La configuración de Firebase está en `.env.local`, que no se sube al repositorio. `.env.example` sirve de plantilla.
 
+### Probar sin tocar la base de datos real
+
+`npm run emulators` arranca los emuladores locales de Auth y Firestore (necesita Java). Con `VITE_EMULATORS=1` en `.env.development.local`, `npm run dev` se conecta a ellos en lugar de a Firebase. En ese modo, `window.__emuGoogle('correo@gmail.com')` en la consola simula vincular una cuenta de Google, lo que sirve, por ejemplo, para probar el panel de administración.
+
+## Sugerencias y panel de administración
+
+- **Reportar sugerencias** (Logros → Perfil): cualquier jugador envía una idea, un error u otro comentario. Se guarda en `suggestions/` con su nombre, era y tipo de dispositivo. Las reglas solo aceptan una por minuto por jugador.
+- **Panel de administración**: solo aparece si has entrado con la cuenta de Google de administrador. Las reglas de Firestore lo comprueban con el hash SHA-256 del correo verificado, así que el correo no aparece en el repositorio. El código del panel se descarga aparte y solo para el administrador. Tiene tres pestañas:
+  - **Resumen**: jugadores, activos, altas por día, última conexión, uso de cada minijuego, participación en los retos diarios, eras, economía y récords.
+  - **Jugadores**: búsqueda y detalle de cada partida, con la opción de quitar a alguien de los rankings (la partida no se toca).
+  - **Sugerencias**: marcar como leída, hecha o descartada, o borrar.
+- Las sesiones y eventos de Analytics se ven en la consola de Firebase; el panel enlaza a ella.
+
 ## Configurar Firebase (una sola vez)
 
 En la [consola de Firebase](https://console.firebase.google.com/project/game-f5ffa):
@@ -81,7 +94,7 @@ En la [consola de Firebase](https://console.firebase.google.com/project/game-f5f
 - **Bolsa**: tiene un límite de inversión, y sus ganancias no cuentan para estrellas ni rankings.
 
 ### Pruebas de las reglas
-`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 48 casos, permitidos y de ataque. Necesita Java instalado.
+`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 76 casos, permitidos y de ataque. Necesita Java instalado.
 
 ### Pasos recomendados en la consola (una vez)
 1. **Restringir la API key**:
@@ -110,7 +123,8 @@ src/
   game/          economía, estado, store (zustand), reloj del servidor, nube y rankings
   minigames/     stack/ y traffic/ (canvas), merge/ (2048), daily/ (Apagón), roads/ (Calles),
                  memory/, thief/, wheel/, stocks/
-  ui/            pestañas, barra superior, modales, globo dorado
+  ui/            pestañas, barra superior, modales, globo dorado, sugerencias
+  admin/         panel de administración (métricas, jugadores, sugerencias)
 firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo suben
 ```
 
@@ -122,6 +136,8 @@ firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo
 | `leaderboards/{stack\|merge\|city\|stars\|thief\|traffic\|memory}/scores/{uid}` | mejor puntuación de cada jugador |
 | `daily/{AAAA-MM-DD}/scores/{uid}` | resultado del Apagón diario (un intento registrado) |
 | `roads/{AAAA-MM-DD}/scores/{uid}` | resultado de Conecta las calles (un intento registrado) |
+| `suggestions/{id}` | sugerencias de los jugadores (solo las lee el administrador) |
+| `suggestionMeta/{uid}` | hora del último envío de sugerencia (limita a una por minuto) |
 
 La partida se guarda en `localStorage` cada 5 s y en Firestore cada 60 s, y también al minimizar la app. Las ganancias offline y los tickets usan la hora del servidor, así que adelantar el reloj del móvil no da ventaja.
 

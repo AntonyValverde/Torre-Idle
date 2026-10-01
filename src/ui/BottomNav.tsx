@@ -31,7 +31,8 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
     affordableShopItems(GEM_SHOP, (id) => gemLevel(s, id), s.gems) +
     affordableShopItems(LEGACY, (id) => legacyLevel(s, id), availableStars(s));
   const today = dateKey(s.lastTick);
-  const gamesAlert = isNewDay(s.daily.last, today) || isNewDay(s.wheelLast, today) || s.tickets >= maxTickets(s);
+  const gamesAlert =
+    isNewDay(s.daily.last, today) || isNewDay(s.roads.last, today) || isNewDay(s.wheelLast, today) || s.tickets >= maxTickets(s);
   const claimable = claimableAchievements(s);
 
   const badge = (id: TabId) => {

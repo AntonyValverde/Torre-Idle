@@ -21,6 +21,20 @@ service cloud.firestore {
       return incoming().diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    // Administrador: la cuenta de Google verificada del creador del juego. Se compara el hash
+    // SHA-256 del correo para no publicarlo en el repositorio.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && hashing.sha256(request.auth.token.get('email', '')).toHexString().lower()
+          == '928c5ac9da8be9636a8affbd17b145b535acd327d419b4280916f48fbfae1d0e';
+    }
+
+    // Documento que solo el administrador puede leer: el juego lo usa para saber si mostrar el panel.
+    match /admin/{doc} {
+      allow read: if isAdmin();
+    }
+
     // ------------------------------------------------------------------
     // Partida guardada: solo el dueño puede leerla y escribirla.
     // ------------------------------------------------------------------
@@ -41,7 +55,8 @@ service cloud.firestore {
           && serverTime(d, old, 'ping');
       }
 
-      allow read: if isOwner(uid);
+      // El administrador puede leer las partidas para el panel (nunca modificarlas)
+      allow read: if isOwner(uid) || isAdmin();
       allow create: if isOwner(uid) && validUser();
       // El progreso total nunca puede bajar: evita que un dispositivo con una partida
       // más antigua sobrescriba la buena (el juego detecta el rechazo y recarga la nube).
@@ -83,7 +98,8 @@ service cloud.firestore {
         // O solo cambio de nombre
         || (onlyChanged(['name']) && validName(incoming().name))
       );
-      allow delete: if false;
+      // Solo el administrador puede quitar a alguien del ranking (moderación de trampas)
+      allow delete: if isAdmin();
     }
 
     // ------------------------------------------------------------------
@@ -117,14 +133,51 @@ service cloud.firestore {
       allow create: if isOwner(uid) && validDailyResult(date);
       // El resultado no se puede cambiar, solo el nombre
       allow update: if isOwner(uid) && onlyChanged(['name']) && validName(incoming().name);
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /roads/{date}/scores/{uid} {
       allow read: if true;
       allow create: if isOwner(uid) && validDailyResult(date);
       allow update: if isOwner(uid) && onlyChanged(['name']) && validName(incoming().name);
-      allow delete: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // Sugerencias: cualquier jugador puede enviar (máximo una por minuto);
+    // solo el administrador puede leerlas, cambiarles el estado o borrarlas.
+    // ------------------------------------------------------------------
+    match /suggestions/{id} {
+      function validSuggestion() {
+        let d = incoming();
+        return d.keys().hasOnly(['uid', 'name', 'kind', 'text', 'era', 'ua', 'status', 'createdAt'])
+          && d.keys().hasAll(['uid', 'name', 'kind', 'text', 'status', 'createdAt'])
+          && d.uid == request.auth.uid
+          && validName(d.name)
+          && d.kind in ['idea', 'bug', 'otro']
+          && d.text is string && d.text.size() >= 5 && d.text.size() <= 1000
+          && (!('era' in d) || (d.era is int && d.era >= 1))
+          && (!('ua' in d) || (d.ua is string && d.ua.size() <= 200))
+          && d.status == 'nuevo'
+          && d.createdAt == request.time
+          // El mismo lote tiene que marcar la hora del envío en suggestionMeta (que limita a uno por minuto)
+          && getAfter(/databases/$(database)/documents/suggestionMeta/$(request.auth.uid)).data.lastAt == request.time;
+      }
+
+      allow create: if request.auth != null && validSuggestion();
+      allow read, delete: if isAdmin();
+      allow update: if isAdmin() && onlyChanged(['status'])
+        && incoming().status in ['nuevo', 'leido', 'hecho', 'descartado'];
+    }
+
+    match /suggestionMeta/{uid} {
+      function validMeta() {
+        return incoming().keys().hasOnly(['lastAt']) && incoming().lastAt == request.time;
+      }
+
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && validMeta();
+      allow update: if isOwner(uid) && validMeta() && request.time > resource.data.lastAt + duration.value(60, 's');
     }
 
     // Todo lo demás está cerrado
