@@ -6,6 +6,13 @@ export interface Boost {
   u: number;
 }
 
+/** Progreso de un reto diario: último día completado y racha. */
+export interface DailyRecord {
+  last: string | null;
+  streak: number;
+  bestStreak: number;
+}
+
 export interface GameState {
   v: 1;
   name: string;
@@ -42,7 +49,14 @@ export interface GameState {
   mergeBest: number;
   mergeBestTile: number;
   thiefBest: number;
-  daily: { last: string | null; streak: number; bestStreak: number };
+  /** Récord de coches que cruzaron en Semáforo. */
+  trafficBest: number;
+  /** Récord de rondas completadas en Memoria de ventanas. */
+  memoryBest: number;
+  /** Apagón diario. */
+  daily: DailyRecord;
+  /** Conecta las calles (segundo puzzle diario). */
+  roads: DailyRecord;
   /** Día del último giro gratis de la rueda. */
   wheelLast: string | null;
   wheelSpins: number;
@@ -86,7 +100,10 @@ export function newState(t: number): GameState {
     mergeBest: 0,
     mergeBestTile: 0,
     thiefBest: 0,
+    trafficBest: 0,
+    memoryBest: 0,
     daily: { last: null, streak: 0, bestStreak: 0 },
+    roads: { last: null, streak: 0, bestStreak: 0 },
     wheelLast: null,
     wheelSpins: 0,
     stocks: {},
@@ -107,6 +124,14 @@ function holdings(v: unknown): Record<string, Holding> {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function dailyRecord(v: Partial<DailyRecord> | undefined): DailyRecord {
+  return {
+    last: typeof v?.last === 'string' ? v.last : null,
+    streak: num(v?.streak, 0),
+    bestStreak: num(v?.bestStreak, 0),
+  };
 }
 
 function numRecord(v: unknown): Record<string, number> {
@@ -155,15 +180,14 @@ export function normalize(raw: unknown, t: number): GameState {
     mergeBest: num(r.mergeBest, 0),
     mergeBestTile: num(r.mergeBestTile, 0),
     thiefBest: num(r.thiefBest, 0),
+    trafficBest: num(r.trafficBest, 0),
+    memoryBest: num(r.memoryBest, 0),
     wheelLast: typeof r.wheelLast === 'string' ? r.wheelLast : null,
     wheelSpins: num(r.wheelSpins, 0),
     stocks: holdings(r.stocks),
     stockProfit: num(r.stockProfit, 0),
-    daily: {
-      last: typeof r.daily?.last === 'string' ? r.daily.last : null,
-      streak: num(r.daily?.streak, 0),
-      bestStreak: num(r.daily?.bestStreak, 0),
-    },
+    daily: dailyRecord(r.daily),
+    roads: dailyRecord(r.roads),
     createdAt: num(r.createdAt, t),
   };
 }

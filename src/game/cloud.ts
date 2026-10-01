@@ -298,7 +298,11 @@ export function startAutoSave(): () => void {
 // Rankings
 // =====================================================================
 
-export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief';
+export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory';
+export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory'];
+
+/** Colección de cada reto diario en Firestore: `daily` (Apagón) y `roads` (Conecta las calles). */
+export type DailyKind = 'daily' | 'roads';
 
 export interface ScoreEntry {
   uid: string;
@@ -333,13 +337,16 @@ export async function submitScore(board: Board, score: number, name: string) {
 
 const RANKED_NAME_KEY = 'torre-ranked-name';
 
-/** Cambia el nombre en todos los rankings donde ya aparece el jugador (global y el reto de hoy). */
+/** Cambia el nombre en todos los rankings donde ya aparece el jugador (globales y los retos de hoy). */
 export async function renameInLeaderboards(name: string) {
   const uid = currentUid();
   if (!uid || !db) return;
   const d = db;
-  const boards: Board[] = ['stack', 'merge', 'city', 'stars', 'thief'];
-  const refs = [...boards.map((b) => doc(d, 'leaderboards', b, 'scores', uid)), doc(d, 'daily', dateKey(), 'scores', uid)];
+  const daily: DailyKind[] = ['daily', 'roads'];
+  const refs = [
+    ...BOARDS.map((b) => doc(d, 'leaderboards', b, 'scores', uid)),
+    ...daily.map((k) => doc(d, k, dateKey(), 'scores', uid)),
+  ];
   // updateDoc falla con "not-found" si no hay puntuación en ese ranking: eso es normal
   const results = await Promise.allSettled(refs.map((ref) => updateDoc(ref, { name })));
   cache.clear();
@@ -385,12 +392,12 @@ export async function fetchTop(board: Board, n = 25): Promise<ScoreEntry[]> {
   });
 }
 
-export async function submitDaily(date: string, moves: number, timeMs: number, name: string) {
+export async function submitDaily(date: string, moves: number, timeMs: number, name: string, kind: DailyKind = 'daily') {
   const uid = currentUid();
   if (!uid || !db) return;
   const t = Math.min(9_999_999, Math.max(1000, moves * 250, Math.round(timeMs)));
-  cache.delete(`daily:${date}`);
-  await setDoc(doc(db, 'daily', date, 'scores', uid), {
+  cache.delete(`${kind}:${date}`);
+  await setDoc(doc(db, kind, date, 'scores', uid), {
     name,
     moves,
     timeMs: t,
@@ -399,12 +406,12 @@ export async function submitDaily(date: string, moves: number, timeMs: number, n
   });
 }
 
-export async function fetchDailyTop(date: string, n = 25): Promise<ScoreEntry[]> {
+export async function fetchDailyTop(date: string, kind: DailyKind = 'daily', n = 25): Promise<ScoreEntry[]> {
   const d = db;
   if (!d) return [];
-  return cached(`daily:${date}`, async () => {
+  return cached(`${kind}:${date}`, async () => {
     await ensureUser();
-    const snap = await getDocs(query(collection(d, 'daily', date, 'scores'), orderBy('score', 'asc'), limit(n)));
+    const snap = await getDocs(query(collection(d, kind, date, 'scores'), orderBy('score', 'asc'), limit(n)));
     return snap.docs.map((x) => cleanEntry(x.id, x.data()));
   });
 }

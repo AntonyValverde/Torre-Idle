@@ -1,6 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { dailyPuzzle, isSolved, press } from '../minigames/daily/logic';
+import { CELLS, extend, firstSequence, memoryTickets } from '../minigames/memory/logic';
 import { canMove, move, type Tile } from '../minigames/merge/logic';
+import { mulberry32 } from '../minigames/rng';
+import * as roads from '../minigames/roads/logic';
+import {
+  BOX1,
+  CAR_L,
+  STOP,
+  axisOf,
+  isCommitted,
+  newTraffic,
+  patienceMs,
+  step,
+  toggleLight,
+  type Car,
+  type Traffic,
+} from '../minigames/traffic/logic';
 import { now, prevDateKey } from './clock';
 import {
   ACHIEVEMENTS,
@@ -103,6 +119,130 @@ describe('apagón diario', () => {
   it('calcula el día anterior cruzando meses y años', () => {
     expect(prevDateKey('2027-01-01')).toBe('2026-12-31');
     expect(prevDateKey('2026-03-01')).toBe('2026-02-28');
+  });
+});
+
+describe('semáforo', () => {
+  const car = (dir: Car['dir'], f: number, id = 1): Car => ({ id, dir, f, speed: 0.4, wait: 0, rush: false, hue: 0 });
+  // Sin coches nuevos, para estudiar solo los que pone el test
+  const world = (cars: Car[], light: Traffic['light'] = 'h'): Traffic => ({ ...newTraffic(), cars, light, nextSpawn: Infinity });
+  const run = (g: Traffic, ms: number) => {
+    for (let t = 0; t < ms; t += 8) step(g, 8, () => 0.5);
+  };
+
+  it('un coche se detiene en rojo y cruza en verde', () => {
+    const g = world([car('S', 0.1)], 'h');
+    run(g, 2000);
+    expect(g.cars[0].f).toBeCloseTo(STOP, 6);
+    toggleLight(g);
+    run(g, 4000);
+    expect(g.cars).toHaveLength(0);
+    expect(g.score).toBe(1);
+  });
+
+  it('si espera demasiado en rojo, pierde la paciencia y se lo salta', () => {
+    const g = world([car('E', STOP)], 'v');
+    run(g, patienceMs(0) - 100);
+    expect(g.cars[0].rush).toBe(false);
+    run(g, 200);
+    expect(g.cars[0].rush).toBe(true);
+    run(g, 500);
+    expect(g.cars[0].f).toBeGreaterThan(STOP);
+  });
+
+  it('dos coches de calles perpendiculares dentro del cruce chocan', () => {
+    // E ocupa x∈[0.375, 0.46] en su carril (y≈0.55); S ocupa y∈[0.475, 0.56] en el suyo (x≈0.45)
+    const g = world([car('E', 0.46, 1), car('S', 0.56, 2)]);
+    step(g, 8, () => 0.5);
+    expect(g.crash).not.toBeNull();
+    // Coches del mismo eje en sentidos contrarios van por carriles distintos
+    const h = world([car('E', 0.5, 1), car('W', 0.5, 2)]);
+    step(h, 8, () => 0.5);
+    expect(h.crash).toBeNull();
+  });
+
+  it('se puede jugar bien mucho tiempo, pero sin cambiar el semáforo se acaba chocando', () => {
+    // Jugador prudente: cambia cuando alguien espera en rojo y el cruce está despejado
+    const careful = newTraffic();
+    const rand = mulberry32(7);
+    for (let t = 0; t < 180_000 && !careful.crash; t += 8) {
+      const red = careful.light === 'h' ? 'v' : 'h';
+      const waiting = careful.cars.some((c) => axisOf(c.dir) === red && c.wait > 300);
+      const busy = careful.cars.some((c) => axisOf(c.dir) === careful.light && isCommitted(c) && c.f - CAR_L < BOX1 + 0.02);
+      if (waiting && !busy) toggleLight(careful);
+      step(careful, 8, rand);
+    }
+    expect(careful.score).toBeGreaterThan(100);
+
+    const lazy = newTraffic();
+    const rand2 = mulberry32(7);
+    for (let t = 0; t < 180_000 && !lazy.crash; t += 8) step(lazy, 8, rand2);
+    expect(lazy.crash).not.toBeNull();
+    expect(lazy.score).toBeLessThan(careful.score);
+  });
+});
+
+describe('memoria de ventanas', () => {
+  it('la secuencia crece de una en una y nunca repite ventana seguida', () => {
+    const rand = mulberry32(3);
+    let seq = firstSequence(rand);
+    expect(seq).toHaveLength(3);
+    for (let k = 0; k < 200; k++) {
+      const next = extend(seq, rand);
+      expect(next.slice(0, -1)).toEqual(seq);
+      expect(next[next.length - 1]).not.toBe(seq[seq.length - 1]);
+      expect(next[next.length - 1]).toBeGreaterThanOrEqual(0);
+      expect(next[next.length - 1]).toBeLessThan(CELLS);
+      seq = next;
+    }
+  });
+
+  it('devuelve tickets según las rondas, sin pasar del máximo', () => {
+    expect(memoryTickets(4)).toBe(0);
+    expect(memoryTickets(5)).toBe(1);
+    expect(memoryTickets(15)).toBe(4);
+    useGame.getState().init({ ...newState(Date.now()), tickets: 1 });
+    const r = useGame.getState().rewardMemory(15);
+    expect(r.tickets).toBe(4);
+    expect(useGame.getState().s.tickets).toBe(5);
+    expect(useGame.getState().s.memoryBest).toBe(15);
+    // Con los tickets casi llenos, el resto se pierde
+    useGame.getState().init({ ...newState(Date.now()), tickets: 4 });
+    const full = useGame.getState().rewardMemory(15);
+    expect(full.tickets).toBe(1);
+    expect(full.lost).toBe(3);
+    expect(useGame.getState().s.tickets).toBe(5);
+  });
+});
+
+describe('conecta las calles', () => {
+  it('girar cuatro veces deja el tramo igual', () => {
+    expect(roads.rotate(roads.N | roads.E)).toBe(roads.E | roads.S);
+    for (let m = 0; m < 16; m++) expect(roads.rotate(roads.rotate(roads.rotate(roads.rotate(m))))).toBe(m);
+  });
+
+  it('el plano es determinista, empieza sin resolver y siempre tiene solución', () => {
+    for (const date of ['2026-09-30', '2026-12-31', '2027-01-01', '2027-02-14']) {
+      const p = roads.dailyRoads(date);
+      expect(roads.dailyRoads(date)).toEqual(p);
+      expect(p.houses.length).toBeGreaterThan(0);
+      expect(roads.isSolved(p.tiles, p.hall, p.houses)).toBe(false);
+      expect(roads.isSolved(p.solution, p.hall, p.houses)).toBe(true);
+      // La solución pasa por todas las casillas y cada tramo es un giro del desordenado
+      expect(roads.connected(p.solution, p.hall).size).toBe(roads.SIZE * roads.SIZE);
+      let par = 0;
+      for (let i = 0; i < p.tiles.length; i++) {
+        const k = roads.turnsBetween(p.tiles[i], p.solution[i]);
+        expect(k).toBeGreaterThanOrEqual(0);
+        par += k;
+      }
+      expect(p.par).toBe(par);
+      for (const h of p.houses) expect(roads.exits(p.tiles[h])).toBe(1);
+    }
+  });
+
+  it('cambia cada día', () => {
+    expect(roads.dailyRoads('2026-09-30').tiles).not.toEqual(roads.dailyRoads('2026-10-01').tiles);
   });
 });
 
@@ -249,6 +389,26 @@ describe('progresión infinita', () => {
     expect(useGame.getState().completeDaily('2026-10-03', 8, 8)?.streak).toBe(2);
   });
 
+  it('los dos retos diarios llevan su propia racha', () => {
+    useGame.getState().init({ ...newState(Date.now()), daily: { last: '2026-10-02', streak: 4, bestStreak: 4 } });
+    expect(useGame.getState().completeDaily('2026-10-03', 8, 8)?.streak).toBe(5);
+    // Hacer el Apagón no impide hacer las Calles el mismo día
+    expect(useGame.getState().completeRoads('2026-10-03', 30, 25)?.streak).toBe(1);
+    expect(useGame.getState().completeRoads('2026-10-03', 30, 25)).toBeNull();
+    const s = useGame.getState().s;
+    expect(s.daily.streak).toBe(5);
+    expect(s.roads).toEqual({ last: '2026-10-03', streak: 1, bestStreak: 1 });
+  });
+
+  it('el boost del semáforo se multiplica con el de Stack', () => {
+    const t = Date.now();
+    useGame.getState().init({ ...newState(t), boosts: [{ k: 'stack', m: 2, u: t + 600_000 }] });
+    const r = useGame.getState().rewardTraffic(50);
+    expect(r.mult).toBe(3);
+    expect(boostMultiplier(useGame.getState().s, now())).toBe(6);
+    expect(useGame.getState().s.trafficBest).toBe(50);
+  });
+
   it('las ausencias cortas se cobran y las largas respetan el tope total', () => {
     const t = Date.now();
     useGame.getState().init({ ...newState(t), buildings: { casa: 10 }, lastTick: t - 30_000 });
@@ -288,5 +448,8 @@ describe('progresión infinita', () => {
     expect(s.era).toBe(1);
     expect(s.boosts).toEqual([]);
     expect(s.buildings.choza).toBe(3);
+    expect(s.roads).toEqual({ last: null, streak: 0, bestStreak: 0 });
+    expect(s.trafficBest).toBe(0);
+    expect(s.memoryBest).toBe(0);
   });
 });

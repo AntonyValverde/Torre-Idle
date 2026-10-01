@@ -6,10 +6,13 @@ import { newState } from './game/state';
 import { claimTab } from './game/tabLock';
 import { useGame } from './game/store';
 import { DailyScreen } from './minigames/daily/DailyScreen';
+import { MemoryScreen } from './minigames/memory/MemoryScreen';
 import { MergeScreen } from './minigames/merge/MergeScreen';
+import { RoadsScreen } from './minigames/roads/RoadsScreen';
 import { StackScreen } from './minigames/stack/StackScreen';
 import { StockScreen } from './minigames/stocks/StockScreen';
 import { ThiefScreen } from './minigames/thief/ThiefScreen';
+import { TrafficScreen } from './minigames/traffic/TrafficScreen';
 import { WheelScreen } from './minigames/wheel/WheelScreen';
 import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
@@ -139,6 +142,9 @@ export default function App() {
       {game === 'wheel' && <WheelScreen onClose={() => setGame(null)} />}
       {game === 'thief' && <ThiefScreen onClose={() => setGame(null)} />}
       {game === 'stocks' && <StockScreen onClose={() => setGame(null)} />}
+      {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
+      {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
+      {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
       {!game && <OfflineModal />}
       {!game && updateReady && (
         <button className="update-banner" onClick={applyUpdate}>

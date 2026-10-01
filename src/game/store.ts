@@ -20,6 +20,7 @@ import {
   isBuildingEraLocked,
   legacyLevel,
   maxAffordable,
+  maxTickets,
   offlineCapSeconds,
   offlineEfficiency,
   pendingStars,
@@ -32,6 +33,7 @@ import {
 import { DECREE_BY_ID, pickDecrees, type DecreeId } from './events';
 import { fmt } from './format';
 import { isNameAllowed, sanitizeName } from './names';
+import { memoryTickets } from '../minigames/memory/logic';
 import { newState, type GameState } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import { WHEEL, pickSegment } from './wheel';
@@ -73,6 +75,15 @@ export interface ThiefReward {
   newBest: boolean;
 }
 
+export interface MemoryReward {
+  coins: number;
+  /** Tickets ganados (sin pasar del máximo). */
+  tickets: number;
+  /** Tickets que no cupieron porque ya estabas al máximo. */
+  lost: number;
+  newBest: boolean;
+}
+
 export interface DecreeOffer {
   options: [DecreeId, DecreeId];
   expires: number;
@@ -96,6 +107,9 @@ interface GameStore {
   rewardStack(score: number): StackReward;
   rewardMerge(score: number, maxTile: number): MergeReward;
   completeDaily(date: string, moves: number, par: number): DailyReward | null;
+  completeRoads(date: string, moves: number, par: number): DailyReward | null;
+  rewardTraffic(score: number): StackReward;
+  rewardMemory(rounds: number): MemoryReward;
   rewardGolden(): string;
   offerDecree(): void;
   chooseDecree(id: DecreeId): string;
@@ -132,6 +146,21 @@ function addCoins(s: GameState, amount: number): GameState {
     totalEarned: capped(s.totalEarned + amount),
     allTimeEarned: capped(s.allTimeEarned + amount),
   };
+}
+
+/** Completa un reto diario (Apagón o Calles): un premio por día, con racha y gemas extra dentro del par. */
+function finishDaily(s: GameState, key: 'daily' | 'roads', date: string, moves: number, par: number) {
+  const rec = s[key];
+  if (!isNewDay(rec.last, date)) return null;
+  const streak = rec.last === prevDateKey(date) ? rec.streak + 1 : 1;
+  const gems = 3 + Math.min(streak, 7) + (moves <= par ? 2 : 0);
+  const coins = Math.round(Math.max(100, productionPerSec(s, now(), false) * 120));
+  const next: GameState = {
+    ...addCoins(s, coins),
+    gems: s.gems + gems,
+    [key]: { last: date, streak, bestStreak: Math.max(rec.bestStreak, streak) },
+  };
+  return { next, reward: { coins, gems, streak } };
 }
 
 export const useGame = create<GameStore>((set, get) => ({
@@ -283,19 +312,41 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   completeDaily(date, moves, par) {
+    const r = finishDaily(get().s, 'daily', date, moves, par);
+    if (!r) return null;
+    set({ s: r.next });
+    return r.reward;
+  },
+
+  completeRoads(date, moves, par) {
+    const r = finishDaily(get().s, 'roads', date, moves, par);
+    if (!r) return null;
+    set({ s: r.next });
+    return r.reward;
+  },
+
+  rewardTraffic(score) {
     const { s } = get();
-    if (!isNewDay(s.daily.last, date)) return null;
-    const streak = s.daily.last === prevDateKey(date) ? s.daily.streak + 1 : 1;
-    const gems = 3 + Math.min(streak, 7) + (moves <= par ? 2 : 0);
-    const coins = Math.round(Math.max(100, productionPerSec(s, now(), false) * 120));
-    set({
-      s: {
-        ...addCoins(s, coins),
-        gems: s.gems + gems,
-        daily: { last: date, streak, bestStreak: Math.max(s.daily.bestStreak, streak) },
-      },
-    });
-    return { coins, gems, streak };
+    const t = now();
+    const pps = productionPerSec(s, t, false);
+    const coins = Math.round(score * Math.max(10, pps * 6));
+    const mult = score >= 120 ? 5 : score >= 80 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : score >= 10 ? 1.5 : 1;
+    const seconds = Math.min(900, score * 10);
+    // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
+    let next = { ...addCoins(s, coins), trafficBest: Math.max(s.trafficBest, score) };
+    if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'semaforo', mult, seconds) };
+    set({ s: next });
+    return { coins, mult, seconds, newBest: score > s.trafficBest };
+  },
+
+  rewardMemory(rounds) {
+    const { s } = get();
+    const coins = Math.round(rounds * Math.max(20, productionPerSec(s, now(), false) * 8));
+    const won = memoryTickets(rounds);
+    // Los tickets ganados no pasan del máximo: Memoria rellena, no permite acumular sin fin
+    const tickets = Math.max(s.tickets, Math.min(maxTickets(s), s.tickets + won));
+    set({ s: { ...addCoins(s, coins), tickets, memoryBest: Math.max(s.memoryBest, rounds) } });
+    return { coins, tickets: tickets - s.tickets, lost: won - (tickets - s.tickets), newBest: rounds > s.memoryBest };
   },
 
   rewardGolden() {

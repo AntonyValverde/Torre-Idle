@@ -61,7 +61,9 @@ service cloud.firestore {
           || (board == 'merge' && s is int && s >= 0 && s <= 4000000)
           || (board == 'city' && s is number && s >= 0)
           || (board == 'stars' && s is int && s >= 0 && s <= 1000000000)
-          || (board == 'thief' && s is int && s >= 0 && s <= 3000);
+          || (board == 'thief' && s is int && s >= 0 && s <= 3000)
+          || (board == 'traffic' && s is int && s >= 0 && s <= 5000)
+          || (board == 'memory' && s is int && s >= 0 && s <= 500);
       }
 
       function validEntry() {
@@ -85,21 +87,21 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // Reto diario: un único resultado por jugador y día.
+    // Retos diarios (Apagón en /daily, Conecta las calles en /roads):
+    // un único resultado por jugador y día.
     // ------------------------------------------------------------------
-    match /daily/{date}/scores/{uid} {
-      // Solo se aceptan resultados del día actual (±36 h por las zonas horarias),
-      // para que nadie publique resultados de días futuros o pasados.
-      function dateIsCurrent() {
-        let parts = date.split('-');
-        let day = timestamp.date(int(parts[0]), int(parts[1]), int(parts[2]));
-        return math.abs(day.toMillis() + 43200000 - request.time.toMillis()) < 129600000;
-      }
 
-      allow read: if true;
-      allow create: if isOwner(uid)
-        && date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && dateIsCurrent()
+    // Solo se aceptan resultados del día actual (±36 h por las zonas horarias),
+    // para que nadie publique resultados de días futuros o pasados.
+    function dateIsCurrent(date) {
+      let parts = date.split('-');
+      let day = timestamp.date(int(parts[0]), int(parts[1]), int(parts[2]));
+      return math.abs(day.toMillis() + 43200000 - request.time.toMillis()) < 129600000;
+    }
+
+    function validDailyResult(date) {
+      return date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && dateIsCurrent(date)
         && incoming().keys().hasOnly(['name', 'moves', 'timeMs', 'score', 'createdAt'])
         && validName(incoming().name)
         && incoming().moves is int && incoming().moves >= 1 && incoming().moves <= 999
@@ -108,7 +110,19 @@ service cloud.firestore {
         && incoming().timeMs >= 1000 && incoming().timeMs >= incoming().moves * 250
         && incoming().score == incoming().moves * 10000000 + incoming().timeMs
         && incoming().createdAt == request.time;
+    }
+
+    match /daily/{date}/scores/{uid} {
+      allow read: if true;
+      allow create: if isOwner(uid) && validDailyResult(date);
       // El resultado no se puede cambiar, solo el nombre
+      allow update: if isOwner(uid) && onlyChanged(['name']) && validName(incoming().name);
+      allow delete: if false;
+    }
+
+    match /roads/{date}/scores/{uid} {
+      allow read: if true;
+      allow create: if isOwner(uid) && validDailyResult(date);
       allow update: if isOwner(uid) && onlyChanged(['name']) && validName(incoming().name);
       allow delete: if false;
     }

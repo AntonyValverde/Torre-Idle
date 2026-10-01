@@ -1,6 +1,22 @@
 # Torre Idle
 
-Juego idle/clicker para móvil (PWA) con tres minijuegos: **Stack Tower**, **Fusión** (tipo 2048) y **Apagón diario** (un puzzle al día, igual para todos). Está hecho con React, Vite y TypeScript, usa Firebase (Auth anónima, Firestore y Analytics) y se despliega en Vercel.
+Juego idle/clicker para móvil (PWA) con minijuegos. Está hecho con React, Vite y TypeScript, usa Firebase (Auth anónima, Firestore y Analytics) y se despliega en Vercel.
+
+## Minijuegos
+
+| Juego | Entrada | Premio |
+|---|---|---|
+| 🌃 **Apagón diario**: enciende todas las ventanas | Gratis, uno al día | Gemas, racha y ranking del día |
+| 🛣️ **Conecta las calles**: gira tramos hasta unir las casas con el ayuntamiento | Gratis, uno al día | Gemas, racha y ranking del día |
+| 🎡 **Rueda de la fortuna** | 1 giro gratis al día, luego 🎟️ | Monedas, gemas, boosts o edificios raros |
+| 🦹 **Atrapa al ladrón**: 30 s de reflejos | 🎟️ | Monedas y gemas |
+| 🏗️ **Stack Tower**: apila pisos | 🎟️ | Monedas y boost de producción |
+| 🚦 **Semáforo**: cambia el semáforo sin que choquen los coches | 🎟️ | Monedas y boost de producción (se multiplica con el de Stack) |
+| 🧠 **Memoria de ventanas**: repite la secuencia de luces | 🎟️ | Monedas y hasta 4 🎟️ (sin pasar del máximo) |
+| 🧱 **Fusión** (tipo 2048) | 🎟️ | Gemas y edificios raros |
+| 📈 **Bolsa de la ciudad** | Libre | Ganancias que no cuentan para estrellas ni rankings |
+
+Los dos retos diarios generan el mismo tablero para todos a partir de la fecha. En Semáforo, un coche que espera demasiado en rojo pierde la paciencia y se lo salta, así que no se puede dejar el semáforo fijo.
 
 ## Progresión (sin final)
 
@@ -8,7 +24,7 @@ Juego idle/clicker para móvil (PWA) con tres minijuegos: **Stack Tower**, **Fus
 - **16 edificios**. Los 6 últimos se desbloquean en eras avanzadas.
 - **Hitos infinitos**: cada edificio produce x2 al llegar a 25, 50, 100… y después cada 100, sin límite.
 - **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado, que tiene niveles infinitos.
-- **Logros infinitos**: 9 categorías sin nivel máximo. Cada logro da +2% de producción y gemas.
+- **Logros infinitos**: 15 categorías sin nivel máximo. Cada logro da +2% de producción y gemas.
 - **Decretos del consejo**: cada pocos minutos eliges entre dos ventajas (festival, lotería, horas extra…).
 - **Boosts combinables**: fuentes distintas se multiplican entre sí; la misma fuente solo se alarga.
 - Los números usan K, M, B… y luego aa, ab, ac… hasta ~1e308.
@@ -18,7 +34,7 @@ Juego idle/clicker para móvil (PWA) con tres minijuegos: **Stack Tower**, **Fus
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # tests de la lógica (economía, fusión, puzzle diario)
+npm test         # tests de la lógica (economía y minijuegos)
 npm run build    # build de producción en dist/
 ```
 
@@ -55,7 +71,7 @@ En la [consola de Firebase](https://console.firebase.google.com/project/game-f5f
   - El progreso total no puede bajar: un dispositivo con una partida vieja no sobrescribe la buena, y el juego carga la más avanzada.
   - Las puntuaciones tienen límites realistas y solo pueden subir, con un máximo de una subida cada 5 s.
   - Los nombres solo aceptan letras, números y `_ . -`.
-  - El reto diario solo admite resultados del día actual y con tiempos humanos.
+  - Los retos diarios solo admiten resultados del día actual y con tiempos humanos.
 - **Reloj de confianza**: se ancla a la hora del servidor y nunca retrocede con el juego abierto, así que cambiar la hora o la zona horaria del móvil no da ventaja.
 - **Guardado robusto**:
   - Hay una copia de seguridad local, y una partida corrupta se aparta sin borrarla.
@@ -65,7 +81,7 @@ En la [consola de Firebase](https://console.firebase.google.com/project/game-f5f
 - **Bolsa**: tiene un límite de inversión, y sus ganancias no cuentan para estrellas ni rankings.
 
 ### Pruebas de las reglas
-`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 37 casos, permitidos y de ataque. Necesita Java instalado.
+`npm run test:rules` ejecuta [tests/firestore.rules.test.mjs](tests/firestore.rules.test.mjs) contra el emulador local de Firestore, sin tocar la base de datos real. Son 48 casos, permitidos y de ataque. Necesita Java instalado.
 
 ### Pasos recomendados en la consola (una vez)
 1. **Restringir la API key**:
@@ -92,7 +108,8 @@ El juego corre en el navegador del jugador, así que alguien con conocimientos p
 ```
 src/
   game/          economía, estado, store (zustand), reloj del servidor, nube y rankings
-  minigames/     stack/ (canvas), merge/ (2048), daily/ (Apagón)
+  minigames/     stack/ y traffic/ (canvas), merge/ (2048), daily/ (Apagón), roads/ (Calles),
+                 memory/, thief/, wheel/, stocks/
   ui/            pestañas, barra superior, modales, globo dorado
 firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo suben
 ```
@@ -102,8 +119,9 @@ firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo
 | Ruta | Contenido |
 |---|---|
 | `users/{uid}` | partida guardada (solo la lee y escribe su dueño) |
-| `leaderboards/{stack\|merge\|city\|stars}/scores/{uid}` | mejor puntuación de cada jugador |
-| `daily/{AAAA-MM-DD}/scores/{uid}` | resultado del reto diario (un intento registrado) |
+| `leaderboards/{stack\|merge\|city\|stars\|thief\|traffic\|memory}/scores/{uid}` | mejor puntuación de cada jugador |
+| `daily/{AAAA-MM-DD}/scores/{uid}` | resultado del Apagón diario (un intento registrado) |
+| `roads/{AAAA-MM-DD}/scores/{uid}` | resultado de Conecta las calles (un intento registrado) |
 
 La partida se guarda en `localStorage` cada 5 s y en Firestore cada 60 s, y también al minimizar la app. Las ganancias offline y los tickets usan la hora del servidor, así que adelantar el reloj del móvil no da ventaja.
 

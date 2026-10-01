@@ -159,6 +159,18 @@ function Profile() {
           <small>Mejor racha</small>
           <b>🔥 {s.daily.bestStreak}</b>
         </div>
+        <div>
+          <small>Mejor semáforo</small>
+          <b>{s.trafficBest}</b>
+        </div>
+        <div>
+          <small>Mejor memoria</small>
+          <b>{s.memoryBest}</b>
+        </div>
+        <div>
+          <small>Racha de calles</small>
+          <b>🔥 {s.roads.bestStreak}</b>
+        </div>
       </div>
     </>
   );

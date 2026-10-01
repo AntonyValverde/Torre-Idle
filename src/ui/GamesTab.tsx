@@ -4,16 +4,17 @@ import { fmt, fmtClock, fmtTime } from '../game/format';
 import { STOCKS, saleValue, stockPrice } from '../game/stocks';
 import { useGame } from '../game/store';
 
-export type GameId = 'stack' | 'merge' | 'daily' | 'wheel' | 'thief' | 'stocks';
+export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory';
 
 /** Juegos que cuestan un ticket al entrar. */
-export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief'];
+export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory'];
 
 export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
   const s = useGame((st) => st.s);
   const max = maxTickets(s);
   const today = dateKey(s.lastTick);
   const dailyDone = !isNewDay(s.daily.last, today);
+  const roadsDone = !isNewDay(s.roads.last, today);
   const wheelFree = isNewDay(s.wheelLast, today);
   const nextTicket = ticketRegenMs(s) - (s.lastTick - s.ticketTime);
   const untilTomorrow = fmtTime(msUntilTomorrow(s.lastTick) / 1000);
@@ -40,6 +41,18 @@ export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
           </small>
         </div>
         <span className="game-cost">{dailyDone ? '✅' : 'GRATIS'}</span>
+      </button>
+
+      <button className={`game-card roads${roadsDone ? ' done' : ''}`} onClick={() => onPlay('roads')}>
+        <span className="game-emoji">🛣️</span>
+        <div className="game-info">
+          <b>Conecta las calles</b>
+          <small>Gira los tramos hasta unir las casas con el ayuntamiento. Mismo plano para todos.</small>
+          <small className="game-meta">
+            🔥 Racha {s.roads.streak} · {roadsDone ? `Nuevo en ${untilTomorrow}` : '¡Disponible!'}
+          </small>
+        </div>
+        <span className="game-cost">{roadsDone ? '✅' : 'GRATIS'}</span>
       </button>
 
       <button className={`game-card fortune${wheelFree ? '' : ' done'}`} onClick={() => onPlay('wheel')}>
@@ -73,6 +86,26 @@ export function GamesTab({ onPlay }: { onPlay: (g: GameId) => void }) {
           <b>Stack Tower</b>
           <small>Apila pisos con precisión. Gana monedas y un boost de producción.</small>
           <small className="game-meta">🏆 Récord: {s.stackBest} pisos</small>
+        </div>
+        <span className="game-cost">🎟️1</span>
+      </button>
+
+      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('traffic')}>
+        <span className="game-emoji">🚦</span>
+        <div className="game-info">
+          <b>Semáforo</b>
+          <small>Cambia el semáforo para que los coches crucen sin chocar. Gana un boost de producción.</small>
+          <small className="game-meta">🏆 Récord: {s.trafficBest} coches</small>
+        </div>
+        <span className="game-cost">🎟️1</span>
+      </button>
+
+      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('memory')}>
+        <span className="game-emoji">🧠</span>
+        <div className="game-info">
+          <b>Memoria de ventanas</b>
+          <small>Repite la secuencia de luces. Si llegas lejos, recuperas hasta 4 tickets.</small>
+          <small className="game-meta">🏆 Récord: {s.memoryBest} rondas</small>
         </div>
         <span className="game-cost">🎟️1</span>
       </button>

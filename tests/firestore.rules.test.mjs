@@ -66,10 +66,14 @@ await no('puntuación decimal', () => setDoc(doc(bob, 'leaderboards/thief/scores
 await no('ranking inventado', () => setDoc(doc(bob, 'leaderboards/hack/scores/bob'), { name: 'Bob', score: 1, updatedAt: serverTimestamp() }));
 await no('updatedAt falso', () => setDoc(doc(bob, 'leaderboards/merge/scores/bob'), { name: 'Bob', score: 1, updatedAt: Timestamp.now() }));
 await ok('ciudad con número grande', () => setDoc(doc(bob, 'leaderboards/city/scores/bob'), { name: 'Bob', score: 1.5e40, updatedAt: serverTimestamp() }));
+await ok('semáforo', () => setDoc(doc(bob, 'leaderboards/traffic/scores/bob'), { name: 'Bob', score: 42, updatedAt: serverTimestamp() }));
+await no('semáforo imposible', () => setDoc(doc(alice, 'leaderboards/traffic/scores/alice'), { name: 'Alice', score: 5001, updatedAt: serverTimestamp() }));
+await ok('memoria', () => setDoc(doc(bob, 'leaderboards/memory/scores/bob'), { name: 'Bob', score: 12, updatedAt: serverTimestamp() }));
+await no('memoria imposible', () => setDoc(doc(alice, 'leaderboards/memory/scores/alice'), { name: 'Alice', score: 501, updatedAt: serverTimestamp() }));
 await new Promise((r) => setTimeout(r, 5500));
 await ok('récord mayor tras 5 s', () => setDoc(la, { name: 'Alice', score: 20, updatedAt: serverTimestamp() }));
 
-console.log('daily');
+console.log('daily (Apagón)');
 const da = doc(alice, `daily/${today}/scores/alice`);
 const entry = (moves, timeMs) => ({ name: 'Alice', moves, timeMs, score: moves * 10000000 + timeMs, createdAt: serverTimestamp() });
 await no('día futuro', () => setDoc(doc(alice, `daily/${future}/scores/alice`), entry(8, 5000)));
@@ -79,6 +83,16 @@ await ok('resultado de hoy', () => setDoc(da, entry(8, 5000)));
 await no('reescribir resultado', () => setDoc(da, entry(6, 4000)));
 await no('cambiar movimientos', () => updateDoc(da, { moves: 1 }));
 await ok('renombrar en el diario', () => updateDoc(da, { name: 'Alicia' }));
+
+console.log('roads (Conecta las calles)');
+const ra = doc(alice, `roads/${today}/scores/alice`);
+await no('calles: día futuro', () => setDoc(doc(alice, `roads/${future}/scores/alice`), entry(20, 9000)));
+await no('calles: demasiado rápido', () => setDoc(ra, entry(20, 2000)));
+await no('calles: resultado de otro', () => setDoc(doc(bob, `roads/${today}/scores/alice`), entry(20, 9000)));
+await ok('calles: resultado de hoy', () => setDoc(ra, entry(20, 9000)));
+await no('calles: reescribir resultado', () => setDoc(ra, entry(10, 9000)));
+await ok('calles: lectura pública', () => getDoc(doc(anon, `roads/${today}/scores/alice`)));
+await ok('calles: renombrar', () => updateDoc(ra, { name: 'Alicia' }));
 
 console.log('otros');
 await no('colección inventada', () => setDoc(doc(alice, 'admin/config'), { x: 1 }));

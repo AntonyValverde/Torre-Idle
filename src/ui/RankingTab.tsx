@@ -4,11 +4,14 @@ import { dateKey } from '../game/clock';
 import { currentUid, fetchDailyTop, fetchTop, type ScoreEntry } from '../game/cloud';
 import { fmt, fmtClock } from '../game/format';
 
-export type BoardTab = 'daily' | 'stack' | 'merge' | 'city' | 'stars' | 'thief';
+export type BoardTab = 'daily' | 'roads' | 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory';
 
 const TABS: { id: BoardTab; label: string }[] = [
-  { id: 'daily', label: '🌃 Hoy' },
+  { id: 'daily', label: '🌃 Apagón' },
+  { id: 'roads', label: '🛣️ Calles' },
   { id: 'thief', label: '🦹 Ladrón' },
+  { id: 'traffic', label: '🚦 Semáforo' },
+  { id: 'memory', label: '🧠 Memoria' },
   { id: 'stack', label: '🏗️ Torre' },
   { id: 'merge', label: '🧱 Fusión' },
   { id: 'city', label: '🏙️ Ciudad' },
@@ -25,7 +28,7 @@ export function RankingTab({ initial = 'daily' }: { initial?: BoardTab }) {
     let alive = true;
     setRows(null);
     setError(false);
-    const p = board === 'daily' ? fetchDailyTop(dateKey()) : fetchTop(board);
+    const p = board === 'daily' || board === 'roads' ? fetchDailyTop(dateKey(), board) : fetchTop(board);
     p.then((r) => alive && setRows(r)).catch((e) => {
       console.warn(e);
       if (alive) setError(true);
@@ -36,9 +39,11 @@ export function RankingTab({ initial = 'daily' }: { initial?: BoardTab }) {
   }, [board]);
 
   const value = (r: ScoreEntry) => {
-    if (board === 'daily') return `${r.moves} mov · ${fmtClock(r.timeMs ?? 0)}`;
+    if (board === 'daily' || board === 'roads') return `${r.moves} mov · ${fmtClock(r.timeMs ?? 0)}`;
     if (board === 'stack') return `${r.score} pisos`;
     if (board === 'thief') return `${r.score} pts`;
+    if (board === 'traffic') return `${r.score} coches`;
+    if (board === 'memory') return `${r.score} rondas`;
     if (board === 'city') return `${fmt(r.score)} 🪙`;
     if (board === 'stars') return `${fmt(r.score)} ⭐`;
     return fmt(r.score);
@@ -53,6 +58,7 @@ export function RankingTab({ initial = 'daily' }: { initial?: BoardTab }) {
           </button>
         ))}
       </div>
+      {(board === 'daily' || board === 'roads') && <p className="hint">Reto de hoy: gana quien use menos movimientos y, si empatan, menos tiempo.</p>}
       {board === 'city' && <p className="hint">Monedas ganadas en total. Se actualiza cada pocos minutos.</p>}
       {board === 'stars' && <p className="hint">Estrellas de legado. Se actualiza al refundar la ciudad.</p>}
       {!cloudEnabled && <p className="empty">Configura Firebase para ver los rankings.</p>}
