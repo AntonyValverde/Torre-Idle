@@ -430,6 +430,15 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     stat: (s) => s.stars,
     desc: (v) => `Consigue ${fmt(v)} estrellas de legado`,
   },
+  {
+    id: 'casino',
+    name: 'Gran apostador',
+    emoji: '🎰',
+    // Cuenta partidas jugadas, no lo ganado: así no premia apostar fuerte
+    threshold: (k) => 25 * 3 ** k,
+    stat: (s) => s.casino.hands,
+    desc: (v) => `Juega ${fmt(v)} partidas en el casino`,
+  },
 ];
 
 export const ACHIEVEMENT_BONUS = 0.02;

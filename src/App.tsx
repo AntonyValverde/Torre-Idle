@@ -43,6 +43,7 @@ const ThiefScreen = lazy(() => import('./minigames/thief/ThiefScreen').then((m) 
 const TrafficScreen = lazy(() => import('./minigames/traffic/TrafficScreen').then((m) => ({ default: m.TrafficScreen })));
 const WheelScreen = lazy(() => import('./minigames/wheel/WheelScreen').then((m) => ({ default: m.WheelScreen })));
 const CupScreen = lazy(() => import('./ui/cup/CupScreen').then((m) => ({ default: m.CupScreen })));
+const CasinoScreen = lazy(() => import('./minigames/casino/CasinoScreen').then((m) => ({ default: m.CasinoScreen })));
 
 const loading = (
   <div className="game-screen splash">
@@ -221,6 +222,7 @@ export default function App() {
             {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
             {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
             {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
+            {game === 'casino' && <CasinoScreen onClose={() => setGame(null)} />}
           </Suspense>
         </ErrorBoundary>
       )}

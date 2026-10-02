@@ -5,9 +5,10 @@ import { STOCKS, saleValue, stockPrice } from '../game/stocks';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
 import { vipReady } from '../game/legacy';
+import { CASINO_ERA, casinoOpen, casinoToday } from '../game/casino';
 import { CupCard } from './cup/CupCard';
 
-export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro';
+export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro' | 'casino';
 
 /** Juegos que cuestan un ticket al entrar. */
 export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro'];
@@ -184,6 +185,29 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
               <small className="game-meta">{portfolio > 0 ? `Tu cartera: ${fmt(portfolio)} 🪙` : 'Invierte tus monedas'}</small>
             </div>
             <span className="game-cost">LIBRE</span>
+          </button>
+
+          <div className="section-head">
+            <h2>Casino</h2>
+            {casinoOpen(s) && <small className="muted">🎰 {fmt(s.casino.chips)} fichas</small>}
+          </div>
+
+          <button className="game-card casino" disabled={!casinoOpen(s)} onClick={() => onPlay('casino')}>
+            <span className="game-emoji">🎰</span>
+            <div className="game-info">
+              <b>Casino de la ciudad {casinoOpen(s) && NEW_TAG}</b>
+              <small>Tragaperras, blackjack, ruleta, cohete, rasca y gana y más alto o más bajo. Se juega con fichas.</small>
+              <small className="game-meta">
+                {!casinoOpen(s)
+                  ? `🔒 Abre en la era ${CASINO_ERA}: refunda tu ciudad`
+                  : !s.casino.welcome
+                    ? '🎁 ¡Regalo de bienvenida!'
+                    : !casinoToday(s.casino, t).bonus
+                      ? '🎁 Bono diario disponible'
+                      : 'Tienda de premios con tus fichas'}
+              </small>
+            </div>
+            <span className="game-cost">{casinoOpen(s) ? 'FICHAS' : '🔒'}</span>
           </button>
         </>
       )}

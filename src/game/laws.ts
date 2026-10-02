@@ -27,6 +27,10 @@ export interface LawEffects {
   arcadeCoins?: number;
   /** Tiempo de recarga de los tickets (menos = más rápido). */
   ticketRegen?: number;
+  /** Bono diario de fichas del casino. */
+  casinoBonus?: number;
+  /** Precio en monedas de las fichas del casino. */
+  chipPrice?: number;
 }
 
 type MultKey = Exclude<keyof LawEffects, 'crit' | 'offlineHours'>;
@@ -98,6 +102,14 @@ export const LAWS: LawDef[] = [
     pro: 'Tickets se recargan el doble de rápido',
     con: 'Producción x0.9',
     fx: { ticketRegen: 0.5, prod: 0.9 },
+  },
+  {
+    id: 'azar',
+    emoji: '🎰',
+    name: 'Ciudad del azar',
+    pro: 'Casino: bono diario x3 y fichas 30% más baratas',
+    con: 'Edificios 10% más caros',
+    fx: { casinoBonus: 3, chipPrice: 0.7, buildCost: 1.1 },
   },
 ];
 

@@ -2202,6 +2202,11 @@ img.splash-logo {
   padding: 4px;
 }
 
+.game-card.casino {
+  background: linear-gradient(135deg, #a3207f, #2b0b5a 60%, #0b4a5a);
+  border-color: rgba(255, 204, 77, 0.6);
+}
+
 .game-card.fortune {
   background: linear-gradient(135deg, #1f8a70, #2a4fa8);
 }
