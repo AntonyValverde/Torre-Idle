@@ -638,7 +638,12 @@ function PickCard({ week, view }: { week: string; view: CupView }) {
   const toast = useGame((st) => st.toast);
   const [choice, setChoice] = useState<string | null>(null);
   const [stake, setStake] = useState(PICK_STAKES[0]);
-  const rows = useMemo(() => view.standings.flat().filter((r) => r.played).sort((a, b) => b.points - a.points), [view]);
+  const uid = currentUid();
+  // No se puede apostar por uno mismo: siendo finalista, la apuesta casi nunca se perdería
+  const rows = useMemo(
+    () => view.standings.flat().filter((r) => r.played && r.entry.uid !== uid).sort((a, b) => b.points - a.points),
+    [view, uid],
+  );
   const pick = cup.pick?.week === week ? cup.pick : null;
   // Un pronóstico anterior sin cobrar se perdería: primero se cobra
   const pending = pick ? null : pendingCup(cup, week);
@@ -665,7 +670,7 @@ function PickCard({ week, view }: { week: string; view: CupView }) {
 
   const confirm = () => {
     const r = rows.find((x) => x.entry.uid === choice);
-    if (!r) return;
+    if (!r || r.entry.uid === uid) return;
     if (useGame.getState().cupPredict(week, r.entry.uid, r.entry.name, stake)) {
       sfx('buy');
       track('cup_pick', { stake });
@@ -676,9 +681,9 @@ function PickCard({ week, view }: { week: string; view: CupView }) {
   return (
     <div className="card cup-pick">
       <b>🔮 ¿Quién ganará la Copa?</b>
-      <small className="muted">Apuesta hoy, antes de la final del domingo. ×5 si aciertas el campeón, ×2 si sube al podio y recuperas la apuesta si llega a la final.</small>
+      <small className="muted">Apuesta hoy, antes de la final del domingo. ×5 si aciertas el campeón, ×2 si sube al podio y recuperas la apuesta si llega a la final. No puedes apostar por ti.</small>
       {rows.length === 0 ? (
-        <small className="muted">Aún nadie ha jugado: vuelve en un rato.</small>
+        <small className="muted">Aún no ha jugado nadie más: vuelve en un rato.</small>
       ) : (
         <>
           <div className="cup-pick-list">
