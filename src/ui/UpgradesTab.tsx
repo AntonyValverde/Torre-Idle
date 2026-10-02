@@ -23,11 +23,13 @@ import {
 import { fmt } from '../game/format';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
+import { advisorsAlert } from '../game/advisors';
 import { sfx, vibrate } from './haptics';
+import { Council } from './Council';
 import { LawCard } from './LawCard';
 import { Modal } from './Modal';
 
-type Section = 'upgrades' | 'gems' | 'legacy';
+type Section = 'upgrades' | 'council' | 'gems' | 'legacy';
 
 export function UpgradesTab() {
   const [section, setSection] = useState<Section>('upgrades');
@@ -45,9 +47,12 @@ export function UpgradesTab() {
 
   return (
     <div className="tab">
-      <div className="segmented wide">
+      <div className="segmented wide four">
         <button className={section === 'upgrades' ? 'active' : ''} onClick={() => setSection('upgrades')}>
           🪙 Mejoras{upgradesCount > 0 && <span className="seg-badge">{upgradesCount}</span>}
+        </button>
+        <button className={section === 'council' ? 'active' : ''} onClick={() => setSection('council')}>
+          🧑‍💼 Consejo{advisorsAlert(s) && <span className="seg-badge">!</span>}
         </button>
         <button className={section === 'gems' ? 'active' : ''} onClick={() => setSection('gems')}>
           💎 Gemas
@@ -57,6 +62,7 @@ export function UpgradesTab() {
         </button>
       </div>
       {section === 'upgrades' && <CoinUpgrades />}
+      {section === 'council' && <Council />}
       {section === 'gems' && <GemShop />}
       {section === 'legacy' && <Legacy />}
     </div>
@@ -158,7 +164,7 @@ function GemShop() {
     <>
       <div className="currency-banner gem">
         <span className="big">💎 {fmt(s.gems)}</span>
-        <small>Gana gemas en Fusión, el Apagón diario, logros, decretos y globos dorados.</small>
+        <small>Gana gemas en Fusión, el Apagón diario, logros, decretos y globos dorados. También compran sobres de consejeros en 🧑‍💼 Consejo.</small>
       </div>
       <ShopList items={GEM_SHOP} level={(id) => gemLevel(s, id)} budget={s.gems} currency="💎" onBuy={buyGem} />
     </>

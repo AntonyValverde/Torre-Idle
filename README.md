@@ -92,6 +92,11 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - **Hitos infinitos**: cada edificio produce x2 al llegar a 25, 50, 100… y después cada 100, sin límite.
 - **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado, que tiene niveles infinitos.
 - **Leyes de era**: desde la era 2, cada era se rige por una ley que eliges entre tres (las mismas para todos los que están en esa era). Cada ley tiene una ventaja y una desventaja: industrial (producción x1.75, toques ÷2), activa, turística, tecnológica, lúdica, nocturna, constructora o de feria. Rige hasta la próxima refundación ([laws.ts](src/game/laws.ts)).
+- **Consejeros** (Mejoras → 🧑‍💼 Consejo):
+  - 14 consejeros coleccionables: comunes (8, mejoran parejas de edificios), raros (toques, offline, arcade, tickets) y épicos (producción global, suerte).
+  - Salen en sobres: el primero es de regalo, y hay uno en el cofre del día y en cada misión semanal; también se compran por 20 💎.
+  - Las copias repetidas los suben de nivel sin límite (nivel 2 con 3 copias, nivel 3 con 6…).
+  - Solo dan su ventaja los que se sientan en el consejo: 2 sillas, y una más en las eras 3, 6 y 10. Sus efectos se combinan con la ley de la era ([advisors.ts](src/game/advisors.ts)).
 - **Logros**: 20 categorías, casi todas sin nivel máximo. Cada logro da +2% de producción y gemas.
 - **Decretos del consejo**: cada pocos minutos eliges entre dos ventajas (festival, lotería, horas extra…).
 - **Boosts combinables**: fuentes distintas se multiplican entre sí; la misma fuente solo se alarga.

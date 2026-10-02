@@ -3,6 +3,7 @@ import { isNameAllowed, randomName, sanitizeName } from './names';
 import { CARD_IDS, HISTORY_MAX, TRAINING_MAX, newCup, type CardId, type CupState } from './cup';
 import { newTutorial, tutorialState, type TutorialState } from './tutorial';
 import { LAW_BY_ID } from './laws';
+import { advisorsState, newAdvisors, type AdvisorsState } from './advisors';
 
 export interface Boost {
   k: string;
@@ -93,6 +94,8 @@ export interface GameState {
   tutorial: TutorialState;
   /** Ley elegida para la era actual (null: aún sin elegir o en la era 1). Se reinicia al refundar. */
   law: string | null;
+  /** Consejeros: colección, sillas del consejo y sobres sin abrir. */
+  advisors: AdvisorsState;
   createdAt: number;
 }
 
@@ -163,6 +166,7 @@ export function newState(t: number): GameState {
     pendingOffline: null,
     tutorial: newTutorial(),
     law: null,
+    advisors: newAdvisors(),
     createdAt: t,
   };
 }
@@ -364,6 +368,7 @@ export function normalize(raw: unknown, t: number): GameState {
     tutorial: tutorialState(r.tutorial),
     // Una ley que ya no existe (de otra versión) se descarta: se vuelve a elegir
     law: typeof r.law === 'string' && LAW_BY_ID.has(r.law) ? r.law : null,
+    advisors: advisorsState(r.advisors),
     createdAt: num(r.createdAt, t),
   };
 }

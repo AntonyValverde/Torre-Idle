@@ -28,6 +28,7 @@ import {
   regenTickets,
   startingCapital,
   tapValue,
+  fxMult,
   upgradeCost,
   type RareDef,
 } from './economy';
@@ -57,6 +58,11 @@ import {
 
 export interface CupClaim extends CupReward {
   card: CardId | null;
+}
+
+/** Un sobre de consejero para abrir en Mejoras → Consejo. */
+function withPack(s: GameState): GameState {
+  return { ...s, advisors: { ...s.advisors, packs: s.advisors.packs + 1 } };
 }
 
 /** Afición de la Copa: cuenta los días jugados entre semana. */
@@ -90,7 +96,8 @@ import {
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import { INCIDENTS, INCIDENT_BONUS, INCIDENT_PENALTY, INCIDENT_PENALTY_KEY, newIncident, type Incident, type IncidentKind } from './incidents';
-import { lawMult, lawOptions, lawPending } from './laws';
+import { lawOptions, lawPending } from './laws';
+import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
 
@@ -212,6 +219,14 @@ interface GameStore {
   /** Devuelve las monedas realmente invertidas (0 si no se pudo). */
   buyStock(id: string, coins: number): number;
   sellStock(id: string, fraction: number): { value: number; profit: number } | null;
+  /**
+   * Abre un sobre de consejero: el de regalo, uno guardado o uno comprado con gemas (en ese orden).
+   * Devuelve el consejero que salió, su nivel y si es nuevo o subió de nivel; null si no se pudo.
+   */
+  openAdvisorPack(): { def: AdvisorDef; level: number; isNew: boolean; levelUp: boolean; paid: number } | null;
+  /** Sienta a un consejero en una silla libre del consejo. */
+  seatAdvisor(id: string): boolean;
+  unseatAdvisor(id: string): void;
   /** Elige la ley de la era actual (una de sus tres opciones, una sola vez por era). */
   chooseLaw(id: string): boolean;
   /** Avanza un paso del tutorial que se completa con su botón. */
@@ -445,7 +460,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const t = now();
     const pps = productionPerSec(s, t, false);
-    const coins = Math.round(score * Math.max(15, pps * 10) * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(score * Math.max(15, pps * 10) * fxMult(s, 'arcadeCoins'));
     const mult = score >= 60 ? 5 : score >= 40 ? 4 : score >= 25 ? 3 : score >= 10 ? 2 : score >= 5 ? 1.5 : 1;
     const seconds = Math.min(900, score * 15);
     let next = { ...addCoins(s, coins), stackBest: Math.max(s.stackBest, score) };
@@ -457,7 +472,7 @@ export const useGame = create<GameStore>((set, get) => ({
   rewardMerge(score, maxTile) {
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
-    const coins = Math.round(score * Math.max(1, pps * 0.1) * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(score * Math.max(1, pps * 0.1) * fxMult(s, 'arcadeCoins'));
     const gems =
       maxTile >= 4096 ? 25 : maxTile >= 2048 ? 15 : maxTile >= 1024 ? 8 : maxTile >= 512 ? 4 : maxTile >= 256 ? 2 : maxTile >= 128 ? 1 : 0;
     const newRare = RARE.filter((r) => maxTile >= r.tile && !s.rare.includes(r.id));
@@ -497,7 +512,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
     const bonus = incidentBonus('fire', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(15, pps * 4) * bonus * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(score * Math.max(15, pps * 4) * bonus * fxMult(s, 'arcadeCoins'));
     const gems = score >= 400 ? 6 : score >= 250 ? 4 : score >= 120 ? 2 : score >= 60 ? 1 : 0;
     set({
       s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score),
@@ -511,7 +526,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const t = now();
     const pps = productionPerSec(s, t, false);
     const bonus = incidentBonus('metro', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(25, pps * 8) * bonus * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(score * Math.max(25, pps * 8) * bonus * fxMult(s, 'arcadeCoins'));
     const mult = score >= 150 ? 4 : score >= 100 ? 3 : score >= 50 ? 2 : score >= 20 ? 1.5 : 1;
     const seconds = Math.min(900, score * 12);
     // Fuente propia ('metro'): se multiplica con los boosts de Stack y Semáforo
@@ -526,7 +541,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const t = now();
     const pps = productionPerSec(s, t, false);
     const bonus = incidentBonus('traffic', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(10, pps * 6) * bonus * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(score * Math.max(10, pps * 6) * bonus * fxMult(s, 'arcadeCoins'));
     const mult = score >= 120 ? 5 : score >= 80 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : score >= 10 ? 1.5 : 1;
     const seconds = Math.min(900, score * 10);
     // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
@@ -538,7 +553,7 @@ export const useGame = create<GameStore>((set, get) => ({
 
   rewardMemory(rounds) {
     const { s } = get();
-    const coins = Math.round(rounds * Math.max(20, productionPerSec(s, now(), false) * 8) * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(rounds * Math.max(20, productionPerSec(s, now(), false) * 8) * fxMult(s, 'arcadeCoins'));
     const won = memoryTickets(rounds);
     // Los tickets ganados no pasan del máximo: Memoria rellena, no permite acumular sin fin
     const tickets = Math.max(s.tickets, Math.min(maxTickets(s), s.tickets + won));
@@ -700,7 +715,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
     const bonus = incidentBonus('thief', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(20, pps * 4) * bonus * lawMult(s, 'arcadeCoins'));
+    const coins = Math.round(score * Math.max(20, pps * 4) * bonus * fxMult(s, 'arcadeCoins'));
     const gems = score >= 150 ? 6 : score >= 100 ? 4 : score >= 60 ? 2 : score >= 30 ? 1 : 0;
     set({
       s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) }, 'arcade'), 'thief', score),
@@ -759,9 +774,9 @@ export const useGame = create<GameStore>((set, get) => ({
       return `+${DAILY_REWARD.gems} 💎 · +${DAILY_REWARD.tickets} 🎟️ · +${DAILY_REWARD.points} pts de liga`;
     }
     const card = randomCard(Math.random);
-    next = withCard(addPoints({ ...next, gems: next.gems + WEEKLY_REWARD.gems }, WEEKLY_REWARD.points), card);
+    next = withPack(withCard(addPoints({ ...next, gems: next.gems + WEEKLY_REWARD.gems }, WEEKLY_REWARD.points), card));
     set({ s: next });
-    return `+${WEEKLY_REWARD.gems} 💎 · +${WEEKLY_REWARD.points} pts de liga · ${CARDS[card].emoji} carta de la Copa`;
+    return `+${WEEKLY_REWARD.gems} 💎 · +${WEEKLY_REWARD.points} pts de liga · ${CARDS[card].emoji} carta de la Copa · 🧑‍💼 sobre de consejero`;
   },
 
   claimChest() {
@@ -769,20 +784,22 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!chestReady(s)) return null;
     const t = now();
     const card = randomCard(Math.random);
-    const next = withCard(
-      addPoints(
-        {
-          ...s,
-          missions: { ...s.missions, chest: true },
-          gems: s.gems + CHEST_REWARD.gems,
-          boosts: addBoost(s, t, 'cofre', CHEST_REWARD.boost, CHEST_REWARD.boostSeconds),
-        },
-        CHEST_REWARD.points,
+    const next = withPack(
+      withCard(
+        addPoints(
+          {
+            ...s,
+            missions: { ...s.missions, chest: true },
+            gems: s.gems + CHEST_REWARD.gems,
+            boosts: addBoost(s, t, 'cofre', CHEST_REWARD.boost, CHEST_REWARD.boostSeconds),
+          },
+          CHEST_REWARD.points,
+        ),
+        card,
       ),
-      card,
     );
     set({ s: next });
-    return `+${CHEST_REWARD.gems} 💎 · ⚡ Producción x${CHEST_REWARD.boost} ${CHEST_REWARD.boostSeconds / 60} min · +${CHEST_REWARD.points} pts de liga · ${CARDS[card].emoji} carta de la Copa`;
+    return `+${CHEST_REWARD.gems} 💎 · ⚡ Producción x${CHEST_REWARD.boost} ${CHEST_REWARD.boostSeconds / 60} min · +${CHEST_REWARD.points} pts de liga · ${CARDS[card].emoji} carta de la Copa · 🧑‍💼 sobre de consejero`;
   },
 
   claimLeague() {
@@ -910,6 +927,35 @@ export const useGame = create<GameStore>((set, get) => ({
     const flag = !!r?.flag;
     set({ s: { ...s, gems: s.gems + gems, cup: { ...s.cup, seasonClaimed: season, seasons: s.cup.seasons + (flag ? 1 : 0) } } });
     return { gems, flag };
+  },
+
+  openAdvisorPack() {
+    const { s } = get();
+    const a = s.advisors;
+    // Primero el regalo, luego los sobres guardados y, si no hay, se compra con gemas
+    const paid = a.gift && a.packs < 1 ? PACK_GEMS : 0;
+    if (paid && s.gems < paid) return null;
+    const def = drawAdvisor(Math.random);
+    const before = a.copies[def.id] ?? 0;
+    const copies = { ...a.copies, [def.id]: before + 1 };
+    const advisors = { ...a, copies, gift: true, packs: !a.gift || paid ? a.packs : a.packs - 1 };
+    set({ s: { ...s, gems: s.gems - paid, advisors } });
+    const level = levelFor(before + 1);
+    return { def, level, isNew: before === 0, levelUp: before > 0 && level > levelFor(before), paid };
+  },
+
+  seatAdvisor(id) {
+    const { s } = get();
+    const a = s.advisors;
+    if (!a.copies[id] || a.seats.includes(id) || a.seats.length >= seatCount(s)) return false;
+    set({ s: { ...s, advisors: { ...a, seats: [...a.seats, id] } } });
+    return true;
+  },
+
+  unseatAdvisor(id) {
+    const { s } = get();
+    if (!s.advisors.seats.includes(id)) return;
+    set({ s: { ...s, advisors: { ...s.advisors, seats: s.advisors.seats.filter((x) => x !== id) } } });
   },
 
   chooseLaw(id) {

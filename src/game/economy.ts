@@ -1,6 +1,17 @@
 import { fmt } from './format';
+import { advisorAdd, advisorBuildingMult, advisorMult, type AdvisorKey } from './advisors';
 import { lawAdd, lawMult } from './laws';
 import type { Boost, GameState } from './state';
+
+/** Efecto combinado de la ley de la era y de los consejeros sentados (multiplicador). */
+export function fxMult(s: GameState, key: Parameters<typeof lawMult>[1]): number {
+  return lawMult(s, key) * advisorMult(s, key as AdvisorKey);
+}
+
+/** Efecto combinado de la ley de la era y de los consejeros sentados (sumando). */
+export function fxAdd(s: GameState, key: Parameters<typeof lawAdd>[1]): number {
+  return lawAdd(s, key) + advisorAdd(s, key);
+}
 
 // =====================================================================
 // Edificios
@@ -51,7 +62,7 @@ export function maxAffordable(def: BuildingDef, owned: number, coins: number, di
 }
 
 export function costDiscount(s: GameState): number {
-  return 0.96 ** legacyLevel(s, 'arquitecto') * lawMult(s, 'buildCost');
+  return 0.96 ** legacyLevel(s, 'arquitecto') * fxMult(s, 'buildCost');
 }
 
 // ---------- Hitos: cada edificio duplica su producción al llegar a ciertas cantidades, para siempre ----------
@@ -154,7 +165,7 @@ export const UPGRADE_BY_ID = new Map(UPGRADES.map((u) => [u.id, u]));
 
 /** Coste real de una mejora (la ley de la era puede abaratarla o encarecerla). */
 export function upgradeCost(s: GameState, u: UpgradeDef): number {
-  return u.cost * lawMult(s, 'upgradeCost');
+  return u.cost * fxMult(s, 'upgradeCost');
 }
 
 // =====================================================================
@@ -478,7 +489,7 @@ export function totalBuildings(s: GameState): number {
 
 export function buildingMultiplier(s: GameState, buildingId: string): number {
   const upgrades = countUpgrades(s, (e) => e.type === 'building' && e.building === buildingId);
-  return 2 ** (upgrades + milestoneCount(s.buildings[buildingId] ?? 0));
+  return 2 ** (upgrades + milestoneCount(s.buildings[buildingId] ?? 0)) * advisorBuildingMult(s, buildingId);
 }
 
 export function buildingProduction(s: GameState, def: BuildingDef): number {
@@ -531,7 +542,7 @@ export function productionPerSec(s: GameState, t: number, withBoost = true): num
   let base = 0;
   for (const b of BUILDINGS) base += buildingProduction(s, b);
   const boost = withBoost ? boostMultiplier(s, t) : 1;
-  return base * globalMultiplier(s) * boost * lawMult(s, 'prod');
+  return base * globalMultiplier(s) * boost * fxMult(s, 'prod');
 }
 
 export function tapValue(s: GameState, t: number): number {
@@ -539,11 +550,11 @@ export function tapValue(s: GameState, t: number): number {
   const pct = 0.01 * countUpgrades(s, (e) => e.type === 'tapPct');
   const boost = boostMultiplier(s, t);
   const fest = isTapBoosted(s, t) ? s.tapBoostMult : 1;
-  return (mult * globalMultiplier(s) * boost + productionPerSec(s, t) * pct) * fest * lawMult(s, 'tap');
+  return (mult * globalMultiplier(s) * boost + productionPerSec(s, t) * pct) * fest * fxMult(s, 'tap');
 }
 
 export function critChance(s: GameState): number {
-  return 0.04 + 0.01 * legacyLevel(s, 'suerte') + lawAdd(s, 'crit');
+  return 0.04 + 0.01 * legacyLevel(s, 'suerte') + fxAdd(s, 'crit');
 }
 
 export function autoTapsPerSec(s: GameState): number {
@@ -552,7 +563,7 @@ export function autoTapsPerSec(s: GameState): number {
 
 /** Factor (<1) que acorta el tiempo entre globos dorados y decretos. */
 export function eventFrequency(s: GameState): number {
-  return 0.88 ** legacyLevel(s, 'cielo') * lawMult(s, 'events');
+  return 0.88 ** legacyLevel(s, 'cielo') * fxMult(s, 'events');
 }
 
 export function maxTickets(s: GameState): number {
@@ -560,16 +571,16 @@ export function maxTickets(s: GameState): number {
 }
 
 export function ticketRegenMs(s: GameState): number {
-  return 20 * 60_000 * 0.9 ** gemLevel(s, 'regen') * lawMult(s, 'ticketRegen');
+  return 20 * 60_000 * 0.9 ** gemLevel(s, 'regen') * fxMult(s, 'ticketRegen');
 }
 
 export function offlineCapSeconds(s: GameState): number {
-  return (2 + gemLevel(s, 'offline') + lawAdd(s, 'offlineHours')) * 3600;
+  return (2 + gemLevel(s, 'offline') + fxAdd(s, 'offlineHours')) * 3600;
 }
 
 export function offlineEfficiency(s: GameState): number {
   // Nunca más del 100%: cerrar la app no debe rendir más que jugar
-  return Math.min(1, (OFFLINE_EFFICIENCY + 0.1 * gemLevel(s, 'offlineEff')) * lawMult(s, 'offlineEff'));
+  return Math.min(1, (OFFLINE_EFFICIENCY + 0.1 * gemLevel(s, 'offlineEff')) * fxMult(s, 'offlineEff'));
 }
 
 /** Recarga tickets según el tiempo transcurrido. */

@@ -307,6 +307,153 @@ img.splash-logo {
   gap: 1px;
 }
 
+/* ---------- Consejo (consejeros coleccionables) ---------- */
+
+.r-comun {
+  --rarity: #9fb3c8;
+}
+
+.r-rara {
+  --rarity: #4aa8ff;
+}
+
+.r-epica {
+  --rarity: #c77dff;
+}
+
+.council-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #2a2050, #1d3048);
+  border: 1px solid var(--line);
+}
+
+.council-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.council-seats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid var(--rarity, var(--line));
+  font-size: 0.85rem;
+  line-height: 1.15;
+}
+
+.seat small {
+  font-size: 0.7rem;
+}
+
+.seat.empty {
+  border-style: dashed;
+  color: var(--muted);
+  justify-content: center;
+  min-height: 86px;
+}
+
+.seat-emoji {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.council-note {
+  text-align: center;
+}
+
+.advisor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 8px;
+}
+
+.advisor-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 10px 6px 8px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 2px solid var(--rarity, var(--line));
+  font-size: 0.85rem;
+  line-height: 1.15;
+}
+
+.advisor-card small {
+  font-size: 0.68rem;
+}
+
+.advisor-card.locked {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.advisor-card.seated {
+  background: linear-gradient(180deg, hsl(var(--hue) 40% 26%), var(--card));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--rarity) 50%, transparent);
+}
+
+.advisor-emoji {
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.advisor-fx {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.advisor-progress {
+  width: 100%;
+  height: 5px;
+  margin-top: 2px;
+}
+
+.seated-tag {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  translate: -50% 0;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: 99px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  background: var(--rarity);
+  color: #10121e;
+}
+
+.rarity {
+  color: var(--rarity);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.advisor-reveal .big-emoji {
+  filter: drop-shadow(0 0 22px var(--rarity));
+}
+
 /* ---------- Incidentes en la ciudad ---------- */
 
 /* Centrado con translate: las animaciones usan scale/opacity para no pisarlo */
@@ -745,6 +892,16 @@ img.splash-logo {
 .segmented.wide button {
   padding: 7px 8px;
   font-size: 0.85rem;
+}
+
+/* Cuatro secciones (Mejoras): más justas para que quepan en un móvil */
+.segmented.wide.four button {
+  padding: 7px 2px;
+  font-size: 0.8rem;
+}
+
+.segmented.wide.four .seg-badge {
+  margin-left: 2px;
 }
 
 .seg-badge {
