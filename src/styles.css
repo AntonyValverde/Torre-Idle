@@ -222,6 +222,91 @@ img.splash-logo {
   animation: none;
 }
 
+/* ---------- Leyes de era ---------- */
+
+.law-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #1d3a5c, #3a1f5c);
+  border: 1px solid #7ab8ff;
+  box-shadow: 0 0 24px rgba(120, 180, 255, 0.22);
+  animation: popIn 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.law-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.law-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.law-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  font-size: 0.85rem;
+  line-height: 1.15;
+}
+
+.law-option:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.law-option small {
+  font-size: 0.72rem;
+}
+
+.law-emoji {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.law-pro {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.law-con {
+  color: #ff9aa8;
+  font-weight: 700;
+}
+
+.law-note {
+  text-align: center;
+}
+
+.law-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.law-current > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 /* ---------- Incidentes en la ciudad ---------- */
 
 /* Centrado con translate: las animaciones usan scale/opacity para no pisarlo */

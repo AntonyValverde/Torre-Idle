@@ -2,6 +2,7 @@ import { dateKey } from '../game/clock';
 import { totalAchievements, totalBuildings } from '../game/economy';
 import type { GameState } from '../game/state';
 import { TUTORIAL, TUTORIAL_SINCE, stepsCompleted } from '../game/tutorial';
+import { LAWS } from '../game/laws';
 
 // Métricas del panel de administración, calculadas a partir de las partidas guardadas en Firestore.
 // Funciones puras: no leen la red, así se pueden probar.
@@ -82,6 +83,8 @@ export interface Summary {
   /** Partidas que pudieron ver el tutorial, y cuántas lo saltaron. */
   tutorialPlayers: number;
   tutorialSkipped: number;
+  /** Jugadores que rigen su era actual con cada ley. */
+  laws: Bucket[];
 }
 
 export function tutorialFunnel(players: Player[]): { funnel: Bucket[]; players: number; skipped: number } {
@@ -150,6 +153,7 @@ export function summarize(players: Player[], nowMs: number): Summary {
     tutorial: tut.funnel,
     tutorialPlayers: tut.players,
     tutorialSkipped: tut.skipped,
+    laws: LAWS.map((l) => ({ label: `${l.emoji} ${l.name}`, value: players.filter((p) => p.s.law === l.id).length })),
   };
 }
 

@@ -91,6 +91,7 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - **16 edificios**. Los 6 últimos se desbloquean en eras avanzadas.
 - **Hitos infinitos**: cada edificio produce x2 al llegar a 25, 50, 100… y después cada 100, sin límite.
 - **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado, que tiene niveles infinitos.
+- **Leyes de era**: desde la era 2, cada era se rige por una ley que eliges entre tres (las mismas para todos los que están en esa era). Cada ley tiene una ventaja y una desventaja: industrial (producción x1.75, toques ÷2), activa, turística, tecnológica, lúdica, nocturna, constructora o de feria. Rige hasta la próxima refundación ([laws.ts](src/game/laws.ts)).
 - **Logros**: 20 categorías, casi todas sin nivel máximo. Cada logro da +2% de producción y gemas.
 - **Decretos del consejo**: cada pocos minutos eliges entre dos ventajas (festival, lotería, horas extra…).
 - **Boosts combinables**: fuentes distintas se multiplican entre sí; la misma fuente solo se alarga.

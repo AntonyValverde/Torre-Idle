@@ -28,6 +28,7 @@ import {
   regenTickets,
   startingCapital,
   tapValue,
+  upgradeCost,
   type RareDef,
 } from './economy';
 import {
@@ -89,6 +90,7 @@ import {
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import { INCIDENTS, INCIDENT_BONUS, INCIDENT_PENALTY, INCIDENT_PENALTY_KEY, newIncident, type Incident, type IncidentKind } from './incidents';
+import { lawMult, lawOptions, lawPending } from './laws';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
 
@@ -210,6 +212,8 @@ interface GameStore {
   /** Devuelve las monedas realmente invertidas (0 si no se pudo). */
   buyStock(id: string, coins: number): number;
   sellStock(id: string, fraction: number): { value: number; profit: number } | null;
+  /** Elige la ley de la era actual (una de sus tres opciones, una sola vez por era). */
+  chooseLaw(id: string): boolean;
   /** Avanza un paso del tutorial que se completa con su botón. */
   tutorialNext(): void;
   tutorialSkip(): void;
@@ -390,8 +394,10 @@ export const useGame = create<GameStore>((set, get) => ({
   buyUpgrade(id) {
     const { s } = get();
     const u = UPGRADE_BY_ID.get(id);
-    if (!u || s.upgrades.includes(id) || !u.unlocked(s) || s.coins < u.cost) return false;
-    set({ s: bump({ ...s, coins: s.coins - u.cost, upgrades: [...s.upgrades, id] }, 'upgrade') });
+    if (!u || s.upgrades.includes(id) || !u.unlocked(s)) return false;
+    const cost = upgradeCost(s, u);
+    if (!(cost <= s.coins)) return false;
+    set({ s: bump({ ...s, coins: s.coins - cost, upgrades: [...s.upgrades, id] }, 'upgrade') });
     return true;
   },
 
@@ -439,7 +445,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const t = now();
     const pps = productionPerSec(s, t, false);
-    const coins = Math.round(score * Math.max(15, pps * 10));
+    const coins = Math.round(score * Math.max(15, pps * 10) * lawMult(s, 'arcadeCoins'));
     const mult = score >= 60 ? 5 : score >= 40 ? 4 : score >= 25 ? 3 : score >= 10 ? 2 : score >= 5 ? 1.5 : 1;
     const seconds = Math.min(900, score * 15);
     let next = { ...addCoins(s, coins), stackBest: Math.max(s.stackBest, score) };
@@ -451,7 +457,7 @@ export const useGame = create<GameStore>((set, get) => ({
   rewardMerge(score, maxTile) {
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
-    const coins = Math.round(score * Math.max(1, pps * 0.1));
+    const coins = Math.round(score * Math.max(1, pps * 0.1) * lawMult(s, 'arcadeCoins'));
     const gems =
       maxTile >= 4096 ? 25 : maxTile >= 2048 ? 15 : maxTile >= 1024 ? 8 : maxTile >= 512 ? 4 : maxTile >= 256 ? 2 : maxTile >= 128 ? 1 : 0;
     const newRare = RARE.filter((r) => maxTile >= r.tile && !s.rare.includes(r.id));
@@ -491,7 +497,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
     const bonus = incidentBonus('fire', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(15, pps * 4) * bonus);
+    const coins = Math.round(score * Math.max(15, pps * 4) * bonus * lawMult(s, 'arcadeCoins'));
     const gems = score >= 400 ? 6 : score >= 250 ? 4 : score >= 120 ? 2 : score >= 60 ? 1 : 0;
     set({
       s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score),
@@ -505,7 +511,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const t = now();
     const pps = productionPerSec(s, t, false);
     const bonus = incidentBonus('metro', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(25, pps * 8) * bonus);
+    const coins = Math.round(score * Math.max(25, pps * 8) * bonus * lawMult(s, 'arcadeCoins'));
     const mult = score >= 150 ? 4 : score >= 100 ? 3 : score >= 50 ? 2 : score >= 20 ? 1.5 : 1;
     const seconds = Math.min(900, score * 12);
     // Fuente propia ('metro'): se multiplica con los boosts de Stack y Semáforo
@@ -520,7 +526,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const t = now();
     const pps = productionPerSec(s, t, false);
     const bonus = incidentBonus('traffic', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(10, pps * 6) * bonus);
+    const coins = Math.round(score * Math.max(10, pps * 6) * bonus * lawMult(s, 'arcadeCoins'));
     const mult = score >= 120 ? 5 : score >= 80 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : score >= 10 ? 1.5 : 1;
     const seconds = Math.min(900, score * 10);
     // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
@@ -532,7 +538,7 @@ export const useGame = create<GameStore>((set, get) => ({
 
   rewardMemory(rounds) {
     const { s } = get();
-    const coins = Math.round(rounds * Math.max(20, productionPerSec(s, now(), false) * 8));
+    const coins = Math.round(rounds * Math.max(20, productionPerSec(s, now(), false) * 8) * lawMult(s, 'arcadeCoins'));
     const won = memoryTickets(rounds);
     // Los tickets ganados no pasan del máximo: Memoria rellena, no permite acumular sin fin
     const tickets = Math.max(s.tickets, Math.min(maxTickets(s), s.tickets + won));
@@ -631,6 +637,8 @@ export const useGame = create<GameStore>((set, get) => ({
       tapBoostMult: 1,
       tapBoostUntil: 0,
       stocks: {},
+      // Cada era nueva elige su ley
+      law: null,
       lastTick: t,
     };
     next.coins = startingCapital(next);
@@ -692,7 +700,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
     const bonus = incidentBonus('thief', get().incidentPlay, score, get().toast);
-    const coins = Math.round(score * Math.max(20, pps * 4) * bonus);
+    const coins = Math.round(score * Math.max(20, pps * 4) * bonus * lawMult(s, 'arcadeCoins'));
     const gems = score >= 150 ? 6 : score >= 100 ? 4 : score >= 60 ? 2 : score >= 30 ? 1 : 0;
     set({
       s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) }, 'arcade'), 'thief', score),
@@ -902,6 +910,13 @@ export const useGame = create<GameStore>((set, get) => ({
     const flag = !!r?.flag;
     set({ s: { ...s, gems: s.gems + gems, cup: { ...s.cup, seasonClaimed: season, seasons: s.cup.seasons + (flag ? 1 : 0) } } });
     return { gems, flag };
+  },
+
+  chooseLaw(id) {
+    const { s } = get();
+    if (!lawPending(s) || !lawOptions(s.era).some((l) => l.id === id)) return false;
+    set({ s: { ...s, law: id } });
+    return true;
   },
 
   tutorialNext() {

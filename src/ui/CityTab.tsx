@@ -20,7 +20,9 @@ import {
 import { fmt, fmtClock } from '../game/format';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
+import { currentLaw } from '../game/laws';
 import { CityIncident } from './CityIncident';
+import { LawCard } from './LawCard';
 import { CityScene } from './CityScene';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
@@ -47,6 +49,7 @@ export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIn
   // Primer edificio bloqueado por era: se muestra como teaser de la próxima era
   const nextEraBuilding = BUILDINGS.find((_, i) => isBuildingEraLocked(s, i));
   const tut = currentStep(s)?.id;
+  const law = currentLaw(s);
 
   return (
     <div className="tab city-tab">
@@ -55,6 +58,7 @@ export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIn
         <CityIncident onPlay={onIncident} />
         <div className="scene-badge">
           Era {s.era} · {eraName(s.era)}
+          {law && ` · ${law.emoji}`}
         </div>
         <div className="scene-badge scene-weather">
           {WEATHER_LABEL[weatherAt(t)]}
@@ -66,6 +70,8 @@ export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIn
           {festival && <span className="hot">🎉 x{s.tapBoostMult} {fmtClock(s.tapBoostUntil - t)}</span>}
         </div>
       </div>
+
+      <LawCard />
 
       {isUnlocked(s, 'missions') && <MissionsCard />}
 

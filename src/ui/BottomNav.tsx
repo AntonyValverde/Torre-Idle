@@ -11,10 +11,12 @@ import {
   legacyLevel,
   maxTickets,
   pendingStars,
+  upgradeCost,
 } from '../game/economy';
 import { claimableMissions } from '../game/missions';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
+import { lawPending } from '../game/laws';
 
 export type TabId = 'city' | 'upgrades' | 'games' | 'ranking' | 'profile';
 
@@ -30,7 +32,7 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
   const s = useGame((st) => st.s);
   const decree = useGame((st) => st.decree);
   const affordable =
-    availableUpgrades(s).filter((u) => s.coins >= u.cost).length +
+    availableUpgrades(s).filter((u) => s.coins >= upgradeCost(s, u)).length +
     affordableShopItems(GEM_SHOP, (id) => gemLevel(s, id), s.gems) +
     affordableShopItems(LEGACY, (id) => legacyLevel(s, id), availableStars(s));
   const today = dateKey(s.lastTick);
@@ -46,6 +48,7 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
 
   const badge = (id: TabId) => {
     if (id === 'city' && decree && tab !== 'city') return <span className="badge dot">📜</span>;
+    if (id === 'city' && lawPending(s)) return <span className="badge dot">⚖️</span>;
     if (id === 'city' && missions > 0) return <span className="badge">{missions > 9 ? '9+' : missions}</span>;
     if (id === 'upgrades' && pendingStars(s) > 0 && affordable === 0) return <span className="badge dot">⭐</span>;
     if (id === 'upgrades' && affordable > 0) return <span className="badge">{affordable > 9 ? '9+' : affordable}</span>;

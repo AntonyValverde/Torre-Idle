@@ -17,12 +17,14 @@ import {
   pendingStars,
   startingCapital,
   starsPotential,
+  upgradeCost,
   type ShopItemDef,
 } from '../game/economy';
 import { fmt } from '../game/format';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
 import { sfx, vibrate } from './haptics';
+import { LawCard } from './LawCard';
 import { Modal } from './Modal';
 
 type Section = 'upgrades' | 'gems' | 'legacy';
@@ -30,7 +32,7 @@ type Section = 'upgrades' | 'gems' | 'legacy';
 export function UpgradesTab() {
   const [section, setSection] = useState<Section>('upgrades');
   const s = useGame((st) => st.s);
-  const upgradesCount = availableUpgrades(s).filter((u) => s.coins >= u.cost).length;
+  const upgradesCount = availableUpgrades(s).filter((u) => s.coins >= upgradeCost(s, u)).length;
 
   // Durante el tutorial solo están las mejoras con monedas; Gemas y Legado llegan al terminarlo
   if (!isUnlocked(s, 'shops')) {
@@ -72,7 +74,8 @@ function CoinUpgrades() {
       {upgrades.length === 0 && <p className="empty">Compra más edificios para desbloquear mejoras.</p>}
       <ul className="list">
         {upgrades.map((u, i) => {
-          const can = s.coins >= u.cost;
+          const cost = upgradeCost(s, u);
+          const can = s.coins >= cost;
           return (
             <li key={u.id} className={`row${can ? ' can' : ''}${tutStep && i === 0 ? ' tut-target' : ''}`}>
               <span className="row-emoji">{u.emoji}</span>
@@ -82,7 +85,7 @@ function CoinUpgrades() {
               </div>
               <button
                 className={`buy${can ? ' can' : ''}`}
-                style={{ '--p': `${Math.min(100, (s.coins / u.cost) * 100)}%` } as CSSProperties}
+                style={{ '--p': `${Math.min(100, (s.coins / cost) * 100)}%` } as CSSProperties}
                 disabled={!can}
                 onClick={() => {
                   if (!buyUpgrade(u.id)) return;
@@ -90,7 +93,7 @@ function CoinUpgrades() {
                   vibrate(12);
                 }}
               >
-                {fmt(u.cost)} 🪙
+                {fmt(cost)} 🪙
               </button>
             </li>
           );
@@ -183,7 +186,7 @@ function Legacy() {
     celebrate(10);
     sfx('win');
     vibrate([30, 50, 30, 50, 80]);
-    st.toast(`🌅 ¡Bienvenido a la era ${ns.era}: ${eraName(ns.era)}! +${gained} ⭐`);
+    st.toast(`🌅 ¡Bienvenido a la era ${ns.era}: ${eraName(ns.era)}! +${gained} ⭐ · Elige la ley de la era ⚖️`);
     track('prestige', { era: ns.era, stars: ns.stars });
     submitScore('stars', ns.stars, ns.name).catch(() => {});
     saveCloud(ns).catch(() => {});
@@ -227,6 +230,8 @@ function Legacy() {
           {pending < 1 ? 'Necesitas al menos 1 ⭐' : `Refundar y ganar ${fmt(pending)} ⭐`}
         </button>
       </div>
+
+      <LawCard showCurrent />
 
       <div className="section-head">
         <h2>Árbol de legado</h2>

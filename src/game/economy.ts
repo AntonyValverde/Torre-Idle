@@ -1,4 +1,5 @@
 import { fmt } from './format';
+import { lawAdd, lawMult } from './laws';
 import type { Boost, GameState } from './state';
 
 // =====================================================================
@@ -50,7 +51,7 @@ export function maxAffordable(def: BuildingDef, owned: number, coins: number, di
 }
 
 export function costDiscount(s: GameState): number {
-  return 0.96 ** legacyLevel(s, 'arquitecto');
+  return 0.96 ** legacyLevel(s, 'arquitecto') * lawMult(s, 'buildCost');
 }
 
 // ---------- Hitos: cada edificio duplica su producción al llegar a ciertas cantidades, para siempre ----------
@@ -150,6 +151,11 @@ export const UPGRADES: UpgradeDef[] = [
 ];
 
 export const UPGRADE_BY_ID = new Map(UPGRADES.map((u) => [u.id, u]));
+
+/** Coste real de una mejora (la ley de la era puede abaratarla o encarecerla). */
+export function upgradeCost(s: GameState, u: UpgradeDef): number {
+  return u.cost * lawMult(s, 'upgradeCost');
+}
 
 // =====================================================================
 // Edificios raros (se consiguen en Fusión)
@@ -525,7 +531,7 @@ export function productionPerSec(s: GameState, t: number, withBoost = true): num
   let base = 0;
   for (const b of BUILDINGS) base += buildingProduction(s, b);
   const boost = withBoost ? boostMultiplier(s, t) : 1;
-  return base * globalMultiplier(s) * boost;
+  return base * globalMultiplier(s) * boost * lawMult(s, 'prod');
 }
 
 export function tapValue(s: GameState, t: number): number {
@@ -533,11 +539,11 @@ export function tapValue(s: GameState, t: number): number {
   const pct = 0.01 * countUpgrades(s, (e) => e.type === 'tapPct');
   const boost = boostMultiplier(s, t);
   const fest = isTapBoosted(s, t) ? s.tapBoostMult : 1;
-  return (mult * globalMultiplier(s) * boost + productionPerSec(s, t) * pct) * fest;
+  return (mult * globalMultiplier(s) * boost + productionPerSec(s, t) * pct) * fest * lawMult(s, 'tap');
 }
 
 export function critChance(s: GameState): number {
-  return 0.04 + 0.01 * legacyLevel(s, 'suerte');
+  return 0.04 + 0.01 * legacyLevel(s, 'suerte') + lawAdd(s, 'crit');
 }
 
 export function autoTapsPerSec(s: GameState): number {
@@ -546,7 +552,7 @@ export function autoTapsPerSec(s: GameState): number {
 
 /** Factor (<1) que acorta el tiempo entre globos dorados y decretos. */
 export function eventFrequency(s: GameState): number {
-  return 0.88 ** legacyLevel(s, 'cielo');
+  return 0.88 ** legacyLevel(s, 'cielo') * lawMult(s, 'events');
 }
 
 export function maxTickets(s: GameState): number {
@@ -554,15 +560,16 @@ export function maxTickets(s: GameState): number {
 }
 
 export function ticketRegenMs(s: GameState): number {
-  return 20 * 60_000 * 0.9 ** gemLevel(s, 'regen');
+  return 20 * 60_000 * 0.9 ** gemLevel(s, 'regen') * lawMult(s, 'ticketRegen');
 }
 
 export function offlineCapSeconds(s: GameState): number {
-  return (2 + gemLevel(s, 'offline')) * 3600;
+  return (2 + gemLevel(s, 'offline') + lawAdd(s, 'offlineHours')) * 3600;
 }
 
 export function offlineEfficiency(s: GameState): number {
-  return OFFLINE_EFFICIENCY + 0.1 * gemLevel(s, 'offlineEff');
+  // Nunca más del 100%: cerrar la app no debe rendir más que jugar
+  return Math.min(1, (OFFLINE_EFFICIENCY + 0.1 * gemLevel(s, 'offlineEff')) * lawMult(s, 'offlineEff'));
 }
 
 /** Recarga tickets según el tiempo transcurrido. */

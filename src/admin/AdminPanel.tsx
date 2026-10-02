@@ -196,6 +196,12 @@ function SummaryView({
       </div>
 
       <div className="card">
+        <b>Leyes de era</b>
+        <small className="muted">Ley que rige ahora en cada ciudad (desde la era 2)</small>
+        <BarList data={sum.laws} total={Math.max(1, sum.laws.reduce((n, b) => n + b.value, 0))} />
+      </div>
+
+      <div className="card">
         <b>Jugadores por minijuego</b>
         <small className="muted">Cuántos lo han jugado al menos una vez</small>
         <BarList data={sum.adoption} total={sum.total} />
