@@ -4,6 +4,7 @@ import { CARD_IDS, HISTORY_MAX, TRAINING_MAX, newCup, type CardId, type CupState
 import { newTutorial, tutorialState, type TutorialState } from './tutorial';
 import { LAW_BY_ID } from './laws';
 import { advisorsState, newAdvisors, type AdvisorsState } from './advisors';
+import { newPaper, paperState, type PaperState } from './paper';
 import { casinoState, newCasino, type CasinoState } from './casino';
 
 export interface Boost {
@@ -101,6 +102,8 @@ export interface GameState {
   respecFree: boolean;
   /** Última partida gratis del Pase VIP (hora de confianza). */
   vipLast: number;
+  /** Periódico diario: foto de la ciudad de cada día y resumen de la edición. */
+  paper: PaperState;
   /** Casino (desde la era 2): fichas, nivel de socio y partidas a medias. Sobrevive a las refundaciones. */
   casino: CasinoState;
   createdAt: number;
@@ -176,6 +179,7 @@ export function newState(t: number): GameState {
     advisors: newAdvisors(),
     respecFree: true,
     vipLast: 0,
+    paper: newPaper(),
     casino: newCasino(),
     createdAt: t,
   };
@@ -382,6 +386,7 @@ export function normalize(raw: unknown, t: number): GameState {
     // Sin campo (partidas de antes del árbol con ramas): la primera reorganización es gratis
     respecFree: r.respecFree !== false,
     vipLast: num(r.vipLast, 0),
+    paper: paperState(r.paper),
     casino: casinoState(r.casino),
     createdAt: num(r.createdAt, t),
   };

@@ -23,6 +23,7 @@ import { currentStep, isUnlocked } from '../game/tutorial';
 import { currentLaw } from '../game/laws';
 import { CityIncident } from './CityIncident';
 import { LawCard } from './LawCard';
+import { NewspaperCard, NewspaperScreen } from './Newspaper';
 import { CityScene } from './CityScene';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
@@ -39,6 +40,7 @@ export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIn
   const s = useGame((st) => st.s);
   const buy = useGame((st) => st.buyBuilding);
   const [amount, setAmount] = useState<(typeof AMOUNTS)[number]>(1);
+  const [paper, setPaper] = useState(false);
   const t = s.lastTick;
   const mult = globalMultiplier(s) * boostMultiplier(s, t);
   const discount = costDiscount(s);
@@ -72,6 +74,9 @@ export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIn
       </div>
 
       <LawCard />
+
+      {isUnlocked(s, 'ranking') && <NewspaperCard onOpen={() => setPaper(true)} />}
+      {paper && <NewspaperScreen onClose={() => setPaper(false)} />}
 
       {isUnlocked(s, 'missions') && <MissionsCard />}
 

@@ -2,6 +2,7 @@ import { hashString, mulberry32 } from '../minigames/rng';
 import { dateKey, isNewDay, weekKey } from './clock';
 import type { GameState } from './state';
 import { tutorialProgress } from './tutorial';
+import { rollPaper } from './paper';
 
 // Misiones diarias y semanales, y la liga semanal que se alimenta de ellas.
 // Las misiones del día (y de la semana) son las mismas para todos: salen de la fecha.
@@ -164,7 +165,8 @@ export function syncPeriods(s: GameState, t: number): GameState {
     if (ended && l.prev) next = payLeague(next, l.prev.points);
     next = { ...next, league: { ...next.league, week, points: 0, prev: ended ?? l.prev } };
   }
-  return m === s.missions && next === s ? s : { ...next, missions: m };
+  // El periódico hace su foto diaria de la ciudad
+  return rollPaper(m === s.missions && next === s ? s : { ...next, missions: m }, today);
 }
 
 /** Cobra el premio de una semana de liga: gemas, tickets y la mejor división (para el logro). */

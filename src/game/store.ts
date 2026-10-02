@@ -98,6 +98,7 @@ import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unit
 import { INCIDENTS, INCIDENT_BONUS, INCIDENT_PENALTY, INCIDENT_PENALTY_KEY, newIncident, type Incident, type IncidentKind } from './incidents';
 import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
+import { PAPER_GEMS, paperUnread } from './paper';
 import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
@@ -234,6 +235,8 @@ interface GameStore {
   unseatAdvisor(id: string): void;
   /** Elige la ley de la era actual (una de sus tres opciones, una sola vez por era). */
   chooseLaw(id: string): boolean;
+  /** Marca el periódico de hoy como leído; devuelve la propina en gemas (0 si ya se leyó hoy). */
+  readPaper(): number;
   /** Avanza un paso del tutorial que se completa con su botón. */
   tutorialNext(): void;
   tutorialSkip(): void;
@@ -987,6 +990,14 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!lawPending(s) || !lawOptions(s.era).some((l) => l.id === id)) return false;
     set({ s: { ...s, law: id } });
     return true;
+  },
+
+  readPaper() {
+    const { s } = get();
+    const today = dateKey(now());
+    if (!paperUnread(s, today)) return 0;
+    set({ s: { ...s, gems: s.gems + PAPER_GEMS, paper: { ...s.paper, read: today } } });
+    return PAPER_GEMS;
   },
 
   tutorialNext() {

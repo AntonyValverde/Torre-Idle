@@ -61,6 +61,14 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - Las partidas de antes del tutorial no lo ven.
 - El panel de administración muestra el embudo: cuántos jugadores nuevos completan cada paso y cuántos lo saltan.
 
+## Periódico: La Gaceta de Infinite City
+
+- Cada día sale una edición nueva. Se abre desde la tarjeta 📰 de la Ciudad, y la primera lectura del día da +2 💎 de propina del repartidor.
+- La portada cuenta lo más destacado de tu ciudad desde la edición anterior: nueva era, copas, ascenso de liga, récords de minijuegos, logros y lo recaudado.
+- "Ayer en tu ciudad" (o "desde tu última visita") sale de una foto diaria de tus estadísticas ([paper.ts](src/game/paper.ts)).
+- También trae la previsión del clima, la acción que más sube y la que más baja en 24 h, la agenda (fase de la Copa, retos, rueda y cofre), la columna de Clara con un consejo según tu partida y dos anuncios clasificados.
+- Todo sale de la partida o de fórmulas iguales para todos ([gazette.ts](src/ui/gazette.ts)). Lo único que se lee de Firestore son los ganadores de ayer de los tres retos diarios: tres lecturas.
+
 ## Incidentes en la ciudad
 
 - Cada 6–10 minutos, si estás mirando la ciudad, aparece un incidente en la escena: 🔥 incendio, 🦹 ladrón, 🚦 atasco o 🚇 hora punta.

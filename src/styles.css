@@ -307,6 +307,255 @@ img.splash-logo {
   gap: 1px;
 }
 
+/* ---------- Periódico (La Gaceta) ---------- */
+
+.paper-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #f4ecd8, #e3d5b3);
+  color: #2b2418;
+  text-align: left;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.paper-card.unread {
+  box-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.35),
+    0 0 18px rgba(255, 210, 120, 0.45);
+}
+
+.paper-card-icon {
+  font-size: 30px;
+}
+
+.paper-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.paper-card-main small {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  color: #5a4c33;
+}
+
+.paper-card-main b {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.paper-card-tip {
+  font-weight: 800;
+  color: #1d6b4a;
+  white-space: nowrap;
+}
+
+.paper-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  overflow-y: auto;
+  background: rgba(10, 8, 20, 0.75);
+  padding: calc(12px + var(--safe-top)) 10px calc(16px + var(--safe-bottom));
+  animation: tabIn 0.25s ease-out;
+}
+
+.paper {
+  position: relative;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 18px 16px 20px;
+  background: #f4ecd8;
+  background-image: radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.5), transparent 60%);
+  color: #2b2418;
+  font-family: Georgia, 'Times New Roman', serif;
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  user-select: text;
+}
+
+.paper-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #2b2418;
+  font-size: 1.1rem;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.paper-masthead {
+  text-align: center;
+  border-bottom: 3px double #2b2418;
+  padding-bottom: 8px;
+}
+
+.paper-masthead h1 {
+  margin: 0;
+  font-size: 2.4rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.paper-sub {
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.paper-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #2b2418;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.paper-weather {
+  display: flex;
+  justify-content: space-around;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid #2b2418;
+  font-size: 0.8rem;
+}
+
+.paper-weather small {
+  display: block;
+  text-align: center;
+  font-style: italic;
+  color: #5a4c33;
+}
+
+.paper-lead {
+  text-align: center;
+  padding: 12px 0 8px;
+  border-bottom: 1px solid rgba(43, 36, 24, 0.4);
+}
+
+.paper-lead-emoji {
+  font-size: 44px;
+}
+
+.paper-lead h2 {
+  margin: 4px 0 6px;
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.paper-lead p,
+.paper-section p,
+.paper-briefs p {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.paper-briefs {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(43, 36, 24, 0.4);
+}
+
+.paper-section {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(43, 36, 24, 0.4);
+}
+
+.paper-section h3 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.paper-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  text-align: center;
+  font-size: 0.78rem;
+}
+
+.paper-stats b {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.paper-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+
+.paper-columns .paper-section + .paper-section {
+  border-left: 1px solid rgba(43, 36, 24, 0.4);
+  padding-left: 12px;
+  margin-left: -6px;
+}
+
+.paper .up {
+  color: #1d6b4a;
+}
+
+.paper .down {
+  color: #a3202f;
+}
+
+.paper-muted {
+  color: #7a6a4c;
+  font-style: italic;
+}
+
+.paper-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.paper-clara p {
+  font-style: italic;
+}
+
+.paper-ad {
+  font-size: 0.82rem !important;
+  padding: 4px 6px;
+  border: 1px dashed rgba(43, 36, 24, 0.5);
+}
+
+.paper-done {
+  width: 100%;
+  margin-top: 12px;
+  font-family: var(--font);
+}
+
+@media (max-width: 360px) {
+  .paper-columns {
+    grid-template-columns: 1fr;
+  }
+  .paper-columns .paper-section + .paper-section {
+    border-left: 0;
+    padding-left: 0;
+    margin-left: 0;
+  }
+}
+
 /* ---------- Árbol de legado ---------- */
 
 .legacy-label {
