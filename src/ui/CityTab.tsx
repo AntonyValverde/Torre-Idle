@@ -20,6 +20,7 @@ import {
 import { fmt, fmtClock } from '../game/format';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
+import { CityIncident } from './CityIncident';
 import { CityScene } from './CityScene';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
@@ -28,8 +29,11 @@ import { SEASON_LABEL, WEATHER_LABEL, seasonAt, weatherAt } from './weather';
 
 const AMOUNTS = [1, 10, -1] as const;
 
-/** `paused`: hay una pantalla completa encima y la escena no necesita dibujarse. */
-export function CityTab({ paused = false }: { paused?: boolean }) {
+/**
+ * `paused`: hay una pantalla completa encima y la escena no necesita dibujarse.
+ * `onIncident`: el jugador tocó el incidente de la escena (abre su minijuego gratis).
+ */
+export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIncident: () => void }) {
   const s = useGame((st) => st.s);
   const buy = useGame((st) => st.buyBuilding);
   const [amount, setAmount] = useState<(typeof AMOUNTS)[number]>(1);
@@ -48,6 +52,7 @@ export function CityTab({ paused = false }: { paused?: boolean }) {
     <div className="tab city-tab">
       <div className={`scene-wrap${tut === 'tap' ? ' tut-target' : ''}`}>
         <CityScene paused={paused} />
+        <CityIncident onPlay={onIncident} />
         <div className="scene-badge">
           Era {s.era} · {eraName(s.era)}
         </div>

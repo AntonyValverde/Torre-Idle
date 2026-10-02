@@ -23,6 +23,12 @@ export function TopBar() {
                 ⚡x{fmt(boost)} {fmtClock(boostRemainingMs(s, t))}
               </span>
             )}
+            {/* Daños de un incidente sin atender (y ningún boost que los compense) */}
+            {boost < 1 && (
+              <span className="boost-chip bad">
+                🔻x{boost.toFixed(2)} {fmtClock(boostRemainingMs(s, t))}
+              </span>
+            )}
           </div>
         </div>
       </div>

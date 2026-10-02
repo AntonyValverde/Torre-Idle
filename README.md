@@ -61,6 +61,13 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - Las partidas de antes del tutorial no lo ven.
 - El panel de administración muestra el embudo: cuántos jugadores nuevos completan cada paso y cuántos lo saltan.
 
+## Incidentes en la ciudad
+
+- Cada 6–10 minutos, si estás mirando la ciudad, aparece un incidente en la escena: 🔥 incendio, 🦹 ladrón, 🚦 atasco o 🚇 hora punta.
+- Al tocarlo se abre su minijuego (Bomberos, Atrapa al ladrón, Semáforo o Metro) **gratis, sin ticket**, y sus monedas valen **x1,5**.
+- Hay 90 s para atenderlo. Si se ignora, la producción baja a x0,85 durante 2 minutos (se ve en rojo en la barra de arriba). Si vence con la app en segundo plano, desaparece sin daños.
+- No salen durante el tutorial, y "Cielo festivo" los hace más frecuentes. La lógica está en [incidents.ts](src/game/incidents.ts).
+
 ## Misiones y liga semanal
 
 - **Misiones diarias**: 3 al día, iguales para todos (una de ciudad, una de minijuego y una libre). Cada una da 💎, 🎟️ y puntos de liga. Completar las tres abre el **cofre del día** (gemas, boost x2 de 15 min y más puntos).

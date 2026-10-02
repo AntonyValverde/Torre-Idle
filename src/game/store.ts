@@ -88,6 +88,7 @@ import {
 } from './missions';
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
+import { INCIDENTS, INCIDENT_BONUS, INCIDENT_PENALTY, INCIDENT_PENALTY_KEY, newIncident, type Incident, type IncidentKind } from './incidents';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
 
@@ -146,6 +147,16 @@ interface GameStore {
   ready: boolean;
   toasts: Toast[];
   decree: DecreeOffer | null;
+  /** Incidente en la escena esperando a que lo atiendan. */
+  incident: Incident | null;
+  /** Minijuego abierto para resolver un incidente: su premio lleva el extra. */
+  incidentPlay: IncidentKind | null;
+  /** Saca un incidente a la ciudad (si no hay ya uno). */
+  offerIncident(): void;
+  /** Atiende el incidente: devuelve su tipo (el minijuego que hay que abrir gratis) o null si ya no está. */
+  takeIncident(): IncidentKind | null;
+  /** Al cerrar el minijuego, el extra del incidente ya no vale para la siguiente partida. */
+  endIncidentPlay(): void;
   init(state: GameState): void;
   tick(): void;
   tap(): { amount: number; crit: boolean };
@@ -211,6 +222,8 @@ interface GameStore {
 const OFFLINE_THRESHOLD_S = 15;
 const DECREE_DURATION_MS = 60_000;
 let toastId = 0;
+/** Último incidente que salió (para no repetir el mismo seguido). */
+let lastIncident: IncidentKind | null = null;
 
 function offlineGain(s: GameState, seconds: number): OfflineReport {
   const secs = Math.min(Math.max(0, seconds), offlineCapSeconds(s));
@@ -247,6 +260,13 @@ function addCoins(s: GameState, amount: number): GameState {
   };
 }
 
+/** Extra del incidente si este minijuego se abrió para resolverlo (se gasta al cobrar la partida). */
+function incidentBonus(kind: IncidentKind, play: IncidentKind | null, score: number, toast: (text: string) => void): number {
+  if (play !== kind || !(score > 0)) return 1;
+  toast(`${INCIDENTS[kind].emoji} ¡Incidente resuelto! Monedas x${INCIDENT_BONUS}`);
+  return INCIDENT_BONUS;
+}
+
 /** Completa un reto diario (Apagón, Calles o Plan verde): un premio por día, con racha y gemas extra dentro del par. */
 function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: string, moves: number, par: number) {
   const rec = s[key];
@@ -271,6 +291,26 @@ export const useGame = create<GameStore>((set, get) => ({
   ready: false,
   toasts: [],
   decree: null,
+  incident: null,
+  incidentPlay: null,
+
+  offerIncident() {
+    const { incident } = get();
+    if (incident) return;
+    set({ incident: newIncident(now(), Math.random, lastIncident) });
+  },
+
+  takeIncident() {
+    const { incident } = get();
+    if (!incident || now() > incident.expires) return null;
+    lastIncident = incident.kind;
+    set({ incident: null, incidentPlay: incident.kind });
+    return incident.kind;
+  },
+
+  endIncidentPlay() {
+    if (get().incidentPlay) set({ incidentPlay: null });
+  },
 
   init(state) {
     const t = now();
@@ -288,8 +328,22 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   tick() {
-    const { s, decree } = get();
     const t = now();
+    const inc = get().incident;
+    if (inc && t > inc.expires) {
+      lastIncident = inc.kind;
+      // Solo hay daños si el jugador estaba mirando cuando venció (no si la app estaba en segundo plano)
+      const seen = t - inc.expires < 5000 && (typeof document === 'undefined' || document.visibilityState === 'visible');
+      if (seen) {
+        const cur = get().s;
+        const boosts = addBoost(cur, t, INCIDENT_PENALTY_KEY, INCIDENT_PENALTY.mult, INCIDENT_PENALTY.seconds);
+        set({ incident: null, s: { ...cur, boosts } });
+        get().toast(
+          `${INCIDENTS[inc.kind].emoji} ${INCIDENTS[inc.kind].missed}: producción -${Math.round((1 - INCIDENT_PENALTY.mult) * 100)}% durante ${INCIDENT_PENALTY.seconds / 60} min`,
+        );
+      } else set({ incident: null });
+    }
+    const { s, decree } = get();
     const dt = (t - s.lastTick) / 1000;
     if (decree && t > decree.expires) set({ decree: null });
     // El tiempo nunca retrocede: si el reloj va hacia atrás, no se produce nada hasta alcanzarlo
@@ -436,9 +490,13 @@ export const useGame = create<GameStore>((set, get) => ({
   rewardFire(score) {
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
-    const coins = Math.round(score * Math.max(15, pps * 4));
+    const bonus = incidentBonus('fire', get().incidentPlay, score, get().toast);
+    const coins = Math.round(score * Math.max(15, pps * 4) * bonus);
     const gems = score >= 400 ? 6 : score >= 250 ? 4 : score >= 120 ? 2 : score >= 60 ? 1 : 0;
-    set({ s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score) });
+    set({
+      s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score),
+      incidentPlay: null,
+    });
     return { coins, gems, newBest: score > s.fireBest };
   },
 
@@ -446,13 +504,14 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const t = now();
     const pps = productionPerSec(s, t, false);
-    const coins = Math.round(score * Math.max(25, pps * 8));
+    const bonus = incidentBonus('metro', get().incidentPlay, score, get().toast);
+    const coins = Math.round(score * Math.max(25, pps * 8) * bonus);
     const mult = score >= 150 ? 4 : score >= 100 ? 3 : score >= 50 ? 2 : score >= 20 ? 1.5 : 1;
     const seconds = Math.min(900, score * 12);
     // Fuente propia ('metro'): se multiplica con los boosts de Stack y Semáforo
     let next = { ...addCoins(s, coins), metroBest: Math.max(s.metroBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'metro', mult, seconds) };
-    set({ s: bump(bump(next, 'arcade'), 'metro', score) });
+    set({ s: bump(bump(next, 'arcade'), 'metro', score), incidentPlay: null });
     return { coins, mult, seconds, newBest: score > s.metroBest };
   },
 
@@ -460,13 +519,14 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const t = now();
     const pps = productionPerSec(s, t, false);
-    const coins = Math.round(score * Math.max(10, pps * 6));
+    const bonus = incidentBonus('traffic', get().incidentPlay, score, get().toast);
+    const coins = Math.round(score * Math.max(10, pps * 6) * bonus);
     const mult = score >= 120 ? 5 : score >= 80 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : score >= 10 ? 1.5 : 1;
     const seconds = Math.min(900, score * 10);
     // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
     let next = { ...addCoins(s, coins), trafficBest: Math.max(s.trafficBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'semaforo', mult, seconds) };
-    set({ s: bump(bump(next, 'arcade'), 'traffic', score) });
+    set({ s: bump(bump(next, 'arcade'), 'traffic', score), incidentPlay: null });
     return { coins, mult, seconds, newBest: score > s.trafficBest };
   },
 
@@ -631,9 +691,13 @@ export const useGame = create<GameStore>((set, get) => ({
   rewardThief(score) {
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
-    const coins = Math.round(score * Math.max(20, pps * 4));
+    const bonus = incidentBonus('thief', get().incidentPlay, score, get().toast);
+    const coins = Math.round(score * Math.max(20, pps * 4) * bonus);
     const gems = score >= 150 ? 6 : score >= 100 ? 4 : score >= 60 ? 2 : score >= 30 ? 1 : 0;
-    set({ s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) }, 'arcade'), 'thief', score) });
+    set({
+      s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) }, 'arcade'), 'thief', score),
+      incidentPlay: null,
+    });
     return { coins, gems, newBest: score > s.thiefBest };
   },
 

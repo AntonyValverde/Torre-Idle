@@ -8,6 +8,7 @@ import { useGame } from './game/store';
 import { cityFromUrl } from './game/cities';
 import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
+import { useIncidentScheduler } from './ui/CityIncident';
 import { CityVisit } from './ui/CityVisit';
 import { useDecreeScheduler } from './ui/DecreeCard';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -71,6 +72,11 @@ export default function App() {
   }, []);
   useDecreeScheduler(onDecree);
   useTutorialEffects();
+
+  // Incidentes: solo salen si el jugador está mirando la ciudad, sin nada encima
+  const overlayRef = useRef(false);
+  const canOfferIncident = useCallback(() => tabRef.current === 'city' && !overlayRef.current, []);
+  useIncidentScheduler(canOfferIncident);
   const tutorialOn = useGame((st) => st.s.tutorial.step < TUTORIAL_DONE);
 
   // Música de la era: más baja mientras hay un minijuego abierto
@@ -131,6 +137,19 @@ export default function App() {
     setGame(g);
   };
 
+  // El minijuego de un incidente es gratis (sin ticket) y su premio lleva el extra
+  const playIncident = () => {
+    const kind = useGame.getState().takeIncident();
+    if (!kind) return;
+    track('minigame_start', { game: kind, incident: 1 });
+    setGame(kind);
+  };
+
+  // Al cerrar el minijuego, el extra del incidente no pasa a la siguiente partida
+  useEffect(() => {
+    if (!game) useGame.getState().endIncidentPlay();
+  }, [game]);
+
   const openRanking = (board: BoardTab) => {
     setGame(null);
     setRankingBoard(board);
@@ -142,6 +161,9 @@ export default function App() {
     // Quita ?ciudad=… de la barra de direcciones para que al recargar no vuelva a abrirse
     if (cityFromUrl()) history.replaceState(null, '', location.pathname);
   };
+
+  const overlay = !!game || !!visit || cupOpen || admin;
+  overlayRef.current = overlay;
 
   if (otherTab) {
     return (
@@ -172,7 +194,7 @@ export default function App() {
     <div className={`app${tutorialOn ? ' tutorial-on' : ''}`} style={{ '--hue': eraHue(era) } as CSSProperties}>
       <TopBar />
       <main className="content" key={tab}>
-        {tab === 'city' && <CityTab paused={!!game || !!visit || cupOpen || admin} />}
+        {tab === 'city' && <CityTab paused={overlay} onIncident={playIncident} />}
         {tab === 'upgrades' && <UpgradesTab />}
         {tab === 'games' && <GamesTab onPlay={play} onCup={() => setCupOpen(true)} />}
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
