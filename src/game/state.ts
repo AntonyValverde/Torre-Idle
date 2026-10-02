@@ -5,6 +5,7 @@ import { newTutorial, tutorialState, type TutorialState } from './tutorial';
 import { LAW_BY_ID } from './laws';
 import { advisorsState, newAdvisors, type AdvisorsState } from './advisors';
 import { newPaper, paperState, type PaperState } from './paper';
+import { newSocial, socialState, type SocialState } from './social';
 import { casinoState, newCasino, type CasinoState } from './casino';
 
 export interface Boost {
@@ -104,6 +105,8 @@ export interface GameState {
   vipLast: number;
   /** Periódico diario: foto de la ciudad de cada día y resumen de la edición. */
   paper: PaperState;
+  /** Regalos entre ciudades: enviados hoy y recibidos. */
+  social: SocialState;
   /** Casino (desde la era 2): fichas, nivel de socio y partidas a medias. Sobrevive a las refundaciones. */
   casino: CasinoState;
   createdAt: number;
@@ -180,6 +183,7 @@ export function newState(t: number): GameState {
     respecFree: true,
     vipLast: 0,
     paper: newPaper(),
+    social: newSocial(),
     casino: newCasino(),
     createdAt: t,
   };
@@ -387,6 +391,7 @@ export function normalize(raw: unknown, t: number): GameState {
     respecFree: r.respecFree !== false,
     vipLast: num(r.vipLast, 0),
     paper: paperState(r.paper),
+    social: socialState(r.social),
     casino: casinoState(r.casino),
     createdAt: num(r.createdAt, t),
   };

@@ -76,6 +76,14 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - Hay 90 s para atenderlo. Si se ignora, la producción baja a x0,85 durante 2 minutos (se ve en rojo en la barra de arriba). Si vence con la app en segundo plano, desaparece sin daños.
 - No salen durante el tutorial, y "Cielo festivo" los hace más frecuentes. La lógica está en [incidents.ts](src/game/incidents.ts).
 
+## Regalos entre ciudades
+
+- Al visitar la ciudad de otro jugador se le puede dejar un 🎁 regalo: uno al día por ciudad y hasta 5 al día en total. Cada regalo da +1 💎 a quien lo deja.
+- El alcalde visitado lo cobra al entrar (o en los 5 minutos siguientes si ya estaba jugando): +1 🎟️ por regalo, hasta 5 tickets al día. Un aviso le dice quién se lo dejó.
+- Los regalos recibidos se ven como ❤️ en la ciudad pública, en Logros → Perfil y en el periódico.
+- **Explorar ciudades** (Logros → Perfil) lista las 20 ciudades con actividad más reciente para visitarlas.
+- Firestore: `gifts/{destinatario}/inbox/{remitente}`, un documento por remitente que solo se puede renovar otro día. Solo el destinatario lee su buzón, y la ciudad de destino tiene que existir.
+
 ## Misiones y liga semanal
 
 - **Misiones diarias**: 3 al día, iguales para todos (una de ciudad, una de minijuego y una libre). Cada una da 💎, 🎟️ y puntos de liga. Completar las tres abre el **cofre del día** (gemas, boost x2 de 15 min y más puntos).
@@ -227,6 +235,7 @@ firestore.rules  seguridad: cada jugador solo escribe lo suyo; los rankings solo
 | `roads/{AAAA-MM-DD}/scores/{uid}` | resultado de Conecta las calles (un intento registrado) |
 | `parks/{AAAA-MM-DD}/scores/{uid}` | resultado del Plan verde (un intento registrado) |
 | `cities/{uid}` | ciudad pública para las visitas, con su vitrina de copas y temporadas (cualquiera la lee; solo su dueño la escribe) |
+| `gifts/{uid}/inbox/{remitente}` | regalo de otro alcalde (uno por remitente y día; solo lo lee el destinatario) |
 | `cup/{lunes}/entries/{uid}` | inscripción en la Copa de esa semana (solo de lunes a viernes) |
 | `cup/{lunes}/results/{uid}` | mejores marcas de la Copa: `g1`–`g3` el sábado y `f` el domingo |
 | `league/{lunes AAAA-MM-DD}/scores/{uid}` | puntos de liga de cada jugador en esa semana (solo suben, máximo 1000) |

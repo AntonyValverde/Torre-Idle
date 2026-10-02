@@ -148,6 +148,35 @@ await no('ciudad: copas mal escritas', () => setDoc(doc(carolDb(), 'cities/carol
 await ok('ciudad: con su vitrina y temporadas', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', cups: '2,0,1,1' })));
 await ok('ciudad: vitrina de una versión anterior (3 números)', () => setDoc(doc(carolDb(), 'cities/carol'), city({ name: 'Carol', cups: '1,0,0' })));
 await no('ciudad: vitrina con 5 números', () => setDoc(doc(fakeAdmin, 'cities/fake'), city({ name: 'Fake', cups: '1,1,1,1,1' })));
+const dave = env.authenticatedContext('dave').firestore();
+await ok('ciudad: con regalos recibidos (❤️)', () => setDoc(doc(dave, 'cities/dave'), city({ name: 'Dave', gifts: 12 })));
+const erin = env.authenticatedContext('erin').firestore();
+await no('ciudad: regalos negativos', () => setDoc(doc(erin, 'cities/erin'), city({ name: 'Erin', gifts: -1 })));
+await no('ciudad: regalos decimales', () => setDoc(doc(erin, 'cities/erin'), city({ name: 'Erin', gifts: 1.5 })));
+await no('ciudad: regalos como texto', () => setDoc(doc(erin, 'cities/erin'), city({ name: 'Erin', gifts: 'mil' })));
+
+console.log('gifts (regalos entre ciudades)');
+// El regalo se renueva otro día (posterior); mañana sigue dentro del margen de ±36 h de las reglas
+const tomorrow = key(new Date(Date.now() + 86400000));
+const gift = (extra = {}) => ({ name: 'Bob', day: today, createdAt: serverTimestamp(), ...extra });
+const gBob = doc(bob, 'gifts/alice/inbox/bob');
+await ok('regalo: Bob deja un regalo en la ciudad de Alice', () => setDoc(gBob, gift()));
+await no('regalo: otro el mismo día', () => setDoc(gBob, gift()));
+await ok('regalo: renovarlo otro día', () => setDoc(gBob, gift({ day: tomorrow })));
+await no('regalo: firmar como otro remitente', () => setDoc(doc(bob, 'gifts/alice/inbox/carol'), gift()));
+await no('regalo: a uno mismo', () => setDoc(doc(alice, 'gifts/alice/inbox/alice'), gift({ name: 'Alice' })));
+await no('regalo: a una ciudad que no existe', () => setDoc(doc(bob, 'gifts/fantasma/inbox/bob'), gift()));
+await no('regalo: día futuro', () => setDoc(doc(bob, 'gifts/carol/inbox/bob'), gift({ day: future })));
+await no('regalo: hora falsa del cliente', () => setDoc(doc(bob, 'gifts/carol/inbox/bob'), gift({ createdAt: Timestamp.fromMillis(Date.now()) })));
+await no('regalo: campo extra (p. ej. tickets)', () => setDoc(doc(bob, 'gifts/carol/inbox/bob'), gift({ tickets: 99 })));
+await no('regalo: nombre con HTML', () => setDoc(doc(bob, 'gifts/carol/inbox/bob'), gift({ name: '<b>x</b>' })));
+await no('regalo: sin sesión', () => setDoc(doc(anon, 'gifts/carol/inbox/anon'), gift({ name: 'Anon' })));
+await ok('regalo: Alice lee su buzón', () => getDocs(query(collection(alice, 'gifts/alice/inbox'), where('createdAt', '>', Timestamp.fromMillis(0)))));
+await no('regalo: Bob no lee el buzón de Alice', () => getDocs(collection(bob, 'gifts/alice/inbox')));
+await no('regalo: sin sesión no lee buzones', () => getDoc(doc(anon, 'gifts/alice/inbox/bob')));
+await no('regalo: el remitente no lo borra', () => deleteDoc(gBob));
+await ok('regalo: la destinataria lo borra', () => deleteDoc(doc(alice, 'gifts/alice/inbox/bob')));
+await ok('regalo: el administrador lee buzones', () => getDocs(collection(admin, 'gifts/alice/inbox')));
 
 console.log('league');
 const mondayOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));

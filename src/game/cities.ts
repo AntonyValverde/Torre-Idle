@@ -13,6 +13,8 @@ export interface CitySnapshot {
   stars: number;
   /** Copas ganadas: "oro,plata,bronce,temporadas". */
   cups: string;
+  /** Regalos recibidos de otros alcaldes (❤️). Solo se envía si hay alguno. */
+  gifts?: number;
 }
 
 /**
@@ -35,6 +37,7 @@ export function citySnapshot(s: GameState): CitySnapshot {
     earned: Math.floor(s.allTimeEarned),
     stars: Math.floor(s.stars),
     cups: [s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons].map((n) => Math.min(99999, Math.floor(n))).join(','),
+    ...(s.social.received > 0 ? { gifts: Math.min(10_000_000, Math.floor(s.social.received)) } : {}),
   };
 }
 

@@ -10,6 +10,7 @@ import { shareCity } from './CityVisit';
 import { isSoundOn, setSoundOn } from './haptics';
 import { isMusicOn, musicVolume, nowPlaying, setMusicOn, setMusicVolume } from './music/engine';
 import { SuggestionBox } from './SuggestionBox';
+import { ExploreCities, GiftsCard } from './Gifts';
 
 export function ProfileTab({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: string) => void }) {
   const s = useGame((st) => st.s);
@@ -42,6 +43,7 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
   const [music, setMusic] = useState(isMusicOn());
   const [vol, setVol] = useState(Math.round(musicVolume() * 100));
   const [admin, setAdmin] = useState(false);
+  const [explore, setExplore] = useState(false);
 
   useEffect(() => onAccountChange(setAccount), []);
 
@@ -135,6 +137,9 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
           </div>
         </div>
       )}
+
+      {cloudEnabled && <GiftsCard onExplore={() => setExplore(true)} />}
+      {explore && <ExploreCities onVisit={onVisit} onClose={() => setExplore(false)} />}
 
       <div className="card cup-showcase">
         <b>🏆 Vitrina de la Copa de Alcaldes</b>

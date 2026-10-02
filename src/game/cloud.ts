@@ -16,6 +16,7 @@ import {
   getCountFromServer,
   getDoc,
   getDocs,
+  Timestamp,
   limit,
   orderBy,
   query,
@@ -31,6 +32,7 @@ import { dateKey, now, resyncFromDevice, setServerTime, weekKey } from './clock'
 import { cupWeekKey } from './cup';
 import { addPendingDaily, clampDailyMoves, isArcadeBoard, livePendingDaily, markSubmitted, nextResend, removePendingDaily } from './pending';
 import { newState, normalize, type GameState } from './state';
+import type { GiftIn } from './social';
 import { useGame } from './store';
 
 const LOCAL_KEY = 'torre-save-v1';
@@ -663,7 +665,7 @@ export interface PublicCity extends CitySnapshot {
 }
 
 export function citySignature(c: CitySnapshot): string {
-  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}`;
+  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}|${c.gifts ?? 0}`;
 }
 
 /** Publica la ciudad del jugador (solo lo que se ve al visitarla). */
@@ -679,7 +681,11 @@ export async function fetchCity(uid: string): Promise<PublicCity | null> {
   if (!d) return null;
   await ensureUser();
   const snap = await getDoc(doc(d, 'cities', uid));
-  const x = snap.data();
+  return parseCity(uid, snap.data());
+}
+
+/** Valida una ciudad leída de la nube (puede venir de una versión vieja del juego). */
+function parseCity(uid: string, x: Record<string, unknown> | undefined): PublicCity | null {
   const layout = parseLayout(x?.layout);
   if (!x || !layout) return null;
   const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -692,8 +698,45 @@ export async function fetchCity(uid: string): Promise<PublicCity | null> {
     earned: n(x.earned),
     stars: n(x.stars),
     cups: parseCups(x.cups).join(','),
-    updatedAt: x.updatedAt?.toMillis?.() ?? null,
+    gifts: Math.max(0, Math.floor(n(x.gifts))),
+    updatedAt: (x.updatedAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null,
   };
+}
+
+/** Ciudades con actividad reciente, para descubrir a quién visitar. */
+export async function fetchActiveCities(n = 15): Promise<PublicCity[]> {
+  const d = db;
+  if (!d) return [];
+  await ensureUser();
+  const snap = await getDocs(query(collection(d, 'cities'), orderBy('updatedAt', 'desc'), limit(n)));
+  return snap.docs.map((x) => parseCity(x.id, x.data())).filter((c): c is PublicCity => !!c);
+}
+
+// =====================================================================
+// Regalos entre ciudades: gifts/{destinatario}/inbox/{remitente}, uno por remitente y día
+// =====================================================================
+
+/** Deja un regalo en la ciudad de otro jugador (las reglas solo admiten uno al día por ciudad). */
+export async function sendGiftCloud(toUid: string, name: string): Promise<void> {
+  const uid = currentUid();
+  if (!uid || !db) throw new Error('Sin conexión');
+  await setDoc(doc(db, 'gifts', toUid, 'inbox', uid), { name, day: dateKey(now()), createdAt: serverTimestamp() });
+}
+
+/** Regalos recibidos después de `sinceMs` (hora del servidor). */
+export async function fetchNewGifts(sinceMs: number): Promise<GiftIn[]> {
+  const uid = currentUid();
+  const d = db;
+  if (!uid || !d) return [];
+  const q = query(collection(d, 'gifts', uid, 'inbox'), where('createdAt', '>', Timestamp.fromMillis(sinceMs)), orderBy('createdAt'), limit(30));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((x) => {
+      const v = x.data();
+      const at = v.createdAt?.toMillis?.();
+      return typeof at === 'number' && typeof v.name === 'string' ? { from: x.id, name: v.name.slice(0, 20), at } : null;
+    })
+    .filter((g): g is GiftIn => !!g);
 }
 
 // =====================================================================

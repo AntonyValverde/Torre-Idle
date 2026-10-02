@@ -71,6 +71,13 @@ export function headlines(s: GameState, d: PaperDelta | null): Story[] {
       text: 'Los vecinos lo celebraron hasta tarde.',
     });
   }
+  if (d.gifts > 0) {
+    out.push({
+      emoji: '❤️',
+      title: `${d.gifts} ${d.gifts === 1 ? 'alcalde te dejó un regalo' : 'alcaldes te dejaron regalos'}`,
+      text: 'Tu ciudad cae bien en la región. Devuelve la visita desde Logros → Perfil → Explorar ciudades.',
+    });
+  }
   if (d.achievements > 0) {
     out.push({ emoji: '🏅', title: `${d.achievements} ${d.achievements === 1 ? 'logro nuevo' : 'logros nuevos'}`, text: 'El ayuntamiento amplía su vitrina.' });
   }

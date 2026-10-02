@@ -31,6 +31,8 @@ export interface PaperStats {
   bronze: number;
   league: number;
   achievements: number;
+  /** Regalos recibidos de otros alcaldes. */
+  gifts: number;
   bests: Record<RecordKey, number>;
 }
 
@@ -43,6 +45,7 @@ export interface PaperDelta {
   missions: number;
   spins: number;
   achievements: number;
+  gifts: number;
   /** Eras ganadas (refundaciones). */
   eras: number;
   stars: number;
@@ -92,6 +95,7 @@ function statsOf(v: unknown): PaperStats | null {
     bronze: num(r.bronze),
     league: Number.isFinite(r.league) ? (r.league as number) : -1,
     achievements: num(r.achievements),
+    gifts: num(r.gifts),
     bests,
   };
 }
@@ -130,6 +134,7 @@ export function paperStats(s: GameState): PaperStats {
     bronze: s.cup.bronze,
     league: s.league.best,
     achievements: Object.values(s.achievements).reduce((n, x) => n + x, 0),
+    gifts: s.social.received,
     bests,
   };
 }
@@ -145,6 +150,7 @@ export function paperDelta(a: PaperStats, b: PaperStats, since: string): PaperDe
     missions: Math.max(0, b.missions - a.missions),
     spins: Math.max(0, b.spins - a.spins),
     achievements: Math.max(0, b.achievements - a.achievements),
+    gifts: Math.max(0, b.gifts - a.gifts),
     eras: Math.max(0, b.era - a.era),
     stars: Math.max(0, b.stars - a.stars),
     era: b.era,

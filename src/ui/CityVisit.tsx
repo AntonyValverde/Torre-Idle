@@ -7,6 +7,7 @@ import { fmt } from '../game/format';
 import { useGame } from '../game/store';
 import { ago } from '../admin/metrics';
 import { CityScene } from './CityScene';
+import { GiftButton } from './Gifts';
 import { GameScreen } from './Modal';
 import { SEASON_LABEL, WEATHER_LABEL, seasonAt, weatherAt } from './weather';
 
@@ -101,7 +102,12 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
                 <small>Estrellas</small>
                 <b>{fmt(city.stars)} ⭐</b>
               </div>
+              <div>
+                <small>Regalos</small>
+                <b>❤️ {fmt(city.gifts ?? 0)}</b>
+              </div>
             </div>
+            {!mine && <GiftButton uid={uid} cityName={city.name} />}
             {parseCups(city.cups).some((n) => n > 0) && (
               <div className="card cup-showcase">
                 <b>Vitrina de la Copa de Alcaldes</b>

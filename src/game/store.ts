@@ -110,6 +110,7 @@ import { casinoOpen } from './casino';
 import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { PAPER_GEMS, paperUnread } from './paper';
+import { applyGiftSent, applyGiftsReceived, type GiftIn } from './social';
 import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
@@ -246,6 +247,10 @@ interface GameStore {
   unseatAdvisor(id: string): void;
   /** Elige la ley de la era actual (una de sus tres opciones, una sola vez por era). */
   chooseLaw(id: string): boolean;
+  /** Apunta un regalo ya guardado en la nube para la ciudad `uid` y da sus gemas. */
+  sendGift(uid: string): boolean;
+  /** Cobra los regalos recibidos nuevos. */
+  receiveGifts(gifts: GiftIn[]): { count: number; tickets: number; names: string[] };
   /** Marca el periódico de hoy como leído; devuelve la propina en gemas (0 si ya se leyó hoy). */
   readPaper(): number;
   /** Avanza un paso del tutorial que se completa con su botón. */
@@ -1006,6 +1011,20 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!lawPending(s) || !lawOptions(s.era).some((l) => l.id === id)) return false;
     set({ s: { ...s, law: id } });
     return true;
+  },
+
+  sendGift(uid) {
+    const { s } = get();
+    const next = applyGiftSent(s, uid, dateKey(now()));
+    if (next === s) return false;
+    set({ s: next });
+    return true;
+  },
+
+  receiveGifts(gifts) {
+    const r = applyGiftsReceived(get().s, gifts, dateKey(now()));
+    if (r.count) set({ s: r.s });
+    return { count: r.count, tickets: r.tickets, names: r.names };
   },
 
   readPaper() {

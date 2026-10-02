@@ -307,6 +307,111 @@ img.splash-logo {
   gap: 1px;
 }
 
+/* ---------- Regalos entre ciudades ---------- */
+
+.gift-box {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  text-align: center;
+}
+
+.gift-done {
+  text-align: center;
+  font-weight: 800;
+  color: var(--good);
+  margin: 4px 0;
+}
+
+.gifts-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gifts-card p {
+  margin: 0;
+}
+
+.gifts-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gifts-recent li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.explore {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 24px;
+}
+
+.explore-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explore-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.explore-list li:active {
+  transform: translateY(1px);
+}
+
+.explore-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.explore-main b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explore-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.explore-gift {
+  font-size: 1.2rem;
+  opacity: 0.5;
+}
+
+.explore-gift.can {
+  opacity: 1;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
 /* ---------- Periódico (La Gaceta) ---------- */
 
 .paper-card {
