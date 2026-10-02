@@ -95,7 +95,18 @@ import {
 } from './missions';
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
-import { INCIDENTS, INCIDENT_BONUS, INCIDENT_PENALTY, INCIDENT_PENALTY_KEY, newIncident, type Incident, type IncidentKind } from './incidents';
+import {
+  INCIDENTS,
+  INCIDENT_BONUS,
+  INCIDENT_PENALTY,
+  INCIDENT_PENALTY_KEY,
+  heistChips,
+  newIncident,
+  type Incident,
+  type IncidentGame,
+  type IncidentKind,
+} from './incidents';
+import { casinoOpen } from './casino';
 import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { PAPER_GEMS, paperUnread } from './paper';
@@ -288,9 +299,9 @@ function addCoins(s: GameState, amount: number): GameState {
 }
 
 /** Extra del incidente si este minijuego se abrió para resolverlo (se gasta al cobrar la partida). */
-function incidentBonus(kind: IncidentKind, play: IncidentKind | null, score: number, toast: (text: string) => void): number {
-  if (play !== kind || !(score > 0)) return 1;
-  toast(`${INCIDENTS[kind].emoji} ¡Incidente resuelto! Monedas x${INCIDENT_BONUS}`);
+function incidentBonus(game: IncidentGame, play: IncidentKind | null, score: number, toast: (text: string) => void): number {
+  if (!play || INCIDENTS[play].game !== game || !(score > 0)) return 1;
+  toast(`${INCIDENTS[play].emoji} ¡Incidente resuelto! Monedas x${INCIDENT_BONUS}`);
   return INCIDENT_BONUS;
 }
 
@@ -324,7 +335,7 @@ export const useGame = create<GameStore>((set, get) => ({
   offerIncident() {
     const { incident } = get();
     if (incident) return;
-    set({ incident: newIncident(now(), Math.random, lastIncident) });
+    set({ incident: newIncident(now(), Math.random, lastIncident, casinoOpen(get().s)) });
   },
 
   takeIncident() {
@@ -741,11 +752,16 @@ export const useGame = create<GameStore>((set, get) => ({
   rewardThief(score) {
     const { s } = get();
     const pps = productionPerSec(s, now(), false);
-    const bonus = incidentBonus('thief', get().incidentPlay, score, get().toast);
+    const play = get().incidentPlay;
+    const bonus = incidentBonus('thief', play, score, get().toast);
     const coins = Math.round(score * Math.max(20, pps * 4) * bonus * fxMult(s, 'arcadeCoins'));
     const gems = score >= 150 ? 6 : score >= 100 ? 4 : score >= 60 ? 2 : score >= 30 ? 1 : 0;
+    // Atraco al casino frustrado: además, fichas (no cuentan como ganadas en el casino)
+    const chips = play === 'heist' ? heistChips(score) : 0;
+    if (chips) get().toast(`🎰 ¡Atraco frustrado! +${chips} fichas`);
+    const next: GameState = { ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) };
     set({
-      s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) }, 'arcade'), 'thief', score),
+      s: bump(bump(chips ? { ...next, casino: { ...next.casino, chips: next.casino.chips + chips } } : next, 'arcade'), 'thief', score),
       incidentPlay: null,
     });
     return { coins, gems, newBest: score > s.thiefBest };

@@ -9,6 +9,7 @@ import { cityFromUrl } from './game/cities';
 import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
 import { useIncidentScheduler } from './ui/CityIncident';
+import { INCIDENTS } from './game/incidents';
 import { CityVisit } from './ui/CityVisit';
 import { useDecreeScheduler } from './ui/DecreeCard';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -143,8 +144,9 @@ export default function App() {
   const playIncident = () => {
     const kind = useGame.getState().takeIncident();
     if (!kind) return;
-    track('minigame_start', { game: kind, incident: 1 });
-    setGame(kind);
+    const g = INCIDENTS[kind].game;
+    track('minigame_start', { game: g, incident: 1, kind });
+    setGame(g);
   };
 
   // Al cerrar el minijuego, el extra del incidente no pasa a la siguiente partida

@@ -298,6 +298,30 @@ export const CUP_STYLE: Style = {
   brightness: 10000,
 };
 
+/** Tema del casino: lounge de noche en menor armónica, con bajo caminante y piano eléctrico. */
+export const CASINO_STYLE: Style = {
+  id: 'casino',
+  level: 0.9,
+  title: 'Noche de casino',
+  bpm: 112,
+  root: 57,
+  scale: HARMONIC,
+  progressions: [
+    [0, 3, 4, 0],
+    [0, 5, 3, 4],
+    [0, 3, 0, 4],
+  ],
+  sevenths: true,
+  lead: 'lead',
+  density: 0.42,
+  bass: { voice: 'bass', pattern: 'walk' },
+  chords: { voice: 'epiano', pattern: 'stabs' },
+  drums: 'soft',
+  sparkle: true,
+  echo: 0.18,
+  brightness: 8000,
+};
+
 export const ERA_STYLE_COUNT = ERA_STYLES.length;
 
 /** Estilo de una era. Pasado el Multiverso se repite su estilo, cada vez en otra tonalidad. */

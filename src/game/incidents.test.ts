@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { mulberry32 } from '../minigames/rng';
 import { now } from './clock';
 import { boostMultiplier } from './economy';
-import { INCIDENT_BONUS, INCIDENT_KINDS, INCIDENT_LIFE_MS, INCIDENT_PENALTY, newIncident, nextIncidentDelay } from './incidents';
+import { INCIDENTS, INCIDENT_BONUS, INCIDENT_KINDS, INCIDENT_LIFE_MS, INCIDENT_PENALTY, heistChips, newIncident, nextIncidentDelay } from './incidents';
 import { newState } from './state';
 import { useGame } from './store';
 
@@ -67,6 +67,35 @@ describe('incidentes en la ciudad', () => {
     expect(useGame.getState().rewardTraffic(30).coins).toBeGreaterThan(0);
     expect(useGame.getState().incidentPlay).toBeNull();
     expect(useGame.getState().rewardThief(40).coins).toBe(normal);
+  });
+
+  it('el atraco al casino solo sale con el casino abierto', () => {
+    const rand = mulberry32(11);
+    const closed = Array.from({ length: 300 }, () => newIncident(0, rand).kind);
+    expect(closed).not.toContain('heist');
+    const open = Array.from({ length: 300 }, () => newIncident(0, rand, null, true).kind);
+    expect(open).toContain('heist');
+    // Desde la tienda: en la era 1 nunca sale
+    for (let i = 0; i < 100; i++) {
+      useGame.setState({ incident: null });
+      useGame.getState().offerIncident();
+      expect(useGame.getState().incident?.kind).not.toBe('heist');
+    }
+  });
+
+  it('frustrar el atraco se juega en Atrapa al ladrón: monedas x1.5 y fichas', () => {
+    const normal = useGame.getState().rewardThief(40).coins;
+    fresh();
+    const chips = useGame.getState().s.casino.chips;
+    useGame.setState({ incident: { kind: 'heist', x: 50, expires: now() + 60_000 } });
+    expect(useGame.getState().takeIncident()).toBe('heist');
+    expect(INCIDENTS.heist.game).toBe('thief');
+    const r = useGame.getState().rewardThief(40);
+    expect(r.coins).toBe(Math.round(normal * INCIDENT_BONUS));
+    expect(useGame.getState().s.casino.chips).toBe(chips + heistChips(40));
+    expect(useGame.getState().s.casino.won).toBe(0);
+    expect(heistChips(0)).toBe(0);
+    expect(heistChips(1000)).toBe(400);
   });
 
   it('uno caducado ya no se puede atender', () => {

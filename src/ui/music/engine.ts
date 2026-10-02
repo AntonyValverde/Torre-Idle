@@ -1,6 +1,6 @@
 import { audio } from '../haptics';
 import { nightAt, seasonAt, weatherAt } from '../weather';
-import { CUP_STYLE, composeBar, eraStyle, withMood, type Mood, type Note, type Style, type Voice } from './compose';
+import { CASINO_STYLE, CUP_STYLE, composeBar, eraStyle, withMood, type Mood, type Note, type Style, type Voice } from './compose';
 
 // Reproductor de la música generativa. Programa cada compás por adelantado en el reloj de
 // WebAudio (no en timers), así que no se desfasa aunque el hilo principal vaya cargado.
@@ -34,10 +34,11 @@ let volume = (() => {
   return read(VOLUME_KEY) != null && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.6;
 })();
 
-export type Scene = 'city' | 'game' | 'cup';
+export type Scene = 'city' | 'game' | 'cup' | 'casino';
 let era = 1;
 let baseScene: Scene = 'city';
 let cupDepth = 0;
+let casinoDepth = 0;
 
 export function isMusicOn() {
   return musicOn;
@@ -83,8 +84,29 @@ export function pushCupMusic(): () => void {
   };
 }
 
+/** Mientras el casino está abierto suena su tema. Devuelve la función para quitarlo. */
+export function pushCasinoMusic(): () => void {
+  const before = currentId();
+  casinoDepth++;
+  changed(before);
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    const prev = currentId();
+    casinoDepth--;
+    changed(prev);
+  };
+}
+
 function scene(): Scene {
-  return cupDepth > 0 ? 'cup' : baseScene;
+  return cupDepth > 0 ? 'cup' : casinoDepth > 0 ? 'casino' : baseScene;
+}
+
+/** Tema fijo de la escena (la Copa y el casino no cambian con la era). */
+function fixedStyle(): Style | null {
+  const sc = scene();
+  return sc === 'cup' ? CUP_STYLE : sc === 'casino' ? CASINO_STYLE : null;
 }
 
 export function currentMood(ms = Date.now()): Mood {
@@ -93,7 +115,7 @@ export function currentMood(ms = Date.now()): Mood {
 }
 
 function baseStyle(): Style {
-  return scene() === 'cup' ? CUP_STYLE : eraStyle(era);
+  return fixedStyle() ?? eraStyle(era);
 }
 
 function currentId() {
@@ -102,13 +124,13 @@ function currentId() {
 
 /** Estilo que suena ahora, con la hora y el clima aplicados. */
 export function currentStyle(ms = Date.now()): Style {
-  return scene() === 'cup' ? CUP_STYLE : withMood(eraStyle(era), currentMood(ms));
+  return fixedStyle() ?? withMood(eraStyle(era), currentMood(ms));
 }
 
 /** Texto para el perfil: "Flauta del valle · versión nocturna". */
 export function nowPlaying(ms = Date.now()): string {
   const s = baseStyle();
-  if (scene() === 'cup') return s.title;
+  if (fixedStyle()) return s.title;
   const m = currentMood(ms);
   const extra: string[] = [];
   if (m.night > 0.5) extra.push('versión nocturna');
@@ -366,7 +388,8 @@ let playingId = '';
 let bars: { gain: GainNode; end: number }[] = [];
 
 function targetGain() {
-  const duck = scene() === 'game' ? DUCK_GAME : 1;
+  // En los minijuegos y el casino la música baja para que se oigan sus sonidos
+  const duck = scene() === 'game' || scene() === 'casino' ? DUCK_GAME : 1;
   return musicOn ? volume * MASTER * duck : 0;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CUP_STYLE, ERA_STYLE_COUNT, composeBar, degreeMidi, eraStyle, withMood, type Mood } from './compose';
+import { CASINO_STYLE, CUP_STYLE, ERA_STYLE_COUNT, composeBar, degreeMidi, eraStyle, withMood, type Mood } from './compose';
 
 const DAY: Mood = { night: 0, weather: 'clear', season: null };
 const PITCHED = (v: string) => !['kick', 'snare', 'hat'].includes(v);
@@ -31,7 +31,7 @@ describe('música generativa', () => {
   });
 
   it('las notas caben en el compás y en un rango audible', () => {
-    const styles = [...Array.from({ length: ERA_STYLE_COUNT + 2 }, (_, i) => eraStyle(i + 1)), CUP_STYLE];
+    const styles = [...Array.from({ length: ERA_STYLE_COUNT + 2 }, (_, i) => eraStyle(i + 1)), CUP_STYLE, CASINO_STYLE];
     for (const s of styles) {
       for (let bar = 0; bar < 48; bar++) {
         for (const n of composeBar(s, 42, bar)) {

@@ -46,11 +46,14 @@ export function CityIncident({ onPlay }: { onPlay: () => void }) {
       className={`incident incident-${incident.kind}`}
       style={{ left: `${incident.x}%` }}
       onClick={onPlay}
-      aria-label={`${def.title} Tócalo para resolverlo gratis con monedas x${INCIDENT_BONUS}`}
+      aria-label={`${def.title} Tócalo para resolverlo gratis con monedas x${INCIDENT_BONUS}${incident.kind === 'heist' ? ' y fichas del casino' : ''}`}
     >
       <span className="incident-label">
         <b>{def.title}</b>
-        <small>Gratis · 🪙x{INCIDENT_BONUS}</small>
+        <small>
+          Gratis · 🪙x{INCIDENT_BONUS}
+          {incident.kind === 'heist' && ' + 🎰'}
+        </small>
         <span className="incident-time">
           <span style={{ width: `${(left / INCIDENT_LIFE_MS) * 100}%` }} />
         </span>

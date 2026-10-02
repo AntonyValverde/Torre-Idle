@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { CASINO_ERA } from '../game/casino';
 import { cityLayout } from '../game/cities';
 import { now } from '../game/clock';
 import { FANS_GROUPS, activeDays, cupPhase } from '../game/cup';
@@ -621,6 +622,66 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       });
     }
 
+    /** Casino de la ciudad (desde la era 2), a la izquierda del ayuntamiento: de noche se enciende su neón. */
+    function drawCasino(t: number, night: number) {
+      const gy = groundY();
+      // Algo más grande que la escala de los edificios para que el letrero se lea en el móvil
+      const s = scale * 1.5;
+      const w = 36 * s;
+      const h = 24 * s;
+      const x = W / 2 - 54 * scale - w;
+      const glow = 0.35 + night * 0.65;
+      // Halo del neón
+      const halo = ctx.createRadialGradient(x + w / 2, gy - h - 6 * s, 2, x + w / 2, gy - h - 6 * s, 34 * s);
+      halo.addColorStop(0, `rgba(255,79,216,${0.28 * glow})`);
+      halo.addColorStop(1, 'rgba(255,79,216,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(x - 20 * s, gy - h - 40 * s, w + 40 * s, 60 * s);
+      // Cuerpo, cornisa dorada y puerta iluminada
+      ctx.fillStyle = night > 0.5 ? '#3a1452' : '#6b2a7a';
+      ctx.fillRect(x, gy - h, w, h);
+      ctx.fillStyle = '#e8b84a';
+      ctx.fillRect(x - 2 * s, gy - h - 2 * s, w + 4 * s, 2.5 * s);
+      ctx.fillStyle = `rgba(255,214,110,${0.5 + night * 0.5})`;
+      ctx.fillRect(x + w / 2 - 5 * s, gy - 11 * s, 10 * s, 11 * s);
+      ctx.fillStyle = night > 0.5 ? '#2a0d3a' : '#4a1a58';
+      ctx.fillRect(x + w / 2 - 0.5 * s, gy - 11 * s, 1 * s, 11 * s);
+      // Ventanas redondas con luz de colores
+      for (let i = 0; i < 2; i++) {
+        ctx.fillStyle = i ? `rgba(60,200,255,${0.4 + night * 0.5})` : `rgba(255,201,60,${0.4 + night * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(x + (i ? w - 7 * s : 7 * s), gy - h / 2 - 2 * s, 3.2 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Letrero con bombillas que se encienden en cadena
+      const sw = w + 6 * s;
+      const sh = 9 * s;
+      const sx = x - 3 * s;
+      const sy = gy - h - 3 * s - sh;
+      ctx.fillStyle = '#1c0a2a';
+      ctx.fillRect(sx, sy, sw, sh);
+      const bulbs = 12;
+      const step = Math.floor(t / 180);
+      for (let i = 0; i < bulbs; i++) {
+        const on = (i + step) % 3 === 0;
+        ctx.fillStyle = on ? '#fff4b0' : `rgba(255,200,80,${0.25 + night * 0.2})`;
+        const bx = sx + (sw / (bulbs - 1)) * i;
+        ctx.fillRect(bx - 0.8 * s, sy - 1.6 * s, 1.6 * s, 1.6 * s);
+        ctx.fillRect(bx - 0.8 * s, sy + sh, 1.6 * s, 1.6 * s);
+      }
+      // Parpadeo ocasional del neón, como un letrero de verdad
+      const flicker = Math.sin(t / 97) > 0.97 ? 0.4 : 1;
+      ctx.font = `800 ${Math.max(8, 6.4 * s)}px 'Baloo 2', system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#ff4fd8';
+      ctx.shadowBlur = (4 + night * 10) * flicker;
+      ctx.fillStyle = night > 0.3 ? `rgba(255,224,250,${flicker})` : '#ff8ae6';
+      ctx.fillText('CASINO', sx + sw / 2, sy + sh / 2 + 0.5 * s);
+      ctx.shadowBlur = 0;
+      ctx.textBaseline = 'alphabetic';
+    }
+
     /** Estandartes de campeón de temporada colgados del frontón del ayuntamiento. */
     function drawSeasonBanners(t: number, n: number) {
       const gy = groundY();
@@ -959,6 +1020,7 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       // Edificios (cache) y ayuntamiento
       ctx.drawImage(cache, 0, 0, W, H);
       drawHall(t, night, boosted, era);
+      if (era >= CASINO_ERA) drawCasino(t, night);
       const cups = v ? (v.cups ?? [0, 0, 0, 0]) : ([s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons] as const);
       drawTrophies(t, night, [cups[0], cups[1], cups[2]]);
       if (cups[3] > 0) drawSeasonBanners(t, cups[3]);

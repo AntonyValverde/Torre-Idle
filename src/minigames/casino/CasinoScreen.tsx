@@ -25,6 +25,7 @@ import { fmt, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
 import { sfx, vibrate } from '../../ui/haptics';
 import { GameScreen } from '../../ui/Modal';
+import { pushCasinoMusic } from '../../ui/music/engine';
 import { BlackjackGame } from './BlackjackGame';
 import { HiLoGame } from './HiLoGame';
 import { RocketGame } from './RocketGame';
@@ -51,6 +52,9 @@ export function CasinoScreen({ onClose }: { onClose: () => void }) {
   const [game, setGame] = useState<CasinoGame | null>(null);
   const t = now();
   const today = casinoToday(c, t);
+
+  // Mientras está abierto suena el tema del casino
+  useEffect(() => pushCasinoMusic(), []);
 
   // Al entrar: cierra un vuelo del cohete que terminó mientras no se miraba
   useEffect(() => {

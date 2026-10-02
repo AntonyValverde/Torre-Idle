@@ -21,6 +21,7 @@ import { fmt } from '../game/format';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
 import { advisorsAlert } from '../game/advisors';
+import { CASINO_ERA } from '../game/casino';
 import { sfx, vibrate } from './haptics';
 import { Council } from './Council';
 import { LawCard } from './LawCard';
@@ -189,6 +190,7 @@ function Legacy() {
     sfx('win');
     vibrate([30, 50, 30, 50, 80]);
     st.toast(`🌅 ¡Bienvenido a la era ${ns.era}: ${eraName(ns.era)}! +${gained} ⭐ · Elige la ley de la era ⚖️`);
+    if (ns.era === CASINO_ERA) st.toast('👩‍💼 Clara: ¡La ciudad ya tiene casino! Lo tienes en 🎮 Juegos, con un regalo de bienvenida.');
     track('prestige', { era: ns.era, stars: ns.stars });
     submitScore('stars', ns.stars, ns.name).catch(() => {});
     saveCloud(ns).catch(() => {});
@@ -226,6 +228,7 @@ function Legacy() {
         {nextEraUnlock && (
           <small className="unlock-hint">
             🔓 La era {s.era + 1} desbloquea: {nextEraUnlock.emoji} {nextEraUnlock.name}
+            {s.era + 1 === CASINO_ERA && ' y 🎰 el Casino de la ciudad'}
           </small>
         )}
         <button className="btn primary big" disabled={pending < 1} onClick={() => setConfirm(true)}>

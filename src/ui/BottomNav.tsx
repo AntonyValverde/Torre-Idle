@@ -16,6 +16,7 @@ import { currentStep, isUnlocked } from '../game/tutorial';
 import { lawPending } from '../game/laws';
 import { affordableLegacy } from '../game/legacy';
 import { advisorsAlert } from '../game/advisors';
+import { casinoOpen, casinoToday } from '../game/casino';
 
 export type TabId = 'city' | 'upgrades' | 'games' | 'ranking' | 'profile';
 
@@ -43,7 +44,9 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
     isNewDay(s.parks.last, today) ||
     isNewDay(s.wheelLast, today) ||
     s.tickets >= maxTickets(s) ||
-    cupAlert(s, s.lastTick);
+    cupAlert(s, s.lastTick) ||
+    // Casino: regalo de bienvenida o bono del día sin cobrar
+    (isUnlocked(s, 'stocks') && casinoOpen(s) && (!s.casino.welcome || !casinoToday(s.casino, s.lastTick).bonus));
   const claimable = claimableAchievements(s);
   const missions = claimableMissions(s) + (s.league.prev ? 1 : 0);
 
