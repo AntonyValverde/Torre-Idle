@@ -10,15 +10,19 @@ import { sfx, vibrate } from './haptics';
 export function useDecreeScheduler(onOffer: () => void) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    // Solo se propone si el jugador puede verlo: con la app visible y sin la ventana de ganancias offline
+    const offer = () => {
+      const st = useGame.getState();
+      if (document.visibilityState === 'visible' && !st.decree && !st.s.pendingOffline) {
+        st.offerDecree();
+        onOffer();
+      }
+    };
     const schedule = () => {
       const f = eventFrequency(useGame.getState().s);
       timer = setTimeout(
         () => {
-          const st = useGame.getState();
-          if (document.visibilityState === 'visible' && !st.decree && !st.offline) {
-            st.offerDecree();
-            onOffer();
-          }
+          offer();
           schedule();
         },
         (240_000 + Math.random() * 180_000) * f,
@@ -26,11 +30,7 @@ export function useDecreeScheduler(onOffer: () => void) {
     };
     // El primero llega antes para que el jugador nuevo lo descubra
     timer = setTimeout(() => {
-      const st = useGame.getState();
-      if (!st.decree) {
-        st.offerDecree();
-        onOffer();
-      }
+      offer();
       schedule();
     }, 75_000);
     return () => clearTimeout(timer);
@@ -46,7 +46,9 @@ export function DecreeCard() {
   const choose = (id: (typeof decree.options)[number]) => {
     const st = useGame.getState();
     const msg = st.chooseDecree(id);
-    if (msg) st.toast(msg);
+    // Vacío si el decreto ya se eligió o caducó (p. ej. doble toque)
+    if (!msg) return;
+    st.toast(msg);
     sfx('win');
     vibrate([15, 30, 15]);
     track('decree', { id });

@@ -49,7 +49,9 @@ function comboMult(combo: number) {
 }
 
 export function ThiefGame({ onOver, onScore }: { onOver: (score: number) => void; onScore: (score: number) => void }) {
-  const game = useRef<Game>(newGame());
+  // newGame solo se llama al montar (el componente se vuelve a pintar en cada fotograma)
+  const [firstGame] = useState(newGame);
+  const game = useRef<Game>(firstGame);
   const [, setFrame] = useState(0);
   const onOverRef = useRef(onOver);
   const onScoreRef = useRef(onScore);

@@ -51,6 +51,8 @@ export function FireGameView({ onOver, onScore }: { onOver: (score: number) => v
       }
       splashes.current = splashes.current.filter((x) => t - x.at < 500);
       setFrame((f) => f + 1);
+      // Al terminar, cuando acaban la sacudida y los textos, deja de animar (y de volver a pintar)
+      if (g.over && t >= shakeUntil.current && splashes.current.length === 0) return;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);

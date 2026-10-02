@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { track } from '../../firebase';
-import { dateKey, isNewDay, msUntilTomorrow } from '../../game/clock';
+import { dateKey, isNewDay, msUntilTomorrow, now } from '../../game/clock';
 import { saveCloud } from '../../game/cloud';
 import { fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
@@ -25,24 +25,39 @@ function slicePath(i: number): string {
 export function WheelScreen({ onClose }: { onClose: () => void }) {
   const wheelLast = useGame((st) => st.s.wheelLast);
   const tickets = useGame((st) => st.s.tickets);
-  const lastTick = useGame((st) => st.s.lastTick);
+  // Solo para volver a pintar con cada tick (y cambiar a "gratis" a medianoche)
+  useGame((st) => st.s.lastTick);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<{ emoji: string; message: string } | null>(null);
   const [showOdds, setShowOdds] = useState(false);
   const groupRef = useRef<SVGGElement>(null);
   const angle = useRef(0);
   const raf = useRef(0);
+  /** Premio del giro en curso (ya cobrado): si se cierra la rueda antes de que pare, se enseña en un aviso. */
+  const pendingPrize = useRef<string | null>(null);
 
-  const free = isNewDay(wheelLast, dateKey(lastTick));
+  // Misma hora que usa la tienda al girar (now()), para que "gratis" signifique lo mismo en los dos sitios
+  const t = now();
+  const free = isNewDay(wheelLast, dateKey(t));
   const canSpin = !spinning && (free || tickets >= 1);
   const totalWeight = WHEEL.reduce((a, s) => a + s.weight, 0);
 
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(raf.current);
+      if (pendingPrize.current) {
+        useGame.getState().toast(`🎡 ${pendingPrize.current}`);
+        pendingPrize.current = null;
+      }
+    },
+    [],
+  );
 
   const spin = () => {
     if (!canSpin) return;
     const r = useGame.getState().spinWheel();
     if (!r) return;
+    pendingPrize.current = r.message;
     setSpinning(true);
     setResult(null);
     track('wheel_spin', { free: r.free, index: r.index });
@@ -71,6 +86,7 @@ export function WheelScreen({ onClose }: { onClose: () => void }) {
       if (k < 1) {
         raf.current = requestAnimationFrame(frame);
       } else {
+        pendingPrize.current = null;
         setSpinning(false);
         setResult({ emoji: WHEEL[r.index].emoji, message: r.message });
         sfx('win');
@@ -85,7 +101,7 @@ export function WheelScreen({ onClose }: { onClose: () => void }) {
     <GameScreen title="Rueda de la fortuna" right={free ? '¡Gratis!' : `🎟️ ${tickets}`} onClose={onClose}>
       <div className="wheel-wrap">
         <p className="hint">
-          {free ? 'Tienes un giro gratis hoy.' : `Giro gratis de nuevo en ${fmtTime(msUntilTomorrow(lastTick) / 1000)}. Giros extra: 🎟️1.`}
+          {free ? 'Tienes un giro gratis hoy.' : `Giro gratis de nuevo en ${fmtTime(msUntilTomorrow(t) / 1000)}. Giros extra: 🎟️1.`}
         </p>
         <div className="wheel">
           <div className="wheel-pointer" />

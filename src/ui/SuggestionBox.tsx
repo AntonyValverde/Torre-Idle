@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { track } from '../firebase';
-import { SUGGESTION_MAX, SUGGESTION_MIN, sendSuggestion, type SuggestionKind } from '../game/cloud';
+import { SUGGESTION_MAX, SUGGESTION_MIN, sendSuggestion, suggestionLength, type SuggestionKind } from '../game/cloud';
 import { useGame } from '../game/store';
 
 const KINDS: { id: SuggestionKind; label: string; placeholder: string }[] = [
@@ -14,7 +14,8 @@ export function SuggestionBox() {
   const [kind, setKind] = useState<SuggestionKind>('idea');
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const len = text.trim().length;
+  // Se cuenta igual que en las reglas de Firestore (un emoji es un carácter)
+  const len = suggestionLength(text);
 
   const send = async () => {
     if (len < SUGGESTION_MIN || sending) return;

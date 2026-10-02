@@ -25,7 +25,10 @@ import {
   cupStart,
   cupWeekKey,
   groupStandings,
+  isClaimed,
   makeGroups,
+  slotOpen,
+  unsyncedBest,
   newCup,
   outcomeOf,
   pendingCup,
@@ -111,8 +114,32 @@ describe('grupos', () => {
     expect(by.d.played).toBe(false);
     // a y c empatan a 24 puntos y a una victoria: desempata la suma de marcas (67 contra 49)
     expect(rows.map((r) => r.entry.uid)).toEqual(['a', 'c', 'b', 'd']);
-    expect(rivalOf(rows, 'a')!.entry.uid).toBe('c');
-    expect(rivalOf(rows, 'b')!.entry.uid).toBe('c');
+  });
+
+  it('los rivales son duelos fijos del grupo (el último de un grupo impar se cruza con el penúltimo)', () => {
+    const g = ['a', 'b', 'c', 'd', 'e'].map((u) => entry(u));
+    expect(['a', 'b', 'c', 'd', 'e'].map((u) => rivalOf(g, u)!.uid)).toEqual(['b', 'a', 'd', 'c', 'd']);
+    expect(rivalOf([entry('solo')], 'solo')).toBeNull();
+    expect(rivalOf(g, 'nadie')).toBeNull();
+  });
+
+  it('superar al rival: quedar por delante de tu pareja de duelo, no solo ser primero', () => {
+    const g = ['a', 'b', 'c', 'd'].map((u) => entry(u));
+    // Duelos a-b y c-d. c gana el grupo y supera a d (que no jugó); b queda 2º y supera a a (3º).
+    const res = new Map<string, CupResult>([
+      ['a', { g1: 10 }],
+      ['b', { g1: 20 }],
+      ['c', { g1: 30 }],
+    ]);
+    const standings = [groupStandings(g, res)];
+    const view = { groups: [g], standings, finalists: [], final: [] };
+    expect(standings[0].map((r) => r.entry.uid)).toEqual(['c', 'b', 'a', 'd']);
+    expect(outcomeOf(view, 'b')).toMatchObject({ groupRank: 2, beatRival: true, rivalName: 'A' });
+    expect(outcomeOf(view, 'a')).toMatchObject({ groupRank: 3, beatRival: false, rivalName: 'B' });
+    expect(outcomeOf(view, 'c')).toMatchObject({ groupRank: 1, beatRival: true, rivalName: 'D' });
+    // Quien no jugó no supera a nadie
+    expect(outcomeOf(view, 'd').beatRival).toBe(false);
+    expect(cupRewards(outcomeOf(view, 'b')).gems).toBe(5 + 12 + 5);
   });
 
   it('con un solo grupo pasan 4 a la final; con varios, 2 por grupo', () => {
@@ -149,11 +176,14 @@ describe('final y premios', () => {
     expect(o).toMatchObject({ played: true, groupRank: 2, finalist: true, finalRank: 1 });
     const r = cupRewards(o);
     expect(r.trophy).toBe('gold');
-    // Participación + 2º del grupo + campeón (su rival, f0, quedó por delante en el grupo)
-    expect(r.gems).toBe(5 + 12 + 50);
+    // Participación + 2º del grupo + campeón (+5 si quedó por delante de su pareja de duelo)
+    const rival = view.standings[0].find((x) => x.entry.uid === rivalOf(view.groups[0], 'f1')!.uid)!;
+    expect(o.beatRival).toBe(rival.rank > 2);
+    expect(r.gems).toBe(5 + 12 + 50 + (o.beatRival ? 5 : 0));
     expect(r.tickets).toBe(1);
     expect(cupRewards(outcomeOf(view, 'f2')).trophy).toBe('silver');
     expect(cupRewards(outcomeOf(view, 'f0')).trophy).toBe('bronze');
+    // El 1º del grupo siempre supera a su rival
     expect(outcomeOf(view, 'f0').beatRival).toBe(true);
   });
 
@@ -263,6 +293,10 @@ describe('pronósticos y temporadas', () => {
 });
 
 describe('estado de la Copa en la partida', () => {
+  // Sábado y domingo de la Copa del 28/9
+  const SAT = cr(2026, 10, 3, 12);
+  const SUN = cr(2026, 10, 4, 12);
+
   it('escudo, intento extra, equipar, entrenar, apostar y cobrar', () => {
     const week = '2026-09-28';
     const base = registeredFor(newCup(), week);
@@ -280,9 +314,9 @@ describe('estado de la Copa en la partida', () => {
     expect(g().cupUseCard('extra', 'g1')).toBe(true);
     expect(attemptsFor(g().s.cup, week, 'g1')).toBe(ATTEMPTS + 1);
     // Escudo: el intento que no mejora no se gasta
-    g().cupAttempt('g1');
+    expect(g().cupAttempt('g1', SAT)).toBe(true);
     g().cupScore('g1', 50);
-    g().cupAttempt('g1');
+    expect(g().cupAttempt('g1', SAT)).toBe(true);
     g().cupUseCard('shield', 'g1');
     const r = g().cupScore('g1', 10, 'shield');
     expect(r).toMatchObject({ improved: false, refunded: true });
@@ -321,8 +355,8 @@ describe('estado de la Copa en la partida', () => {
   it('los intentos se acaban y cada Copa se cobra una sola vez', () => {
     useGame.getState().init({ ...newState(Date.now()), cup: registeredFor(newCup(), '2026-09-28') });
     const st = useGame.getState();
-    for (let k = 0; k < ATTEMPTS; k++) expect(useGame.getState().cupAttempt('g1')).toBe(true);
-    expect(useGame.getState().cupAttempt('g1')).toBe(false);
+    for (let k = 0; k < ATTEMPTS; k++) expect(useGame.getState().cupAttempt('g1', SAT)).toBe(true);
+    expect(useGame.getState().cupAttempt('g1', SAT)).toBe(false);
     expect(st.cupScore('g2', 30).improved).toBe(true);
     expect(useGame.getState().cupScore('g2', 20)).toEqual({ score: 20, best: 30, improved: false, refunded: false });
     const gems = useGame.getState().s.gems;
@@ -335,5 +369,67 @@ describe('estado de la Copa en la partida', () => {
     expect(s.cup.history.at(-1)).toMatchObject({ week: '2026-09-28', group: 1, final: 2 });
     expect(useGame.getState().cupClaim('2026-09-28', outcome)).toBeNull();
     expect(pendingCup(s.cup, '2026-10-05')).toBeNull();
+  });
+
+  it('cada prueba solo se juega en su día y en su semana', () => {
+    const week = '2026-09-28';
+    expect(slotOpen(week, 'g1', SAT)).toBe(true);
+    expect(slotOpen(week, 'f', SAT)).toBe(false);
+    expect(slotOpen(week, 'f', SUN)).toBe(true);
+    expect(slotOpen(week, 'g2', SUN)).toBe(false);
+    expect(slotOpen(week, 'g1', cr(2026, 10, 2, 23, 59))).toBe(false);
+    expect(slotOpen(week, 'f', cr(2026, 10, 5, 0, 0))).toBe(false);
+    expect(slotOpen(week, 'g1', cr(2026, 10, 10, 12))).toBe(false);
+    useGame.getState().init({ ...newState(Date.now()), cup: registeredFor(newCup(), week) });
+    const g = () => useGame.getState();
+    expect(g().cupAttempt('g1', cr(2026, 10, 2, 12))).toBe(false);
+    expect(g().cupAttempt('g1', SUN)).toBe(false);
+    expect(g().cupAttempt('f', SUN)).toBe(true);
+    // Pasada la medianoche del domingo ya no se gastan intentos (el servidor no aceptaría la marca)
+    expect(g().cupAttempt('f', cr(2026, 10, 5, 0, 1))).toBe(false);
+    expect(g().s.cup.used).toEqual({ g1: 0, g2: 0, g3: 0, f: 1 });
+  });
+
+  it('no se puede apostar con un pronóstico anterior sin cobrar', () => {
+    const pick = { week: '2026-09-28', uid: 'bob', name: 'Bob', stake: 10 };
+    useGame.getState().init({ ...newState(Date.now()), gems: 100, cup: { ...newCup(), pick } });
+    const g = () => useGame.getState();
+    expect(g().cupPredict('2026-10-05', 'ana', 'Ana', 5)).toBe(false);
+    expect(g().s.cup.pick).toEqual(pick);
+    expect(g().s.gems).toBe(100);
+    const outcome = { played: false, groupRank: null, groupSize: 0, finalist: false, finalRank: null, beatRival: false, rivalName: null };
+    expect(g().cupClaim('2026-09-28', outcome, 50)!.gems).toBe(50);
+    expect(g().cupPredict('2026-10-05', 'ana', 'Ana', 5)).toBe(true);
+    expect(g().s.gems).toBe(145);
+    // Tampoco con una Copa jugada sin cobrar
+    useGame.getState().init({ ...newState(Date.now()), gems: 100, cup: registeredFor(newCup(), '2026-09-28') });
+    expect(g().cupPredict('2026-10-05', 'ana', 'Ana', 5)).toBe(false);
+  });
+
+  it('las Copas se cobran de la más antigua a la más reciente y nunca dos veces', () => {
+    let c = registeredFor(newCup(), '2026-09-28');
+    c = { ...c, pick: { week: '2026-09-21', uid: 'x', name: 'X', stake: 5 } };
+    expect(pendingCup(c, '2026-10-05')).toBe('2026-09-21');
+    // Todo lo anterior a la última Copa cobrada cuenta como cobrado, aunque ya no esté en el historial
+    const old = { ...registeredFor(newCup(), '2026-09-28'), claimed: '2026-12-07', history: [] };
+    expect(isClaimed(old, '2026-09-28')).toBe(true);
+    expect(pendingCup(old, '2027-01-04')).toBeNull();
+    expect(isClaimed(old, '2026-12-14')).toBe(false);
+    // Cobrar una semana anterior no hace retroceder la última cobrada
+    useGame.getState().init({ ...newState(Date.now()), cup: { ...newCup(), claimed: '2026-10-12' } });
+    const outcome = { played: false, groupRank: null, groupSize: 0, finalist: false, finalRank: null, beatRival: false, rivalName: null };
+    expect(useGame.getState().cupClaim('2026-10-05', outcome)).toBeNull();
+    expect(useGame.getState().cupClaim('2026-10-19', outcome)).not.toBeNull();
+    expect(useGame.getState().s.cup.claimed).toBe('2026-10-19');
+  });
+
+  it('marcas locales que el servidor no tiene, solo de las pruebas en juego', () => {
+    const best = { g1: 120, g2: 0, g3: 40, f: 300 };
+    expect(unsyncedBest(best, { g1: 100, g3: 40 }, 'groups')).toEqual({ g1: 120 });
+    expect(unsyncedBest(best, undefined, 'groups')).toEqual({ g1: 120, g3: 40 });
+    expect(unsyncedBest(best, { f: 300 }, 'final')).toEqual({});
+    expect(unsyncedBest(best, { f: 10 }, 'final')).toEqual({ f: 300 });
+    expect(unsyncedBest(best, undefined, 'signup')).toEqual({});
+    expect(unsyncedBest({ ...best, g1: 9999 }, undefined, 'groups').g1).toBe(5000);
   });
 });

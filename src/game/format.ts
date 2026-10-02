@@ -16,8 +16,10 @@ export function fmt(n: number): string {
     return Math.floor(n).toString();
   }
   let tier = Math.floor(Math.log10(n) / 3);
-  // log10 puede quedarse corto por redondeo (p. ej. 1e15 → 14.999…)
+  // log10 puede quedarse corto por redondeo (p. ej. 1e15 → 14.999…) o pasarse justo por debajo
+  // de una potencia de mil (999999.9999999999 → 6, que daría "0.99M" en vez de "999K")
   if (n / 10 ** (tier * 3) >= 1000) tier++;
+  else if (n / 10 ** (tier * 3) < 1) tier--;
   const scaled = n / 10 ** (tier * 3);
   const digits = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
   const p = 10 ** digits;

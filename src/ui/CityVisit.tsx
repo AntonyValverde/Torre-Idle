@@ -33,7 +33,9 @@ export async function shareCity(uid: string, name: string) {
  * o solo el `uid` y se lee de la nube.
  */
 export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: CitySnapshot; onClose: () => void }) {
-  const [city, setCity] = useState<(CitySnapshot & { updatedAt?: number | null }) | null | undefined>(given);
+  // undefined = cargando, null = no existe, 'error' = no se pudo leer (sin conexión, etc.)
+  const [city, setCity] = useState<(CitySnapshot & { updatedAt?: number | null }) | null | undefined | 'error'>(given);
+  const [attempt, setAttempt] = useState(0);
   const mine = uid === currentUid();
   const t = now();
   const season = seasonAt(t);
@@ -41,18 +43,32 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
   useEffect(() => {
     if (given) return;
     let alive = true;
+    setCity(undefined);
     fetchCity(uid)
       .then((c: PublicCity | null) => alive && setCity(c))
-      .catch(() => alive && setCity(null));
+      .catch((e) => {
+        console.warn(e);
+        if (alive) setCity('error');
+      });
     return () => {
       alive = false;
     };
-  }, [uid, given]);
+  }, [uid, given, attempt]);
 
   return (
-    <GameScreen title={city ? `Ciudad de ${city.name}` : 'De visita'} right={mine ? 'Tu ciudad' : null} onClose={onClose}>
+    <GameScreen title={city && city !== 'error' ? `Ciudad de ${city.name}` : 'De visita'} right={mine ? 'Tu ciudad' : null} onClose={onClose}>
       <div className="visit-wrap">
         {city === undefined && <p className="empty">Cargando la ciudad…</p>}
+        {city === 'error' && (
+          <div className="daily-done">
+            <div className="big-emoji">📡</div>
+            <h2>No se pudo cargar la ciudad</h2>
+            <p className="muted">Revisa tu conexión e inténtalo de nuevo.</p>
+            <button className="btn primary" style={{ flex: '0 0 auto', padding: '12px 28px' }} onClick={() => setAttempt((n) => n + 1)}>
+              Reintentar
+            </button>
+          </div>
+        )}
         {city === null && (
           <div className="daily-done">
             <div className="big-emoji">🏚️</div>
@@ -60,7 +76,7 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
             <p className="muted">El alcalde tiene que abrir el juego con la última versión para que se pueda visitar.</p>
           </div>
         )}
-        {city && (
+        {city && city !== 'error' && (
           <>
             <div className="scene-wrap visit-scene">
               <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings, cups: parseCups(city.cups) }} />

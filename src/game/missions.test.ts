@@ -157,6 +157,26 @@ describe('recompensas y liga', () => {
     expect(syncPeriods({ ...withDay(t0) }, at(2026, 10, 6)).league.prev).toBeNull();
   });
 
+  it('un premio de liga sin cobrar no se pierde al terminar otra semana: se cobra solo', () => {
+    let s = withDay(at(2026, 9, 30));
+    s = { ...s, league: { ...s.league, points: 320 } };
+    s = syncPeriods(s, at(2026, 10, 6));
+    // La semana siguiente también suma puntos, pero no se reclamó la anterior
+    s = { ...s, league: { ...s.league, points: 160 } };
+    const gems = s.gems;
+    const tickets = s.tickets;
+    s = syncPeriods(s, at(2026, 10, 13));
+    const oro = divisionOf(320);
+    expect(s.gems).toBe(gems + oro.gems);
+    expect(s.tickets).toBe(tickets + oro.tickets);
+    expect(s.league.best).toBe(2);
+    expect(s.league.prev).toEqual({ week: '2026-10-05', points: 160 });
+    // Sin puntos la semana nueva, el pendiente se conserva tal cual (sin cobrarlo dos veces)
+    const kept = syncPeriods(s, at(2026, 10, 20));
+    expect(kept.league.prev).toEqual({ week: '2026-10-05', points: 160 });
+    expect(kept.gems).toBe(s.gems);
+  });
+
   it('divisiones', () => {
     expect(divisionOf(0).id).toBe('bronce');
     expect(divisionOf(150).id).toBe('plata');

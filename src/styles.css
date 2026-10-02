@@ -1603,17 +1603,22 @@ img.splash-logo {
   animation: toastIn 2.6s ease forwards;
 }
 
+/* Centrado con márgenes automáticos (sin translate, que popIn pisaba) y sin salirse en móviles estrechos */
 .update-banner {
   position: fixed;
-  left: 50%;
+  left: 16px;
+  right: 16px;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 488px;
   bottom: calc(var(--nav-h) + 14px + var(--safe-bottom));
-  transform: translateX(-50%);
   z-index: 55;
   padding: 10px 18px;
   border-radius: 99px;
   background: linear-gradient(90deg, #2a7fff, #7a5cff);
   font-weight: 700;
-  white-space: nowrap;
+  text-align: center;
+  text-wrap: balance;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   animation: popIn 0.3s ease-out;
 }
@@ -2492,6 +2497,11 @@ img.splash-logo {
 
 .ranking li.clickable {
   cursor: pointer;
+}
+
+.ranking li.clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .ranking .val small {

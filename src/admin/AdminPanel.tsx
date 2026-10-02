@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { now } from '../game/clock';
 import { eraName, totalAchievements, totalBuildings } from '../game/economy';
 import { fmt } from '../game/format';
@@ -7,6 +7,7 @@ import { DAILY_KINDS } from '../game/cloud';
 import { useGame } from '../game/store';
 import { CityVisit } from '../ui/CityVisit';
 import { GameScreen, Modal } from '../ui/Modal';
+import { pressable } from '../ui/a11y';
 import { BarList, ColumnChart } from './charts';
 import {
   PLAYER_LIMIT,
@@ -298,7 +299,8 @@ function PlayersView({ players }: { players: Player[] | null }) {
   const rows = useMemo(() => {
     if (!players) return [];
     const needle = q.trim().toLowerCase();
-    const list = needle ? players.filter((p) => p.name.toLowerCase().includes(needle) || p.uid.startsWith(needle)) : players.slice();
+    // Los UID mezclan mayúsculas y minúsculas: se comparan sin distinguirlas
+    const list = needle ? players.filter((p) => p.name.toLowerCase().includes(needle) || p.uid.toLowerCase().startsWith(needle)) : players.slice();
     if (sort === 'earned') list.sort((a, b) => b.s.allTimeEarned - a.s.allTimeEarned);
     if (sort === 'era') list.sort((a, b) => b.s.era - a.s.era || b.s.stars - a.s.stars);
     return list.slice(0, 200);
@@ -325,7 +327,7 @@ function PlayersView({ players }: { players: Player[] | null }) {
       </small>
       <ol className="ranking">
         {rows.map((p) => (
-          <li key={p.uid} onClick={() => setOpen(p)} className="clickable">
+          <li key={p.uid} className="clickable" {...pressable(() => setOpen(p))}>
             <span className="name">
               {p.name}
               <small className="muted"> · Era {p.s.era}</small>
@@ -486,7 +488,7 @@ const STATUS: { id: SuggestionStatus | 'all'; label: string }[] = [
   { id: 'all', label: 'Todas' },
 ];
 
-function SuggestionsView({ items, onChange }: { items: Suggestion[] | null; onChange: (s: Suggestion[]) => void }) {
+function SuggestionsView({ items, onChange }: { items: Suggestion[] | null; onChange: Dispatch<SetStateAction<Suggestion[] | null>> }) {
   const toast = useGame((st) => st.toast);
   const [filter, setFilter] = useState<SuggestionStatus | 'all'>('nuevo');
   const t = now();
@@ -496,7 +498,8 @@ function SuggestionsView({ items, onChange }: { items: Suggestion[] | null; onCh
   const setStatus = async (x: Suggestion, status: SuggestionStatus) => {
     try {
       await setSuggestionStatus(x.id, status);
-      onChange(items.map((y) => (y.id === x.id ? { ...y, status } : y)));
+      // Sobre la lista actual (no la de cuando se pulsó): si hay varias acciones a la vez, no se pisan
+      onChange((prev) => prev && prev.map((y) => (y.id === x.id ? { ...y, status } : y)));
     } catch (e) {
       toast(`⚠️ ${errorText(e)}`);
     }
@@ -506,7 +509,7 @@ function SuggestionsView({ items, onChange }: { items: Suggestion[] | null; onCh
     if (!confirm('¿Borrar esta sugerencia para siempre?')) return;
     try {
       await deleteSuggestion(x.id);
-      onChange(items.filter((y) => y.id !== x.id));
+      onChange((prev) => prev && prev.filter((y) => y.id !== x.id));
     } catch (e) {
       toast(`⚠️ ${errorText(e)}`);
     }

@@ -1,9 +1,24 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 export function Modal({ children, onBackdrop }: { children: ReactNode; onBackdrop?: () => void }) {
+  // Escape cierra la ventana igual que tocar fuera (solo si se puede cerrar así)
+  const close = useRef(onBackdrop);
+  useEffect(() => {
+    close.current = onBackdrop;
+  });
+  const closable = !!onBackdrop;
+  useEffect(() => {
+    if (!closable) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close.current?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closable]);
+
   return (
     <div className="modal-backdrop" onClick={onBackdrop}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>

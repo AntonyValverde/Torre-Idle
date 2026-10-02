@@ -4,7 +4,7 @@ import { sfx } from './haptics';
 import { Modal } from './Modal';
 
 export function OfflineModal() {
-  const offline = useGame((st) => st.offline);
+  const offline = useGame((st) => st.s.pendingOffline);
   const tickets = useGame((st) => st.s.tickets);
   const collect = useGame((st) => st.collectOffline);
   if (!offline) return null;

@@ -65,6 +65,10 @@ export interface GameState {
   roads: DailyRecord;
   /** Plan verde (tercer puzzle diario). */
   parks: DailyRecord;
+  /** Récord ya subido a cada ranking de minijuego: si el local es mayor, se reintenta la subida. */
+  submittedBest: Record<string, number>;
+  /** Resultados de retos diarios que aún no llegaron al ranking (sin conexión, sin sesión…): se reintentan. */
+  pendingDaily: PendingDaily[];
   /** Día del último giro gratis de la rueda. */
   wheelLast: string | null;
   wheelSpins: number;
@@ -78,12 +82,30 @@ export interface GameState {
   league: LeagueState;
   /** Copa de Alcaldes: inscripción, intentos, mejores marcas y trofeos. */
   cup: CupState;
+  /**
+   * Ganancias offline pendientes de recoger. Se guardan con la partida: si se cierra o recarga
+   * la app sin pulsar "Recoger", no se pierden (lastTick ya avanzó y no se volverían a contar).
+   */
+  pendingOffline: OfflineReport | null;
   createdAt: number;
+}
+
+export interface OfflineReport {
+  earned: number;
+  seconds: number;
 }
 
 export interface Holding {
   u: number;
   c: number;
+}
+
+/** Resultado de un reto diario pendiente de subir a su ranking. */
+export interface PendingDaily {
+  kind: 'daily' | 'roads' | 'parks';
+  date: string;
+  moves: number;
+  timeMs: number;
 }
 
 export function newState(t: number): GameState {
@@ -122,6 +144,8 @@ export function newState(t: number): GameState {
     daily: { last: null, streak: 0, bestStreak: 0 },
     roads: { last: null, streak: 0, bestStreak: 0 },
     parks: { last: null, streak: 0, bestStreak: 0 },
+    submittedBest: {},
+    pendingDaily: [],
     wheelLast: null,
     wheelSpins: 0,
     stocks: {},
@@ -130,8 +154,16 @@ export function newState(t: number): GameState {
     missionsDone: 0,
     league: newLeague(),
     cup: newCup(),
+    pendingOffline: null,
     createdAt: t,
   };
+}
+
+function offlineReport(v: Partial<OfflineReport> | null | undefined): OfflineReport | null {
+  if (!v || typeof v !== 'object') return null;
+  const earned = num(v.earned, 0);
+  const seconds = num(v.seconds, 0);
+  return earned > 0 && seconds > 0 ? { earned, seconds } : null;
 }
 
 function cupState(v: Partial<CupState> | undefined): CupState {
@@ -238,6 +270,24 @@ function dailyRecord(v: Partial<DailyRecord> | undefined): DailyRecord {
   };
 }
 
+const PENDING_KINDS: PendingDaily['kind'][] = ['daily', 'roads', 'parks'];
+
+function pendingDaily(v: unknown): PendingDaily[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter(
+      (p) =>
+        p &&
+        PENDING_KINDS.includes(p.kind) &&
+        typeof p.date === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(p.date) &&
+        Number.isFinite(p.moves) &&
+        Number.isFinite(p.timeMs),
+    )
+    .slice(-9)
+    .map((p) => ({ kind: p.kind, date: p.date, moves: p.moves, timeMs: p.timeMs }));
+}
+
 function numRecord(v: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (v && typeof v === 'object') {
@@ -288,6 +338,8 @@ export function normalize(raw: unknown, t: number): GameState {
     memoryBest: num(r.memoryBest, 0),
     fireBest: num(r.fireBest, 0),
     metroBest: num(r.metroBest, 0),
+    submittedBest: numRecord(r.submittedBest),
+    pendingDaily: pendingDaily(r.pendingDaily),
     wheelLast: typeof r.wheelLast === 'string' ? r.wheelLast : null,
     wheelSpins: num(r.wheelSpins, 0),
     stocks: holdings(r.stocks),
@@ -299,6 +351,7 @@ export function normalize(raw: unknown, t: number): GameState {
     missionsDone: num(r.missionsDone, 0),
     league: leagueState(r.league),
     cup: cupState(r.cup),
+    pendingOffline: offlineReport(r.pendingOffline),
     createdAt: num(r.createdAt, t),
   };
 }

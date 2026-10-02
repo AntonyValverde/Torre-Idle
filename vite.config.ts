@@ -11,6 +11,8 @@ export default defineConfig({
       // 'prompt': la versión nueva espera a que el jugador pulse "Actualizar" (ver src/ui/update.ts)
       registerType: 'prompt',
       workbox: {
+        // /__/auth/* y /__/firebase/* son de Firebase (vía vercel.json): no se sirven con index.html
+        navigateFallbackDenylist: [/^\/__\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { tone, vibrate } from '../../ui/haptics';
+import { isGameKey } from '../keys';
 import { BOX0, BOX1, CAR_L, LANE, STOP, carRect, newTraffic, patienceMs, step, toggleLight, type Car, type Dir } from './logic';
 
 const ROAD = '#3b3a52';
@@ -175,7 +176,9 @@ export function TrafficGame({ onGameOver, onScore }: { onGameOver: (score: numbe
     let raf = 0;
     const rand = Math.random;
     function frame(t: number) {
-      const dtMs = Math.min(33, t - last);
+      // Tiempo real (en pasos de 8 ms): con pocos fps los coches no van a cámara lenta.
+      // Solo se limita tras una pausa larga (app en segundo plano).
+      const dtMs = Math.min(250, Math.max(0, t - last));
       last = t;
 
       if (started && !g.crash) {
@@ -252,7 +255,7 @@ export function TrafficGame({ onGameOver, onScore }: { onGameOver: (score: numbe
       toggle();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Space' || e.code === 'Enter') {
+      if (isGameKey(e)) {
         e.preventDefault();
         toggle();
       }

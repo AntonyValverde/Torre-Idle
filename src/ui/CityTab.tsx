@@ -27,7 +27,8 @@ import { SEASON_LABEL, WEATHER_LABEL, seasonAt, weatherAt } from './weather';
 
 const AMOUNTS = [1, 10, -1] as const;
 
-export function CityTab() {
+/** `paused`: hay una pantalla completa encima y la escena no necesita dibujarse. */
+export function CityTab({ paused = false }: { paused?: boolean }) {
   const s = useGame((st) => st.s);
   const buy = useGame((st) => st.buyBuilding);
   const [amount, setAmount] = useState<(typeof AMOUNTS)[number]>(1);
@@ -44,7 +45,7 @@ export function CityTab() {
   return (
     <div className="tab city-tab">
       <div className="scene-wrap">
-        <CityScene />
+        <CityScene paused={paused} />
         <div className="scene-badge">
           Era {s.era} · {eraName(s.era)}
         </div>

@@ -61,7 +61,11 @@ if (typeof window !== 'undefined') {
   window.addEventListener('touchend', unlock, { passive: true });
   window.addEventListener('click', unlock);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && ctx) unlock();
+    if (!ctx) return;
+    // En segundo plano se suspende el audio para no gastar batería (la música ya se paró);
+    // al volver se reanuda, y si el navegador exige un toque, lo hará el siguiente toque.
+    if (document.visibilityState === 'hidden') ctx.suspend().catch(() => {});
+    else unlock();
   });
 }
 

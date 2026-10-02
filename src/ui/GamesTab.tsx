@@ -1,4 +1,4 @@
-import { dateKey, isNewDay, msUntilTomorrow } from '../game/clock';
+import { dateKey, isNewDay, msUntilTomorrow, now } from '../game/clock';
 import { maxTickets, ticketRegenMs } from '../game/economy';
 import { fmt, fmtClock, fmtTime } from '../game/format';
 import { STOCKS, saleValue, stockPrice } from '../game/stocks';
@@ -15,13 +15,16 @@ const NEW_TAG = <span className="new-tag">NUEVO</span>;
 export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup: () => void }) {
   const s = useGame((st) => st.s);
   const max = maxTickets(s);
-  const today = dateKey(s.lastTick);
+  // El día sale de la misma hora que usan los retos y la rueda al jugar (now()); lastTick puede ir
+  // por delante si la partida venía "del futuro" y entonces mostraría "gratis" cuando no lo es
+  const t = now();
+  const today = dateKey(t);
   const dailyDone = !isNewDay(s.daily.last, today);
   const roadsDone = !isNewDay(s.roads.last, today);
   const parksDone = !isNewDay(s.parks.last, today);
   const wheelFree = isNewDay(s.wheelLast, today);
   const nextTicket = ticketRegenMs(s) - (s.lastTick - s.ticketTime);
-  const untilTomorrow = fmtTime(msUntilTomorrow(s.lastTick) / 1000);
+  const untilTomorrow = fmtTime(msUntilTomorrow(t) / 1000);
   const portfolio = STOCKS.reduce((n, d) => n + (s.stocks[d.id] ? saleValue(s.stocks[d.id].u, stockPrice(d, s.lastTick)) : 0), 0);
 
   return (

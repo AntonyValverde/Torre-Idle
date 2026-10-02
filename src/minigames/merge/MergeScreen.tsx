@@ -115,7 +115,7 @@ export function MergeScreen({ onClose }: { onClose: () => void }) {
               {MATERIALS[maxTile]?.emoji} {maxTile}
             </b>
           </div>
-          <button className="btn small" onClick={finish} disabled={!!result}>
+          <button className="btn small" onClick={finish} disabled={!!result || score === 0}>
             Cobrar
           </button>
         </div>

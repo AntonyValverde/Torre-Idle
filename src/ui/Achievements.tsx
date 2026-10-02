@@ -57,7 +57,8 @@ export function Achievements() {
                   className="buy can"
                   onClick={() => {
                     const g = claim(a.id);
-                    if (g) useGame.getState().toast(`🏅 ${a.name}: +${g} 💎`);
+                    if (!g) return;
+                    useGame.getState().toast(`🏅 ${a.name}: +${g} 💎`);
                     sfx('win');
                     vibrate([15, 30, 15]);
                   }}

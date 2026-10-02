@@ -1,6 +1,6 @@
 import { collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, updateDoc, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { dateKey, now, weekKey } from '../game/clock';
+import { dateKey, now, prevDateKey, weekKey } from '../game/clock';
 import { BOARDS, DAILY_KINDS, type Board, type DailyKind } from '../game/cloud';
 import { cupWeekKey } from '../game/cup';
 import { normalize } from '../game/state';
@@ -127,9 +127,11 @@ export async function rankingsOf(uid: string): Promise<RankEntry[]> {
 export async function removeFromRankings(uid: string) {
   const d = need();
   const today = dateKey();
+  // Los retos diarios van por la fecha local del jugador: con otra zona horaria, su "hoy" puede ser nuestro ayer
+  const days = [today, prevDateKey(today)];
   await Promise.all([
     ...BOARDS.map((b) => deleteDoc(doc(d, 'leaderboards', b, 'scores', uid))),
-    ...DAILY_KINDS.map((k) => deleteDoc(doc(d, k, today, 'scores', uid))),
+    ...DAILY_KINDS.flatMap((k) => days.map((day) => deleteDoc(doc(d, k, day, 'scores', uid)))),
     deleteDoc(doc(d, 'league', weekKey(), 'scores', uid)),
     // Copa: sus marcas siempre; la inscripción solo se puede borrar antes de que se formen los grupos
     deleteDoc(doc(d, 'cup', cupWeekKey(now()), 'results', uid)),

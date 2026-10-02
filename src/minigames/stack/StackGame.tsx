@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { tone, vibrate } from '../../ui/haptics';
+import { isGameKey } from '../keys';
 
 interface Block {
   x: number;
@@ -26,6 +27,8 @@ interface Particle {
 
 const BLOCK_H = 26;
 const PERFECT_PX = 5;
+/** Paso máximo de la simulación, en segundos. */
+const SIM_STEP = 1 / 120;
 
 export function StackGame({ onGameOver, onScore }: { onGameOver: (score: number) => void; onScore?: (score: number) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -157,12 +160,7 @@ export function StackGame({ onGameOver, onScore }: { onGameOver: (score: number)
       ctx.fillRect(x, y + h - 3, w, 3);
     }
 
-    let last = performance.now();
-    let raf = 0;
-    function frame(t: number) {
-      const dt = Math.min(0.033, (t - last) / 1000);
-      last = t;
-
+    function update(dt: number) {
       if (!over) {
         cur.x += cur.dir * speed() * dt;
         const [minX, maxX] = bounds(cur.w);
@@ -193,6 +191,21 @@ export function StackGame({ onGameOver, onScore }: { onGameOver: (score: number)
       for (let i = particles.length - 1; i >= 0; i--) if (particles[i].life <= 0) particles.splice(i, 1);
       flash = Math.max(0, flash - dt);
       msgT = Math.max(0, msgT - dt * 0.9);
+    }
+
+    let last = performance.now();
+    let raf = 0;
+    function frame(t: number) {
+      // Se simula el tiempo real en pasos pequeños: con pocos fps el bloque no va a cámara lenta
+      // (sería más fácil) y en pantallas de 120 Hz no va más rápido. Tras una pausa larga
+      // (app en segundo plano) no se recupera todo el hueco de golpe.
+      let left = Math.min(0.25, Math.max(0, (t - last) / 1000));
+      last = t;
+      while (left > 0) {
+        const step = Math.min(SIM_STEP, left);
+        update(step);
+        left -= step;
+      }
 
       // Fondo
       const h = (hue0 + score * 4) % 360;
@@ -262,7 +275,7 @@ export function StackGame({ onGameOver, onScore }: { onGameOver: (score: number)
       place();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Space' || e.code === 'Enter') {
+      if (isGameKey(e)) {
         e.preventDefault();
         place();
       }

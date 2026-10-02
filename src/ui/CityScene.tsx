@@ -347,12 +347,24 @@ export interface CityVisitView {
   cups?: [number, number, number, number];
 }
 
-export function CityScene({ visit }: { visit?: CityVisitView }) {
+/** Distancia máxima (px) entre tocar y soltar para que cuente como toque y no como desplazamiento. */
+const TAP_SLOP = 10;
+
+export function CityScene({ visit, paused = false }: { visit?: CityVisitView; paused?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visitRef = useRef(visit);
+  const pausedRef = useRef(paused);
+  // Reanuda el bucle de dibujo (lo asigna el efecto principal)
+  const resumeRef = useRef<() => void>(() => {});
   useEffect(() => {
     visitRef.current = visit;
   });
+
+  // Con una pantalla completa encima (minijuego, visita, Copa, panel) no se dibuja: ahorra batería
+  useEffect(() => {
+    pausedRef.current = paused;
+    if (!paused) resumeRef.current();
+  }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -761,10 +773,25 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
       }
     }
 
-    const onPointer = (e: PointerEvent) => {
+    // Se recauda al soltar, y solo si el dedo casi no se movió: deslizar para hacer scroll no cuenta como toque
+    const downs = new Map<number, { x: number; y: number }>();
+    const onDown = (e: PointerEvent) => {
+      downs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    };
+    const onCancel = (e: PointerEvent) => {
+      downs.delete(e.pointerId);
+    };
+    const onUp = (e: PointerEvent) => {
+      const d = downs.get(e.pointerId);
+      downs.delete(e.pointerId);
+      if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP) return;
+      onTap(d.x, d.y);
+    };
+
+    const onTap = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
       if (visitRef.current) {
         // De visita no se recauda: solo se saluda
         texts.push({ x, y: y - 10, text: ['👋', '❤️', '✨', '🎉'][Math.floor(Math.random() * 4)], life: 1, crit: false });
@@ -781,11 +808,19 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
       vibrate(crit ? 30 : 6);
       sfx(crit ? 'crit' : 'tap');
     };
-    canvas.addEventListener('pointerdown', onPointer);
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onCancel);
+    canvas.addEventListener('pointerleave', onCancel);
 
     let last = performance.now();
     let raf = 0;
     const frame = (t: number) => {
+      if (pausedRef.current) {
+        // En pausa: se detiene el bucle hasta que se quite la pantalla de encima
+        raf = 0;
+        return;
+      }
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
       const { s } = useGame.getState();
@@ -1045,11 +1080,21 @@ export function CityScene({ visit }: { visit?: CityVisitView }) {
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
+    resumeRef.current = () => {
+      if (raf) return;
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    };
 
     return () => {
       cancelAnimationFrame(raf);
+      raf = 0;
+      resumeRef.current = () => {};
       ro.disconnect();
-      canvas.removeEventListener('pointerdown', onPointer);
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onCancel);
+      canvas.removeEventListener('pointerleave', onCancel);
     };
   }, []);
 

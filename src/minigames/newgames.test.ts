@@ -145,7 +145,8 @@ describe('Metro', () => {
     // Desde una estación intermedia sale una línea nueva
     expect(metro.connect(g, b, a).kind).toBe('new');
     expect(metro.connect(g, c, b, g.lines[1].id)).toEqual({ kind: 'none', reason: 'inline' });
-    metro.connect(g, c, a);
+    const d = metro.addStation(g, mulberry32(9))!;
+    expect(metro.connect(g, d.id, a).kind).toBe('new');
     expect(g.lines.length).toBe(metro.MAX_LINES);
     metro.removeLine(g, g.lines[2].id);
     expect(g.lines.length).toBe(2);
@@ -153,10 +154,45 @@ describe('Metro', () => {
 
   it('no hay más de tres líneas', () => {
     const g = setup();
-    const [a, b] = g.stations.map((s) => s.id);
-    for (let k = 0; k < metro.MAX_LINES; k++) expect(metro.connect(g, a, b).kind).toBe('new');
-    expect(metro.connect(g, a, b)).toEqual({ kind: 'none', reason: 'nolines' });
+    const rand = mulberry32(5);
+    while (g.stations.length < 6) metro.addStation(g, rand);
+    const [s0, s1, s2, s3, s4, s5] = g.stations.map((s) => s.id);
+    expect(metro.connect(g, s0, s1).kind).toBe('new');
+    expect(metro.connect(g, s1, s2).kind).toBe('extend');
+    expect(metro.connect(g, s3, s4).kind).toBe('new');
+    expect(metro.connect(g, s5, s0).kind).toBe('new');
+    // Desde una estación intermedia saldría otra línea, pero ya no quedan
+    expect(metro.connect(g, s1, s3)).toEqual({ kind: 'none', reason: 'nolines' });
     expect(new Set(g.lines.map((l) => l.color)).size).toBe(metro.MAX_LINES);
+  });
+
+  it('desde el extremo de una línea, pasar por una estación de esa misma línea no crea otra repetida', () => {
+    const g = setup();
+    const [a, b, c] = g.stations.map((s) => s.id);
+    metro.connect(g, a, b);
+    metro.connect(g, b, c);
+    // a-b-c: arrastrar desde c y rozar b no gasta una línea nueva
+    expect(metro.connect(g, c, b)).toEqual({ kind: 'none', reason: 'inline' });
+    expect(metro.connect(g, a, b)).toEqual({ kind: 'none', reason: 'inline' });
+    expect(g.lines.length).toBe(1);
+    // Pero si es extremo de otra línea que no pasa por esa estación, la alarga
+    const d = metro.addStation(g, mulberry32(9))!;
+    expect(metro.connect(g, d.id, c).kind).toBe('new');
+    expect(metro.connect(g, c, a).kind).toBe('extend');
+    expect(g.lines[1].stops).toEqual([d.id, c, a]);
+  });
+
+  it('al borrar una línea, los viajeros que iban a la estación donde se bajan cuentan como entregados', () => {
+    const g = setup();
+    const [sa, sb, sc] = g.stations;
+    metro.connect(g, sa.id, sb.id);
+    const line = g.lines[0];
+    // El tren sigue en la primera parada (sa)
+    line.train.cargo = [sa.shape, sc.shape, sa.shape];
+    expect(metro.removeLine(g, line.id)).toBe(2);
+    expect(g.score).toBe(2);
+    expect(sa.queue).toEqual([sc.shape]);
+    expect(g.lines.length).toBe(0);
   });
 
   it('el tren recoge a los viajeros y los deja en su destino', () => {

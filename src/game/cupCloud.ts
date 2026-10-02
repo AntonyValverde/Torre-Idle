@@ -1,4 +1,4 @@
-import { collection, doc, getCountFromServer, getDocs, limit, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getCountFromServer, getDocFromServer, getDocsFromServer, limit, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { now } from './clock';
 import { currentUid, ensureUser } from './cloud';
@@ -6,6 +6,7 @@ import {
   SIGNUP_DAYS,
   buildCup,
   cupStart,
+  cupWeekKey,
   seasonWeeks,
   summarizeCup,
   tierOf,
@@ -32,19 +33,48 @@ function need() {
 
 const int = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
 
+// Las lecturas de la Copa van siempre al servidor: sin conexión, getDocs devolvería la caché (vacía)
+// como si nadie se hubiera inscrito, y eso se guardaría y se cobraría como definitivo.
+
 export async function registerCup(week: string, s: GameState): Promise<void> {
   const d = need();
   const user = await ensureUser();
   if (!user) throw new Error('Sin sesión');
-  await setDoc(doc(d, 'cup', week, 'entries', user.uid), {
-    name: s.name,
-    tier: tierOf(s.allTimeEarned),
-    gold: int(s.cup.gold),
-    silver: int(s.cup.silver),
-    bronze: int(s.cup.bronze),
-    createdAt: serverTimestamp(),
-  });
+  const ref = doc(d, 'cup', week, 'entries', user.uid);
+  try {
+    await setDoc(ref, {
+      name: s.name,
+      tier: tierOf(s.allTimeEarned),
+      gold: int(s.cup.gold),
+      silver: int(s.cup.silver),
+      bronze: int(s.cup.bronze),
+      createdAt: serverTimestamp(),
+    });
+  } catch (e) {
+    // Ya inscrito (desde otro dispositivo o con una partida que no llegó a guardarlo): las reglas
+    // no dejan reescribir la inscripción, pero vale la que ya está.
+    if ((e as { code?: string })?.code !== 'permission-denied' || !(await getDocFromServer(ref)).exists()) throw e;
+  }
   entriesCache.delete(week);
+}
+
+const ENTRIES_KEY = 'torre-cup-entries:';
+/** Semanas de inscritos que se guardan en el dispositivo (la actual y las anteriores aún por cobrar). */
+const ENTRIES_KEEP_WEEKS = 3;
+
+/** Borra las listas de inscritos de semanas viejas: con muchos jugadores llenarían el almacenamiento (y la partida no se podría guardar). */
+function pruneEntries(week: string) {
+  try {
+    const oldest = cupWeekKey(cupStart(week) - (ENTRIES_KEEP_WEEKS - 1) * 7 * 86_400_000 + 86_400_000);
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(ENTRIES_KEY) && k.slice(ENTRIES_KEY.length) < oldest) stale.push(k);
+    }
+    for (const k of stale) localStorage.removeItem(k);
+  } catch {
+    /* sin almacenamiento */
+  }
 }
 
 /**
@@ -55,7 +85,7 @@ export async function fetchCupEntries(week: string): Promise<CupEntry[]> {
   const d = need();
   // Margen de 2 minutos tras el cierre por si el reloj del móvil va algo adelantado respecto al servidor
   const closed = now() > cupStart(week) + SIGNUP_DAYS * 86_400_000 + 120_000;
-  const storeKey = `torre-cup-entries:${week}`;
+  const storeKey = ENTRIES_KEY + week;
   if (closed) {
     try {
       const saved = localStorage.getItem(storeKey);
@@ -67,7 +97,7 @@ export async function fetchCupEntries(week: string): Promise<CupEntry[]> {
   const hit = entriesCache.get(week);
   if (hit && Date.now() - hit.at < 30_000) return hit.data;
   await ensureUser();
-  const snap = await getDocs(query(collection(d, 'cup', week, 'entries'), limit(MAX_PLAYERS)));
+  const snap = await getDocsFromServer(query(collection(d, 'cup', week, 'entries'), limit(MAX_PLAYERS)));
   const data = snap.docs.map((x) => {
     const v = x.data();
     return {
@@ -82,6 +112,7 @@ export async function fetchCupEntries(week: string): Promise<CupEntry[]> {
   entriesCache.set(week, { at: Date.now(), data });
   // Se guarda un rato después del cierre, para que ya estén todas las inscripciones de última hora
   if (closed) {
+    pruneEntries(week);
     try {
       localStorage.setItem(storeKey, JSON.stringify(data));
     } catch {
@@ -96,7 +127,7 @@ export async function fetchCupResults(week: string, fresh = false): Promise<Map<
   const hit = resultsCache.get(week);
   if (!fresh && hit && Date.now() - hit.at < RESULTS_MS) return hit.data;
   await ensureUser();
-  const snap = await getDocs(query(collection(d, 'cup', week, 'results'), limit(MAX_PLAYERS)));
+  const snap = await getDocsFromServer(query(collection(d, 'cup', week, 'results'), limit(MAX_PLAYERS)));
   const data = new Map<string, CupResult>(snap.docs.map((x) => {
     const v = x.data();
     return [x.id, { g1: int(v.g1), g2: int(v.g2), g3: int(v.g3), f: int(v.f) }];
@@ -141,6 +172,19 @@ export async function fetchSeason(season: number): Promise<CupSummary[]> {
 
 export async function cupEntryCount(week: string): Promise<number> {
   return (await getCountFromServer(collection(need(), 'cup', week, 'entries'))).data().count;
+}
+
+/**
+ * Vuelve a subir de una vez las mejores marcas que el servidor no tiene (una subida perdida al cerrar
+ * la app sin conexión, o que agotó los reintentos). Sin reintentos: la Copa lo vuelve a comprobar al recargar.
+ */
+export async function syncCupBest(week: string, scores: Partial<Record<CupSlot, number>>, name: string): Promise<void> {
+  const d = need();
+  const uid = currentUid();
+  const fields = Object.fromEntries(Object.entries(scores).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => [k, Math.floor(v!)]));
+  if (!uid || !Object.keys(fields).length) return;
+  await setDoc(doc(d, 'cup', week, 'results', uid), { name, ...fields, updatedAt: serverTimestamp() }, { merge: true });
+  resultsCache.delete(week);
 }
 
 const retries = new Map<CupSlot, ReturnType<typeof setTimeout>>();

@@ -41,16 +41,17 @@ export function RoadsScreen({ onClose, onRanking }: { onClose: () => void; onRan
   const reach = useMemo(() => connected(tiles, puzzle.hall), [tiles, puzzle]);
   const linked = puzzle.houses.filter((h) => reach.has(h)).length;
 
+  // El cronómetro usa performance.now(): no se ve afectado si se cambia la hora del dispositivo
   useEffect(() => {
     if (startAt === null || result) return;
-    const id = setInterval(() => setElapsed(Date.now() - startAt), 250);
+    const id = setInterval(() => setElapsed(performance.now() - startAt), 250);
     return () => clearInterval(id);
   }, [startAt, result]);
 
   const turn = (i: number) => {
     // Un cruce de cuatro salidas no cambia al girarlo: no cuenta como movimiento
     if (result || alreadyDone || exits(tiles[i]) === 4) return;
-    const t0 = startAt ?? Date.now();
+    const t0 = startAt ?? performance.now();
     if (startAt === null) setStartAt(t0);
     const next = tiles.slice();
     next[i] = rotate(next[i]);
@@ -65,7 +66,7 @@ export function RoadsScreen({ onClose, onRanking }: { onClose: () => void; onRan
     else sfx('tap');
     if (!isSolved(next, puzzle.hall, puzzle.houses)) return;
 
-    const timeMs = Date.now() - t0;
+    const timeMs = Math.round(performance.now() - t0);
     setElapsed(timeMs);
     const store = useGame.getState();
     const reward = store.completeRoads(date, m, puzzle.par);
@@ -78,11 +79,12 @@ export function RoadsScreen({ onClose, onRanking }: { onClose: () => void; onRan
     setResult({ ...reward, moves: m, timeMs });
   };
 
+  // Reiniciar devuelve el plano a su estado inicial, pero los giros (y el tiempo) siguen contando:
+  // si no, se podría probar sin coste y repetir la solución con los giros mínimos para el ranking.
   const reset = () => {
     setTiles(puzzle.tiles);
     // Se completa la vuelta para que la animación no gire hacia atrás
     setTurns((tt) => tt.map((x) => Math.ceil(x / 4) * 4));
-    setMoves(0);
   };
 
   return (
@@ -113,7 +115,7 @@ export function RoadsScreen({ onClose, onRanking }: { onClose: () => void; onRan
                 <small>Tiempo</small>
                 <b>{fmtClock(elapsed)}</b>
               </div>
-              <button className="btn small" onClick={reset} disabled={moves === 0}>
+              <button className="btn small" onClick={reset} disabled={tiles === puzzle.tiles}>
                 Reiniciar
               </button>
             </div>

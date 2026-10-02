@@ -15,6 +15,7 @@ import {
 import { fmt, fmtClock, fmtTime } from '../game/format';
 import { DIVISIONS, divisionOf, nextDivision } from '../game/missions';
 import { useGame } from '../game/store';
+import { pressable } from './a11y';
 
 export type BoardTab = 'league' | DailyKind | Board;
 
@@ -125,7 +126,11 @@ export function RankingTab({ initial = 'league', onVisit }: { initial?: BoardTab
       {rows && rows.length > 0 && (
         <ol className="ranking">
           {rows.map((r, i) => (
-            <li key={r.uid} className={`${r.uid === me ? 'me' : ''}${onVisit ? ' clickable' : ''}`} onClick={onVisit && (() => onVisit(r.uid))}>
+            <li
+              key={r.uid}
+              className={`${r.uid === me ? 'me' : ''}${onVisit ? ' clickable' : ''}`}
+              {...(onVisit ? pressable(() => onVisit(r.uid)) : {})}
+            >
               <span className="pos">{i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span>
               <span className="name">
                 {r.name}

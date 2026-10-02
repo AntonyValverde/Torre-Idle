@@ -166,11 +166,16 @@ export function finalStandings(finalists: CupEntry[], results: Map<string, CupRe
   return rows;
 }
 
-/** El rival directo: quien va justo por delante (o justo detrás si vas primero). */
-export function rivalOf(rows: StandingRow[], uid: string): StandingRow | null {
-  const i = rows.findIndex((r) => r.entry.uid === uid);
-  if (i < 0 || rows.length < 2) return null;
-  return rows[i === 0 ? 1 : i - 1];
+/**
+ * El rival directo: cada grupo se empareja en duelos fijos según el orden del grupo (nivel parecido):
+ * 1º con 2º, 3º con 4º… Si el grupo es impar, el último se cruza con el penúltimo. Como no depende
+ * de la clasificación, se puede superar al rival (o quedar por detrás) hasta el final.
+ */
+export function rivalOf(group: CupEntry[], uid: string): CupEntry | null {
+  const i = group.findIndex((e) => e.uid === uid);
+  if (i < 0 || group.length < 2) return null;
+  const j = i % 2 === 1 ? i - 1 : i + 1 < group.length ? i + 1 : i - 1;
+  return group[j];
 }
 
 export interface CupView {
@@ -202,9 +207,11 @@ export interface CupOutcome {
 }
 
 export function outcomeOf(view: CupView, uid: string): CupOutcome {
-  const rows = view.standings.find((g) => g.some((r) => r.entry.uid === uid)) ?? [];
+  const g = view.groups.findIndex((grp) => grp.some((e) => e.uid === uid));
+  const rows = g >= 0 ? view.standings[g] : [];
   const me = rows.find((r) => r.entry.uid === uid);
-  const rival = rivalOf(rows, uid);
+  const rivalEntry = g >= 0 ? rivalOf(view.groups[g], uid) : null;
+  const rival = rivalEntry ? rows.find((r) => r.entry.uid === rivalEntry.uid) : undefined;
   const fin = view.final.find((r) => r.entry.uid === uid);
   return {
     played: !!me?.played || !!fin?.score,
@@ -330,6 +337,26 @@ export function fansBonus(c: CupState, week: string, slot: CupSlot): number {
 
 export function attemptsFor(c: CupState, week: string, slot: CupSlot): number {
   return ATTEMPTS + (c.week === week ? c.bonus[slot] : 0) + fansBonus(c, week, slot);
+}
+
+/** ¿Se puede jugar ahora esa prueba de la Copa de `week`? Las de grupos el sábado y la final el domingo. */
+export function slotOpen(week: string, slot: CupSlot, ms: number): boolean {
+  const info = cupPhase(ms);
+  return info.week === week && info.phase === (slot === 'f' ? 'final' : 'groups');
+}
+
+/**
+ * Mejores marcas locales que el servidor aún no tiene (p. ej. una subida que se perdió al cerrar la app
+ * sin conexión). Solo las de las pruebas que se están jugando ahora: las demás las reglas ya no las aceptan.
+ */
+export function unsyncedBest(best: Record<CupSlot, number>, server: CupResult | undefined, phase: CupPhase): Partial<Record<CupSlot, number>> {
+  const slots: CupSlot[] = phase === 'groups' ? GROUP_SLOTS : phase === 'final' ? ['f'] : [];
+  const out: Partial<Record<CupSlot, number>> = {};
+  for (const k of slots) {
+    const mine = Math.min(5000, Math.floor(best[k]));
+    if (mine > 0 && mine > (server?.[k] ?? 0)) out[k] = mine;
+  }
+  return out;
 }
 
 /** Marca el día de hoy como jugado (solo de lunes a viernes). Devuelve el mismo objeto si no cambia. */
@@ -508,8 +535,12 @@ export function newCup(): CupState {
   };
 }
 
-function isClaimed(c: CupState, week: string): boolean {
-  return c.claimed === week || c.history.some((h) => h.week === week);
+/**
+ * ¿Ya se cobró esa Copa? Se cobran siempre de la más antigua a la más reciente, así que cualquier
+ * semana hasta la última cobrada cuenta como cobrada (aunque ya no esté en el historial, que es corto).
+ */
+export function isClaimed(c: CupState, week: string): boolean {
+  return (c.claimed !== null && week <= c.claimed) || c.history.some((h) => h.week === week);
 }
 
 /** Inscribe en otra semana: las cartas equipadas y no usadas vuelven a la colección. */
@@ -525,10 +556,11 @@ export function returnCards(cards: Record<CardId, number>, loadout: CardId[]): R
   return out;
 }
 
-/** Una Copa ya terminada en la que participó (o apostó) y aún no cobró, si la hay. */
+/** La Copa ya terminada más antigua en la que participó (o apostó) y aún no cobró, si la hay. */
 export function pendingCup(c: CupState, currentWeek: string): string | null {
-  for (const w of [c.prev, c.week, c.pick?.week ?? null]) if (w && w < currentWeek && !isClaimed(c, w)) return w;
-  return null;
+  let out: string | null = null;
+  for (const w of [c.prev, c.week, c.pick?.week ?? null]) if (w && w < currentWeek && !isClaimed(c, w) && (!out || w < out)) out = w;
+  return out;
 }
 
 /** Temporada ya terminada en la que jugó y aún no cobró. */

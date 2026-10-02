@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloudEnabled, track } from '../../firebase';
 import { now } from '../../game/clock';
 import { currentUid } from '../../game/cloud';
@@ -32,17 +32,19 @@ import {
   seasonStandings,
   seasonWeeks,
   trainingCost,
+  unsyncedBest,
   type CardId,
   type CupEntry,
   type CupGame,
   type CupPhase,
+  type CupResult,
   type CupSlot,
   type CupSummary,
   type CupView,
   type SeasonRow,
   type StandingRow,
 } from '../../game/cup';
-import { cupEntryCount, fetchCupEntries, fetchCupResults, fetchCupSummary, fetchSeason, registerCup } from '../../game/cupCloud';
+import { cupEntryCount, fetchCupEntries, fetchCupResults, fetchCupSummary, fetchSeason, registerCup, syncCupBest } from '../../game/cupCloud';
 import { productionPerSec } from '../../game/economy';
 import { fmt, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
@@ -78,18 +80,23 @@ export function Trophies({ e }: { e: Pick<CupEntry, 'gold' | 'silver' | 'bronze'
   );
 }
 
-/** Inscritos y resultados de una semana, ya convertidos en grupos y clasificaciones. */
-function useCupData(week: string, enabled: boolean) {
+/**
+ * Inscritos y resultados de una semana, ya convertidos en grupos y clasificaciones. Con `poll` se
+ * recargan cada 30 s (solo mientras se juega: una Copa terminada ya no cambia).
+ */
+function useCupData(week: string, enabled: boolean, poll: boolean) {
   const [view, setView] = useState<CupView | null>(null);
+  const [results, setResults] = useState<Map<string, CupResult> | null>(null);
   const [error, setError] = useState(false);
 
   const load = useCallback(
     async (fresh = false) => {
       if (!enabled || !cloudEnabled) return;
+      setError(false);
       try {
         const [entries, res] = await Promise.all([fetchCupEntries(week), fetchCupResults(week, fresh)]);
         setView(buildCup(entries, res, week));
-        setError(false);
+        setResults(res);
       } catch (e) {
         console.warn('Copa', e);
         setError(true);
@@ -101,12 +108,12 @@ function useCupData(week: string, enabled: boolean) {
   // Siempre resultados recientes al abrir (la caché solo evita lecturas repetidas en pocos segundos)
   useEffect(() => {
     load(true);
-    if (!enabled) return;
+    if (!enabled || !poll) return;
     const id = setInterval(() => load(true), 30_000);
     return () => clearInterval(id);
-  }, [load, enabled]);
+  }, [load, enabled, poll]);
 
-  return { view, error, reload: load };
+  return { view, results, error, reload: load };
 }
 
 export function CupScreen({ onClose, onVisit }: { onClose: () => void; onVisit: (uid: string) => void }) {
@@ -116,18 +123,19 @@ export function CupScreen({ onClose, onVisit }: { onClose: () => void; onVisit: 
   const pending = pendingCup(cup, info.week);
   const season = pending ? null : pendingSeason(cup, info.week);
   const [section, setSection] = useState<Section>('week');
-  const [playing, setPlaying] = useState<{ slot: CupSlot; card: CardId | null } | null>(null);
+  // La semana y la prueba se fijan al empezar: si a mitad de partida cambia la semana, no cambia el juego
+  const [playing, setPlaying] = useState<{ week: string; slot: CupSlot; game: CupGame; card: CardId | null } | null>(null);
   const [ceremony, setCeremony] = useState<string | null>(null);
   const [seasonCeremony, setSeasonCeremony] = useState<number | null>(null);
   const events = cupEvents(info.week);
-  const data = useCupData(info.week, info.phase !== 'signup');
+  const data = useCupData(info.week, info.phase !== 'signup', true);
 
   if (playing) {
     return (
       <CupPlay
-        week={info.week}
+        week={playing.week}
         slot={playing.slot}
-        game={events[playing.slot]}
+        game={playing.game}
         final={playing.slot === 'f'}
         card={playing.card}
         onClose={() => {
@@ -204,7 +212,7 @@ export function CupScreen({ onClose, onVisit }: { onClose: () => void; onVisit: 
             week={info.week}
             events={events}
             data={data}
-            onPlay={(slot, card) => setPlaying({ slot, card })}
+            onPlay={(slot, card) => setPlaying({ week: info.week, slot, game: events[slot], card })}
             onVisit={onVisit}
             onPrep={() => setSection('prep')}
           />
@@ -243,9 +251,12 @@ function WeekSection({
   const toast = useGame((st) => st.toast);
   const registered = cup.week === week;
   const uid = currentUid();
+  // Con una Copa anterior sin cobrar no se puede inscribir en otra (su premio se perdería)
+  const pending = pendingCup(cup, week);
   const [busy, setBusy] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [groupIdx, setGroupIdx] = useState<number | null>(null);
+  const synced = useRef<{ key: string; at: number } | null>(null);
 
   useEffect(() => {
     if (phase !== 'signup' || !cloudEnabled) return;
@@ -254,6 +265,21 @@ function WeekSection({
       .catch(() => {});
   }, [phase, week, registered]);
 
+  // Si el servidor tiene una marca peor que la del móvil (una subida que se perdió), se vuelve a subir
+  const { results, reload } = data;
+  useEffect(() => {
+    if (!registered || !uid || !results || !cloudEnabled) return;
+    const missing = unsyncedBest(cup.best, results.get(uid), phase);
+    const key = `${week}:${JSON.stringify(missing)}`;
+    if (key === `${week}:{}`) return;
+    // Como mucho un intento por minuto con las mismas marcas (la subida normal puede estar en camino)
+    if (synced.current?.key === key && Date.now() - synced.current.at < 60_000) return;
+    synced.current = { key, at: Date.now() };
+    syncCupBest(week, missing, useGame.getState().s.name)
+      .then(() => reload(true))
+      .catch((e) => console.warn('Copa: no se pudo resincronizar la marca', e));
+  }, [registered, uid, results, cup.best, phase, week, reload]);
+
   const view = data.view;
   const myGroup = view?.standings.findIndex((g) => g.some((r) => r.entry.uid === uid)) ?? -1;
   const shownGroup = groupIdx ?? (myGroup >= 0 ? myGroup : 0);
@@ -261,6 +287,7 @@ function WeekSection({
   const finalist = !!uid && !!view?.finalists.some((e) => e.uid === uid);
 
   const register = async () => {
+    if (pendingCup(useGame.getState().s.cup, week)) return;
     setBusy(true);
     try {
       await registerCup(week, useGame.getState().s);
@@ -302,7 +329,8 @@ function WeekSection({
             <>
               <b>Inscríbete gratis</b>
               <small className="muted">La inscripción cierra el viernes a medianoche (hora de Costa Rica). Después ya no se puede entrar.</small>
-              <button className="btn primary" onClick={register} disabled={busy || !cloudEnabled}>
+              {pending && <small className="warn">Antes cobra los premios de la Copa del {shortWeek(pending)} (arriba).</small>}
+              <button className="btn primary" onClick={register} disabled={busy || !cloudEnabled || !!pending}>
                 {busy ? 'Inscribiendo…' : '🏆 Inscribirme en la Copa'}
               </button>
             </>
@@ -364,7 +392,7 @@ function WeekSection({
               ))}
             </div>
           )}
-          {phase === 'groups' && registered && shownGroup === myGroup && <RivalBar rows={rows} uid={uid} />}
+          {phase === 'groups' && registered && shownGroup === myGroup && <RivalBar group={view.groups[shownGroup]} rows={rows} uid={uid} />}
           <GroupTable rows={rows} uid={uid} events={events} perGroup={view.groups.length === 1 ? 4 : 2} onVisit={onVisit} />
           {phase === 'groups' && registered && (
             <>
@@ -456,9 +484,10 @@ function EventList({
   );
 }
 
-function RivalBar({ rows, uid }: { rows: StandingRow[]; uid: string | null }) {
+function RivalBar({ group, rows, uid }: { group: CupEntry[]; rows: StandingRow[]; uid: string | null }) {
   const me = rows.find((r) => r.entry.uid === uid);
-  const rival = uid ? rivalOf(rows, uid) : null;
+  const rivalEntry = uid ? rivalOf(group, uid) : null;
+  const rival = rivalEntry ? rows.find((r) => r.entry.uid === rivalEntry.uid) : null;
   if (!me || !rival) return null;
   const total = Math.max(1, me.points + rival.points);
   const ahead = me.rank < rival.rank;
@@ -611,6 +640,17 @@ function PickCard({ week, view }: { week: string; view: CupView }) {
   const [stake, setStake] = useState(PICK_STAKES[0]);
   const rows = useMemo(() => view.standings.flat().filter((r) => r.played).sort((a, b) => b.points - a.points), [view]);
   const pick = cup.pick?.week === week ? cup.pick : null;
+  // Un pronóstico anterior sin cobrar se perdería: primero se cobra
+  const pending = pick ? null : pendingCup(cup, week);
+
+  if (pending) {
+    return (
+      <div className="card cup-pick">
+        <b>🔮 ¿Quién ganará la Copa?</b>
+        <small className="muted">Antes de apostar, cobra los premios de la Copa del {shortWeek(pending)} (arriba).</small>
+      </div>
+    );
+  }
 
   if (pick) {
     return (
@@ -924,7 +964,7 @@ function SeasonSection({ week, onVisit }: { week: string; onVisit: (uid: string)
 function CupCeremony({ week, onDone }: { week: string; onDone: () => void }) {
   const uid = currentUid();
   const pick = useGame((st) => (st.s.cup.pick?.week === week ? st.s.cup.pick : null));
-  const { view, error, reload } = useCupData(week, true);
+  const { view, error, reload } = useCupData(week, true, false);
   const outcome = useMemo(() => (view && uid ? outcomeOf(view, uid) : null), [view, uid]);
   const reward = outcome ? cupRewards(outcome) : null;
   const payout = view ? pickPayout(pick, view) : { mult: 0, gems: 0 };
@@ -952,15 +992,21 @@ function CupCeremony({ week, onDone }: { week: string; onDone: () => void }) {
       <div className="result cup-ceremony">
         <div className="big-emoji">🏆</div>
         <div className="result-label">Copa de Alcaldes · semana del {shortWeek(week)}</div>
-        {error && (
-          <>
-            <p>No se pudieron cargar los resultados.</p>
-            <button className="btn" onClick={() => reload(true)}>
-              Reintentar
-            </button>
-          </>
-        )}
+        {error && <p>No se pudieron cargar los resultados. Revisa tu conexión: los premios te esperan.</p>}
         {!view && !error && <p className="muted">Cargando resultados…</p>}
+        {!view && (
+          // Sin resultados no se cobra nada: se puede salir y volver más tarde
+          <div className="btn-row">
+            <button className="btn" onClick={onDone}>
+              Cerrar
+            </button>
+            {error && (
+              <button className="btn primary" onClick={() => reload(true)}>
+                Reintentar
+              </button>
+            )}
+          </div>
+        )}
         {view && (
           <>
             {podium.length > 0 ? (
@@ -1035,15 +1081,21 @@ function SeasonCeremony({ season, onDone }: { season: number; onDone: () => void
       <div className="result cup-ceremony">
         <div className="big-emoji">📅</div>
         <div className="result-label">Fin de la temporada {season + 1}</div>
-        {error && (
-          <>
-            <p>No se pudo cargar la clasificación.</p>
-            <button className="btn" onClick={load}>
-              Reintentar
-            </button>
-          </>
-        )}
+        {error && <p>No se pudo cargar la clasificación. Revisa tu conexión: el premio te espera.</p>}
         {!rows && !error && <p className="muted">Cargando…</p>}
+        {!rows && (
+          // Sin clasificación no se cobra nada: se puede salir y volver más tarde
+          <div className="btn-row">
+            <button className="btn" onClick={onDone}>
+              Cerrar
+            </button>
+            {error && (
+              <button className="btn primary" onClick={load}>
+                Reintentar
+              </button>
+            )}
+          </div>
+        )}
         {rows && (
           <>
             <ul className="reward-list">

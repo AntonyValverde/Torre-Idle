@@ -23,6 +23,7 @@ import { CityTab } from './ui/CityTab';
 import { CityVisit } from './ui/CityVisit';
 import { CupScreen } from './ui/cup/CupScreen';
 import { useDecreeScheduler } from './ui/DecreeCard';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { setMusicContext } from './ui/music/engine';
 import { GamesTab, TICKET_GAMES, type GameId } from './ui/GamesTab';
 import { GoldenBalloon } from './ui/GoldenBalloon';
@@ -71,6 +72,10 @@ export default function App() {
     let stop: (() => void) | undefined;
     let tickTimer: ReturnType<typeof setInterval> | undefined;
     let cancelled = false;
+    // Otra pestaña tomó el control: aunque el arranque siga a medias (cargando la nube), ya no debe
+    // cargar la partida ni arrancar el tick ni el guardado automático (pisaría la de la otra pestaña)
+    let lost = false;
+    const stopped = () => cancelled || lost;
     const shutdown = () => {
       clearInterval(tickTimer);
       stop?.();
@@ -78,25 +83,27 @@ export default function App() {
     };
     const lock = claimTab(() => {
       // Otra pestaña abrió el juego: guardamos y nos quedamos quietos
+      lost = true;
       if (useGame.getState().ready) saveLocal(useGame.getState().s);
       shutdown();
       setOtherTab(true);
     });
     (async () => {
       await lock.ready;
-      if (cancelled) return;
+      if (stopped()) return;
       const state = await loadBestState(loadLocal());
-      if (cancelled) return;
+      if (stopped()) return;
       useGame.getState().init(state);
       tickTimer = setInterval(() => useGame.getState().tick(), 200);
       stop = startAutoSave();
       syncRankingName(state.name);
       track('session_start');
       const linked = await completeGoogleRedirect();
+      if (stopped()) return;
       if (linked) useGame.getState().toast(linked === 'linked' ? '✅ Cuenta vinculada con Google' : '✅ Sesión iniciada con tu cuenta de Google');
     })().catch((e) => {
       console.error('Error al arrancar', e);
-      if (!useGame.getState().ready) useGame.getState().init(loadLocal() ?? newState(Date.now()));
+      if (!stopped() && !useGame.getState().ready) useGame.getState().init(loadLocal() ?? newState(Date.now()));
     });
     return () => {
       cancelled = true;
@@ -152,7 +159,7 @@ export default function App() {
     <div className="app" style={{ '--hue': eraHue(era) } as CSSProperties}>
       <TopBar />
       <main className="content" key={tab}>
-        {tab === 'city' && <CityTab />}
+        {tab === 'city' && <CityTab paused={!!game || !!visit || cupOpen || admin} />}
         {tab === 'upgrades' && <UpgradesTab />}
         {tab === 'games' && <GamesTab onPlay={play} onCup={() => setCupOpen(true)} />}
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
@@ -161,24 +168,39 @@ export default function App() {
       <BottomNav tab={tab} onTab={setTab} />
 
       {tab === 'city' && !game && <GoldenBalloon />}
-      {game === 'stack' && <StackScreen onClose={() => setGame(null)} />}
-      {game === 'merge' && <MergeScreen onClose={() => setGame(null)} />}
-      {game === 'daily' && <DailyScreen onClose={() => setGame(null)} onRanking={() => openRanking('daily')} />}
-      {game === 'wheel' && <WheelScreen onClose={() => setGame(null)} />}
-      {game === 'thief' && <ThiefScreen onClose={() => setGame(null)} />}
-      {game === 'stocks' && <StockScreen onClose={() => setGame(null)} />}
-      {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
-      {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
-      {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
-      {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
-      {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
-      {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
-      {cupOpen && !game && <CupScreen onClose={() => setCupOpen(false)} onVisit={setVisit} />}
-      {visit && !game && !admin && <CityVisit uid={visit} onClose={closeVisit} />}
+      {/* Cada pantalla superpuesta tiene su propia barrera de errores: si falla, se cierra solo esa pantalla */}
+      {game && (
+        <ErrorBoundary key={game} onClose={() => setGame(null)}>
+          {game === 'stack' && <StackScreen onClose={() => setGame(null)} />}
+          {game === 'merge' && <MergeScreen onClose={() => setGame(null)} />}
+          {game === 'daily' && <DailyScreen onClose={() => setGame(null)} onRanking={() => openRanking('daily')} />}
+          {game === 'wheel' && <WheelScreen onClose={() => setGame(null)} />}
+          {game === 'thief' && <ThiefScreen onClose={() => setGame(null)} />}
+          {game === 'stocks' && <StockScreen onClose={() => setGame(null)} />}
+          {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
+          {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
+          {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
+          {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
+          {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
+          {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
+        </ErrorBoundary>
+      )}
+      {cupOpen && !game && (
+        <ErrorBoundary onClose={() => setCupOpen(false)}>
+          <CupScreen onClose={() => setCupOpen(false)} onVisit={setVisit} />
+        </ErrorBoundary>
+      )}
+      {visit && !game && !admin && (
+        <ErrorBoundary key={visit} onClose={closeVisit}>
+          <CityVisit uid={visit} onClose={closeVisit} />
+        </ErrorBoundary>
+      )}
       {admin && (
-        <Suspense fallback={<div className="game-screen splash"><div className="spinner" /></div>}>
-          <AdminPanel onClose={() => setAdmin(false)} />
-        </Suspense>
+        <ErrorBoundary onClose={() => setAdmin(false)}>
+          <Suspense fallback={<div className="game-screen splash"><div className="spinner" /></div>}>
+            <AdminPanel onClose={() => setAdmin(false)} />
+          </Suspense>
+        </ErrorBoundary>
       )}
       {!game && !admin && !visit && !cupOpen && <OfflineModal />}
       {!game && updateReady && (

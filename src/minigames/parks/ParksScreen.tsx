@@ -1,21 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { track } from '../../firebase';
-import { dateKey, isNewDay, msUntilTomorrow } from '../../game/clock';
+import { dateKey, isNewDay } from '../../game/clock';
 import { saveCloud, submitDaily } from '../../game/cloud';
-import { fmt, fmtClock, fmtTime } from '../../game/format';
+import { fmt, fmtClock } from '../../game/format';
 import { useGame, type DailyReward } from '../../game/store';
 import { sfx, tone, vibrate } from '../../ui/haptics';
 import { CARDS } from '../../game/cup';
 import { GameScreen, Modal } from '../../ui/Modal';
+import { UntilTomorrow } from '../UntilTomorrow';
 import { EMPTY, HOUSE, PARK, SIZE, cycle, dailyParks, isSolved, problems, type Cell } from './logic';
 
 const ICON: Record<Cell, string> = { 0: '', 1: '🏠', 2: '🌳' };
 
 export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRanking: () => void }) {
-  const date = useMemo(() => dateKey(), []);
+  // Al llegar un día nuevo con el plano ya hecho, se vuelve a montar con el plano nuevo
+  const [date, setDate] = useState(() => dateKey());
+  const onNewDay = useCallback(() => setDate(dateKey()), []);
+  return <ParksGame key={date} date={date} onNewDay={onNewDay} onClose={onClose} onRanking={onRanking} />;
+}
+
+function ParksGame({ date, onNewDay, onClose, onRanking }: { date: string; onNewDay: () => void; onClose: () => void; onRanking: () => void }) {
   const puzzle = useMemo(() => dailyParks(date), [date]);
   const [cells, setCells] = useState<Cell[]>(puzzle.givens);
+  // Toques de toda la partida: reiniciar el plano no los pone a cero (cuentan para el par y el ranking)
   const [moves, setMoves] = useState(0);
+  // Reloj monótono (performance.now): cambiar la hora del móvil no altera el tiempo
   const [startAt, setStartAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<(DailyReward & { moves: number; timeMs: number }) | null>(null);
@@ -23,16 +32,17 @@ export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRan
   const alreadyDone = !isNewDay(parks.last, date) && !result;
   const bad = useMemo(() => problems(cells), [cells]);
   const left = cells.filter((c) => c === EMPTY).length;
+  const pristine = cells.every((c, i) => c === puzzle.givens[i]);
 
   useEffect(() => {
     if (startAt === null || result) return;
-    const id = setInterval(() => setElapsed(Date.now() - startAt), 250);
+    const id = setInterval(() => setElapsed(performance.now() - startAt), 250);
     return () => clearInterval(id);
   }, [startAt, result]);
 
   const tap = (i: number) => {
     if (result || alreadyDone || puzzle.givens[i] !== EMPTY) return;
-    const t0 = startAt ?? Date.now();
+    const t0 = startAt ?? performance.now();
     if (startAt === null) setStartAt(t0);
     const next = cells.slice();
     next[i] = cycle(next[i]);
@@ -44,7 +54,7 @@ export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRan
     else tone(next[i] === HOUSE ? 620 : next[i] === PARK ? 760 : 480, 0.04, 'triangle', 0.03);
     if (!isSolved(next)) return;
 
-    const timeMs = Date.now() - t0;
+    const timeMs = Math.round(performance.now() - t0);
     setElapsed(timeMs);
     const store = useGame.getState();
     const reward = store.completeParks(date, m, puzzle.par);
@@ -57,10 +67,8 @@ export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRan
     setResult({ ...reward, moves: m, timeMs });
   };
 
-  const reset = () => {
-    setCells(puzzle.givens);
-    setMoves(0);
-  };
+  // Vuelve al plano inicial; los toques y el tiempo siguen contando
+  const reset = () => setCells(puzzle.givens);
 
   return (
     <GameScreen title="Plan verde" right={`🔥 ${parks.streak}`} onClose={onClose}>
@@ -72,7 +80,9 @@ export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRan
             <p>
               Racha actual: <b>🔥 {parks.streak} días</b>
             </p>
-            <p className="muted">Nuevo plano en {fmtTime(msUntilTomorrow() / 1000)}</p>
+            <p className="muted">
+              Nuevo plano en <UntilTomorrow date={date} onNewDay={onNewDay} />
+            </p>
             <button className="btn primary" onClick={onRanking}>
               Ver ranking de hoy
             </button>
@@ -90,13 +100,14 @@ export function ParksScreen({ onClose, onRanking }: { onClose: () => void; onRan
                 <small>Tiempo</small>
                 <b>{fmtClock(elapsed)}</b>
               </div>
-              <button className="btn small" onClick={reset} disabled={moves === 0}>
+              <button className="btn small" onClick={reset} disabled={pristine || !!result}>
                 Reiniciar
               </button>
             </div>
             <ul className="parks-rules">
               <li>Cada fila y cada columna: 3 🏠 y 3 🌳.</li>
               <li>Nunca tres iguales seguidos (ni en fila ni en columna).</li>
+              <li>Reiniciar vacía el plano, pero los toques y el tiempo siguen contando.</li>
             </ul>
             <div className="parks-board" style={{ gridTemplateColumns: `repeat(${SIZE}, 1fr)` }}>
               {cells.map((c, i) => {

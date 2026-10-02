@@ -152,15 +152,29 @@ export function syncPeriods(s: GameState, t: number): GameState {
   const today = dateKey(t);
   const week = weekKey(t);
   let m = s.missions;
-  let l = s.league;
+  let next = s;
   if (isNewDay(m.day, today)) m = { ...m, day: today, daily: dailyMissions(today), chest: false };
   if (isNewDay(m.week, week)) m = { ...m, week, weekly: weeklyMissions(week) };
+  const l = s.league;
   if (isNewDay(l.week, week)) {
-    // La semana que termina queda pendiente de premio si sumó algo (y si no se cobró ya otra pendiente)
-    const prev = l.week && l.points > 0 ? { week: l.week, points: l.points } : l.prev;
-    l = { ...l, week, points: 0, prev };
+    // La semana que termina queda pendiente de premio si sumó algo
+    const ended = l.week && l.points > 0 ? { week: l.week, points: l.points } : null;
+    // Solo cabe un premio pendiente: si aún quedaba otro sin cobrar, se cobra solo en vez de perderse
+    if (ended && l.prev) next = payLeague(next, l.prev.points);
+    next = { ...next, league: { ...next.league, week, points: 0, prev: ended ?? l.prev } };
   }
-  return m === s.missions && l === s.league ? s : { ...s, missions: m, league: l };
+  return m === s.missions && next === s ? s : { ...next, missions: m };
+}
+
+/** Cobra el premio de una semana de liga: gemas, tickets y la mejor división (para el logro). */
+export function payLeague(s: GameState, points: number): GameState {
+  const d = divisionOf(points);
+  return {
+    ...s,
+    gems: s.gems + d.gems,
+    tickets: s.tickets + d.tickets,
+    league: { ...s.league, best: Math.max(s.league.best, DIVISIONS.indexOf(d)) },
+  };
 }
 
 function advance(slots: MissionSlot[], ev: MissionEvent, n: number): MissionSlot[] {

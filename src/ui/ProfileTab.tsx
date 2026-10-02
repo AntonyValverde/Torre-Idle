@@ -56,6 +56,8 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
   }, [googleUid]);
 
   const saveName = () => {
+    // Enter no respeta el botón desactivado: sin cambios no se guarda ni se renombra en los rankings
+    if (!name.trim() || name === useGame.getState().s.name) return;
     const error = setName(name);
     if (error) {
       toast(`⚠️ ${error}`);

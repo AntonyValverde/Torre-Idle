@@ -28,6 +28,7 @@ import { auth, db } from '../firebase';
 import { citySnapshot, parseCups, parseLayout, type CitySnapshot } from './cities';
 import { dateKey, now, resyncFromDevice, setServerTime, weekKey } from './clock';
 import { cupWeekKey } from './cup';
+import { addPendingDaily, clampDailyMoves, isArcadeBoard, livePendingDaily, markSubmitted, nextResend, removePendingDaily } from './pending';
 import { newState, normalize, type GameState } from './state';
 import { useGame } from './store';
 
@@ -57,12 +58,19 @@ export function loadLocal(): GameState | null {
     return parseSave(localStorage.getItem(LOCAL_KEY));
   } catch (e) {
     console.error('Partida local corrupta, usando la copia de seguridad', e);
+    // Primero la copia de seguridad: apartar la corrupta puede fallar (p. ej. sin espacio) y no debe impedirlo
+    let backup: GameState | null = null;
+    try {
+      backup = parseSave(localStorage.getItem(BACKUP_KEY));
+    } catch {
+      backup = null;
+    }
     try {
       localStorage.setItem(CORRUPT_KEY, localStorage.getItem(LOCAL_KEY) ?? '');
-      return parseSave(localStorage.getItem(BACKUP_KEY));
     } catch {
-      return null;
+      /* sin espacio: no se puede apartar */
     }
+    return backup;
   }
 }
 
@@ -91,11 +99,23 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 }
 
-export async function ensureUser(): Promise<User | null> {
-  if (!auth) return null;
-  await auth.authStateReady();
-  if (!auth.currentUser) await signInAnonymously(auth);
-  return auth.currentUser;
+/** Inicio de sesión en curso: todas las llamadas simultáneas lo comparten (si no, se crearían dos invitados). */
+let signingIn: Promise<User | null> | null = null;
+
+export function ensureUser(): Promise<User | null> {
+  const a = auth;
+  if (!a) return Promise.resolve(null);
+  if (!signingIn) {
+    signingIn = (async () => {
+      await a.authStateReady();
+      if (!a.currentUser) await signInAnonymously(a);
+      return a.currentUser;
+    })().finally(() => {
+      // Al terminar (bien o mal) se olvida: si falló, la próxima llamada lo reintenta
+      signingIn = null;
+    });
+  }
+  return signingIn;
 }
 
 export interface AccountInfo {
@@ -152,18 +172,25 @@ let cloudRead = false;
 
 /** Elige entre la partida local y la de la nube: gana la que tenga más progreso total. */
 export async function loadBestState(local: GameState | null): Promise<GameState> {
+  return (await pickBest(local)).best ?? newState(now());
+}
+
+/** Como loadBestState, pero también devuelve la partida de la nube (null si no hay o no se pudo leer). */
+async function pickBest(local: GameState | null): Promise<{ best: GameState | null; cloud: GameState | null }> {
   let best = local;
+  let cloudState: GameState | null = null;
   try {
     const cloud = await withTimeout(fetchCloud(), 7000);
     if (cloud) {
       if (cloud.serverNow) setServerTime(cloud.serverNow);
+      cloudState = cloud.state;
       if (cloud.state && (!best || cloud.state.allTimeEarned > best.allTimeEarned)) best = cloud.state;
       cloudRead = true;
     }
   } catch (e) {
     console.warn('Sin conexión con Firebase, usando partida local', e);
   }
-  return best ?? newState(now());
+  return { best, cloud: cloudState };
 }
 
 /** Reintenta leer la nube (tras un arranque sin conexión) y carga esa partida si va más avanzada. */
@@ -210,7 +237,16 @@ let pendingSave = false;
  * entonces se carga esa partida (la buena) en lugar de perderla.
  */
 export async function saveCloud(s: GameState): Promise<void> {
-  if (!auth?.currentUser || !db) return;
+  if (!auth || !db) return;
+  if (!auth.currentUser) {
+    // El inicio de sesión de invitado pudo fallar al arrancar (p. ej. sin conexión): se reintenta
+    try {
+      await withTimeout(ensureUser(), 7000);
+    } catch {
+      return;
+    }
+    if (!auth.currentUser) return;
+  }
   if (saving) {
     pendingSave = true;
     return saving;
@@ -269,17 +305,20 @@ export function startAutoSave(): () => void {
   const flush = () => {
     const s = useGame.getState().s;
     saveLocal(s);
-    saveCloud(s).catch(() => {});
+    if (!switching) saveCloud(s).catch(() => {});
   };
 
   const timer = setInterval(() => {
     const s = useGame.getState().s;
     saveLocal(s);
+    // Mientras se cambia de cuenta, nada a la nube: se subiría la partida del invitado a la cuenta nueva
+    if (switching) return;
     const t = Date.now();
     if (t - lastCloud >= 60_000) {
       lastCloud = t;
       saveCloud(s).catch(() => {});
     }
+    retryPending(s);
     const cityScore = Math.floor(s.allTimeEarned);
     if (t - lastCity >= 5 * 60_000 && cityScore > lastCityScore && cityScore > 0) {
       lastCity = t;
@@ -356,11 +395,39 @@ async function cached(key: string, load: () => Promise<ScoreEntry[]>): Promise<S
   return rows;
 }
 
+/** Aplica un cambio a la partida en memoria (lo guarda el guardado automático). */
+function patchState(fn: (s: GameState) => GameState) {
+  const st = useGame.getState();
+  if (!st.ready) return;
+  const next = fn(st.s);
+  if (next !== st.s) useGame.setState({ s: next });
+}
+
+// Subidas en curso (sin conexión, Firestore las retiene hasta que vuelve la red): no se repiten mientras tanto
+const scoresInFlight = new Set<string>();
+// Última subida aceptada de cada ranking en esta sesión: las reglas rechazan otra en menos de 5 s
+const lastScoreWrite = new Map<string, number>();
+
 export async function submitScore(board: Board, score: number, name: string) {
   const uid = currentUid();
   if (!uid || !db || !(score >= 0)) return;
+  const n = Math.floor(score);
+  const arcade = isArcadeBoard(board);
   cache.delete(board);
-  await setDoc(doc(db, 'leaderboards', board, 'scores', uid), { name, score: Math.floor(score), updatedAt: serverTimestamp() });
+  scoresInFlight.add(board);
+  try {
+    await setDoc(doc(db, 'leaderboards', board, 'scores', uid), { name, score: n, updatedAt: serverTimestamp() });
+    lastScoreWrite.set(board, Date.now());
+    if (arcade) patchState((s) => markSubmitted(s, board, n));
+  } catch (e) {
+    // Rechazo de las reglas: el ranking ya tiene esa marca o más (otro dispositivo), o no es válida.
+    // Reintentar no serviría, salvo que el rechazo fuera por subir dos veces en menos de 5 s.
+    const throttled = Date.now() - (lastScoreWrite.get(board) ?? 0) < 6000;
+    if (arcade && errCode(e) === 'permission-denied' && !throttled) patchState((s) => markSubmitted(s, board, n));
+    throw e;
+  } finally {
+    scoresInFlight.delete(board);
+  }
 }
 
 const RANKED_NAME_KEY = 'torre-ranked-name';
@@ -374,14 +441,14 @@ export async function renameInLeaderboards(name: string) {
     ...BOARDS.map((b) => doc(d, 'leaderboards', b, 'scores', uid)),
     ...DAILY_KINDS.map((k) => doc(d, k, dateKey(), 'scores', uid)),
     doc(d, 'league', weekKey(), 'scores', uid),
+    // Los resultados de la Copa no: las reglas exigen marcar la hora del servidor en cada cambio y el juego
+    // no lee ese nombre (usa el de la inscripción). Se actualiza solo con la próxima marca.
     doc(d, 'cup', cupWeekKey(now()), 'entries', uid),
-    doc(d, 'cup', cupWeekKey(now()), 'results', uid),
   ];
   // updateDoc falla con "not-found" si no hay puntuación en ese ranking: eso es normal.
-  // En la Copa, el nombre de los resultados solo se puede cambiar cada 5 s: tampoco cuenta como fallo.
   const results = await Promise.allSettled(refs.map((ref) => updateDoc(ref, { name })));
   cache.clear();
-  const failed = results.some((r, i) => r.status === 'rejected' && errCode(r.reason) !== 'not-found' && refs[i].path.split('/')[0] !== 'cup');
+  const failed = results.some((r) => r.status === 'rejected' && errCode(r.reason) !== 'not-found');
   if (failed) throw new Error('No se pudo actualizar el nombre en algún ranking');
   try {
     localStorage.setItem(RANKED_NAME_KEY, `${uid}:${name}`);
@@ -424,17 +491,58 @@ export async function fetchTop(board: Board, n = 25): Promise<ScoreEntry[]> {
 }
 
 export async function submitDaily(date: string, moves: number, timeMs: number, name: string, kind: DailyKind = 'daily') {
-  const uid = currentUid();
-  if (!uid || !db) return;
+  if (!db) return;
+  // Las reglas solo aceptan de 1 a 999 movimientos: más allá se registra como 999
+  moves = clampDailyMoves(moves);
   const t = Math.min(9_999_999, Math.max(1000, moves * 250, Math.round(timeMs)));
-  cache.delete(`${kind}:${date}`);
-  await setDoc(doc(db, kind, date, 'scores', uid), {
-    name,
-    moves,
-    timeMs: t,
-    score: moves * 10_000_000 + t,
-    createdAt: serverTimestamp(),
-  });
+  // Queda pendiente en la partida hasta que el ranking lo acepte: si falla, el guardado automático lo reintenta
+  patchState((s) => addPendingDaily(s, { kind, date, moves, timeMs: t }));
+  const uid = currentUid();
+  const key = `${kind}:${date}`;
+  if (!uid || dailyInFlight.has(key)) return;
+  cache.delete(key);
+  dailyInFlight.add(key);
+  try {
+    await setDoc(doc(db, kind, date, 'scores', uid), {
+      name,
+      moves,
+      timeMs: t,
+      score: moves * 10_000_000 + t,
+      createdAt: serverTimestamp(),
+    });
+    patchState((s) => removePendingDaily(s, kind, date));
+  } catch (e) {
+    // Rechazo de las reglas: ya había un resultado de ese día (solo se admite uno) o el día ya pasó
+    if (errCode(e) === 'permission-denied') patchState((s) => removePendingDaily(s, kind, date));
+    throw e;
+  } finally {
+    dailyInFlight.delete(key);
+  }
+}
+
+const dailyInFlight = new Set<string>();
+// Próximo reintento permitido de cada subida pendiente (para no insistir cada 5 s si algo falla rápido)
+const retryAt = new Map<string, number>();
+
+/** Reintenta las subidas a rankings que quedaron pendientes: récords de minijuegos y retos diarios. */
+function retryPending(s: GameState) {
+  if (!db || !currentUid()) return;
+  const t = Date.now();
+  const due = (key: string) => {
+    if ((retryAt.get(key) ?? 0) > t) return false;
+    retryAt.set(key, t + 30_000);
+    return true;
+  };
+  const live = livePendingDaily(s.pendingDaily, dateKey());
+  // Los de días que el ranking ya no aceptaría se descartan
+  if (live.length !== s.pendingDaily.length) patchState((x) => ({ ...x, pendingDaily: livePendingDaily(x.pendingDaily, dateKey()) }));
+  for (const p of live) {
+    const key = `${p.kind}:${p.date}`;
+    if (!dailyInFlight.has(key) && due(`daily:${key}`)) submitDaily(p.date, p.moves, p.timeMs, s.name, p.kind).catch(() => {});
+  }
+  // Un récord por vuelta, para repartir las escrituras
+  const next = nextResend(s, (b) => scoresInFlight.has(b) || (retryAt.get(`score:${b}`) ?? 0) > t);
+  if (next && due(`score:${next.board}`)) submitScore(next.board, next.score, s.name).catch(() => {});
 }
 
 export async function fetchDailyTop(date: string, kind: DailyKind = 'daily', n = 25): Promise<ScoreEntry[]> {
@@ -532,6 +640,20 @@ export async function fetchCity(uid: string): Promise<PublicCity | null> {
 export type SuggestionKind = 'idea' | 'bug' | 'otro';
 export const SUGGESTION_MIN = 5;
 export const SUGGESTION_MAX = 1000;
+const OFFLINE_MSG = 'Sin conexión a internet. Inténtalo de nuevo';
+
+/**
+ * Texto de la sugerencia tal como se envía: sin espacios en los extremos y como mucho SUGGESTION_MAX
+ * caracteres. Se cuentan como las reglas de Firestore (un emoji es un carácter, no dos).
+ */
+export function suggestionText(text: string): string {
+  return [...text.trim()].slice(0, SUGGESTION_MAX).join('');
+}
+
+/** Longitud que cuentan las reglas (caracteres Unicode, no unidades UTF-16). */
+export function suggestionLength(text: string): number {
+  return [...suggestionText(text)].length;
+}
 
 /**
  * Envía una sugerencia. Va en un lote con `suggestionMeta/{uid}`, que guarda la hora del último
@@ -539,14 +661,21 @@ export const SUGGESTION_MAX = 1000;
  */
 export async function sendSuggestion(kind: SuggestionKind, text: string, s: GameState): Promise<void> {
   const d = db;
-  const user = d ? await ensureUser() : null;
-  if (!d || !user) throw new Error('Sin conexión');
+  let user: User | null = null;
+  try {
+    user = d ? await withTimeout(ensureUser(), 10_000) : null;
+  } catch {
+    throw new Error(OFFLINE_MSG);
+  }
+  if (!d || !user) throw new Error(OFFLINE_MSG);
+  const body = suggestionText(text);
+  if (suggestionLength(body) < SUGGESTION_MIN) throw new Error(`Escribe al menos ${SUGGESTION_MIN} caracteres`);
   const batch = writeBatch(d);
   batch.set(doc(collection(d, 'suggestions')), {
     uid: user.uid,
     name: s.name,
     kind,
-    text: text.trim().slice(0, SUGGESTION_MAX),
+    text: body,
     era: s.era,
     ua: navigator.userAgent.slice(0, 200),
     status: 'nuevo',
@@ -554,9 +683,13 @@ export async function sendSuggestion(kind: SuggestionKind, text: string, s: Game
   });
   batch.set(doc(d, 'suggestionMeta', user.uid), { lastAt: serverTimestamp() });
   try {
-    await batch.commit();
+    // Sin conexión, Firestore no falla: deja el envío en cola. Pasado un rato se avisa al jugador
+    await withTimeout(batch.commit(), 10_000);
   } catch (e) {
     if (errCode(e) === 'permission-denied') throw new Error('Espera un minuto antes de enviar otra sugerencia');
+    if ((e as Error)?.message === 'timeout' || errCode(e) === 'unavailable') {
+      throw new Error('Sin conexión: tu sugerencia se enviará sola al recuperar internet (no cierres el juego)');
+    }
     throw e;
   }
 }
@@ -604,17 +737,68 @@ export function authErrorMessage(e: unknown): string {
   }
 }
 
+/** true mientras se cambia a una cuenta de Google ya existente: el guardado automático no sube nada. */
+let switching = false;
+
+/** Copia de la partida que se descartó al cambiar de cuenta (por si había que recuperarla a mano). */
+const REPLACED_KEY = 'torre-save-replaced';
+
+function keepReplaced(s: GameState) {
+  try {
+    localStorage.setItem(REPLACED_KEY, JSON.stringify({ at: Date.now(), state: s }));
+  } catch {
+    /* sin espacio */
+  }
+}
+
 /** Si esa cuenta de Google ya existía, entra en ella y conserva la partida con más progreso. */
 async function switchToExistingAccount(e: unknown): Promise<'switched'> {
   const cred = GoogleAuthProvider.credentialFromError(e as AuthError);
   if (!auth || !cred) throw e;
-  const local = useGame.getState().s;
-  await signInWithCredential(auth, cred);
-  const best = await loadBestState(local);
-  useGame.getState().init(best);
-  await saveCloud(best);
+  let best: GameState;
+  switching = true;
+  try {
+    const local = useGame.getState().s;
+    // La del invitado se guarda siempre: si gana la de la nube (o la nube rechaza luego el guardado), es la que se pierde
+    keepReplaced(local);
+    await signInWithCredential(auth, cred);
+    const picked = await pickBest(local);
+    best = picked.best ?? local;
+    // Si gana la del invitado, la que se sobrescribe es la que ya tenía la cuenta de Google
+    if (best === local && picked.cloud) keepReplaced(picked.cloud);
+    // Los récords del invitado se subieron con su uid: con la cuenta nueva hay que volver a subirlos
+    if (best === local) best = { ...local, submittedBest: {} };
+    useGame.getState().init(best);
+    saveLocal(useGame.getState().s);
+  } finally {
+    switching = false;
+  }
+  await saveCloud(useGame.getState().s);
   cache.clear();
   return 'switched';
+}
+
+/** Marca (en esta pestaña) que salimos hacia Google: al volver se sabe si la vinculación se perdió por el camino. */
+const REDIRECT_KEY = 'torre-google-redirect';
+
+async function startRedirect(user: User, provider: GoogleAuthProvider): Promise<'redirecting'> {
+  saveLocal(useGame.getState().s);
+  try {
+    sessionStorage.setItem(REDIRECT_KEY, '1');
+  } catch {
+    /* sin almacenamiento */
+  }
+  try {
+    await linkWithRedirect(user, provider);
+  } catch (e) {
+    try {
+      sessionStorage.removeItem(REDIRECT_KEY);
+    } catch {
+      /* sin almacenamiento */
+    }
+    throw e;
+  }
+  return 'redirecting';
 }
 
 /**
@@ -622,27 +806,22 @@ async function switchToExistingAccount(e: unknown): Promise<'switched'> {
  * Usa una ventana emergente; si el navegador la bloquea (móviles, app instalada), usa redirección.
  */
 export async function linkGoogle(): Promise<'linked' | 'switched' | 'redirecting'> {
-  if (!auth?.currentUser) throw new Error('Sin sesión');
+  const user = auth?.currentUser;
+  if (!auth || !user) throw new Error('Sin sesión');
   const provider = new GoogleAuthProvider();
   // En la app instalada en la pantalla de inicio las ventanas emergentes no funcionan bien
   const standalone =
     window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  if (standalone) {
-    saveLocal(useGame.getState().s);
-    await linkWithRedirect(auth.currentUser, provider);
-    return 'redirecting';
-  }
+  if (standalone) return startRedirect(user, provider);
   try {
-    await linkWithPopup(auth.currentUser, provider);
+    await linkWithPopup(user, provider);
     await saveCloud(useGame.getState().s);
     return 'linked';
   } catch (e) {
     const code = errCode(e);
     if (code === 'auth/credential-already-in-use') return switchToExistingAccount(e);
     if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment' || code === 'auth/cancelled-popup-request') {
-      saveLocal(useGame.getState().s);
-      await linkWithRedirect(auth.currentUser, provider);
-      return 'redirecting';
+      return startRedirect(user, provider);
     }
     throw e;
   }
@@ -651,14 +830,32 @@ export async function linkGoogle(): Promise<'linked' | 'switched' | 'redirecting
 /** Al volver de la redirección de Google: termina la vinculación. */
 export async function completeGoogleRedirect(): Promise<'linked' | 'switched' | null> {
   if (!auth) return null;
+  let started = false;
+  try {
+    started = sessionStorage.getItem(REDIRECT_KEY) === '1';
+    sessionStorage.removeItem(REDIRECT_KEY);
+  } catch {
+    /* sin almacenamiento */
+  }
   try {
     const r = await getRedirectResult(auth);
-    if (!r) return null;
-    await saveCloud(useGame.getState().s);
+    if (!r) {
+      // Salimos hacia Google pero no volvió nada: el navegador perdió el resultado por el camino
+      // (p. ej. Safari o la app instalada bloquean el almacenamiento entre sitios)
+      if (started) {
+        useGame
+          .getState()
+          .toast('⚠️ No se pudo completar la vinculación con Google. Inténtalo de nuevo o ábrelo en el navegador (no en la app instalada)');
+      }
+      return null;
+    }
+    // Ya está vinculada: si el guardado falla ahora, el automático lo reintenta
+    await saveCloud(useGame.getState().s).catch(() => {});
     return 'linked';
   } catch (e) {
     if (errCode(e) === 'auth/credential-already-in-use') return switchToExistingAccount(e);
     console.warn('No se pudo completar la vinculación con Google', e);
+    if (started) useGame.getState().toast(`⚠️ ${authErrorMessage(e)}`);
     return null;
   }
 }

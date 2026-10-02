@@ -1,34 +1,44 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { track } from '../../firebase';
-import { dateKey, isNewDay, msUntilTomorrow } from '../../game/clock';
+import { dateKey, isNewDay } from '../../game/clock';
 import { saveCloud, submitDaily } from '../../game/cloud';
-import { fmt, fmtClock, fmtTime } from '../../game/format';
+import { fmt, fmtClock } from '../../game/format';
 import { useGame, type DailyReward } from '../../game/store';
 import { sfx, vibrate } from '../../ui/haptics';
 import { CARDS } from '../../game/cup';
 import { GameScreen, Modal } from '../../ui/Modal';
+import { UntilTomorrow } from '../UntilTomorrow';
 import { GRID, dailyPuzzle, isSolved, press } from './logic';
 
 export function DailyScreen({ onClose, onRanking }: { onClose: () => void; onRanking: () => void }) {
-  const date = useMemo(() => dateKey(), []);
+  // Al llegar un día nuevo con el reto ya hecho, se vuelve a montar con el tablero nuevo
+  const [date, setDate] = useState(() => dateKey());
+  const onNewDay = useCallback(() => setDate(dateKey()), []);
+  return <DailyGame key={date} date={date} onNewDay={onNewDay} onClose={onClose} onRanking={onRanking} />;
+}
+
+function DailyGame({ date, onNewDay, onClose, onRanking }: { date: string; onNewDay: () => void; onClose: () => void; onRanking: () => void }) {
   const puzzle = useMemo(() => dailyPuzzle(date), [date]);
   const [board, setBoard] = useState(puzzle.board);
+  // Movimientos de toda la partida: reiniciar el tablero no los pone a cero (cuentan para el par y el ranking)
   const [moves, setMoves] = useState(0);
+  // Reloj monótono (performance.now): cambiar la hora del móvil no altera el tiempo
   const [startAt, setStartAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<(DailyReward & { moves: number; timeMs: number }) | null>(null);
   const daily = useGame((st) => st.s.daily);
   const alreadyDone = !isNewDay(daily.last, date) && !result;
+  const pristine = board.every((on, i) => on === puzzle.board[i]);
 
   useEffect(() => {
     if (startAt === null || result) return;
-    const id = setInterval(() => setElapsed(Date.now() - startAt), 250);
+    const id = setInterval(() => setElapsed(performance.now() - startAt), 250);
     return () => clearInterval(id);
   }, [startAt, result]);
 
   const tapWindow = (i: number) => {
     if (result || alreadyDone) return;
-    const t0 = startAt ?? Date.now();
+    const t0 = startAt ?? performance.now();
     if (startAt === null) setStartAt(t0);
     const next = press(board, i);
     const m = moves + 1;
@@ -38,7 +48,7 @@ export function DailyScreen({ onClose, onRanking }: { onClose: () => void; onRan
     sfx('tap');
     if (!isSolved(next)) return;
 
-    const timeMs = Date.now() - t0;
+    const timeMs = Math.round(performance.now() - t0);
     setElapsed(timeMs);
     const store = useGame.getState();
     const reward = store.completeDaily(date, m, puzzle.par);
@@ -51,10 +61,8 @@ export function DailyScreen({ onClose, onRanking }: { onClose: () => void; onRan
     setResult({ ...reward, moves: m, timeMs });
   };
 
-  const reset = () => {
-    setBoard(puzzle.board);
-    setMoves(0);
-  };
+  // Vuelve al edificio inicial; los movimientos y el tiempo siguen contando
+  const reset = () => setBoard(puzzle.board);
 
   const lit = board.filter(Boolean).length;
 
@@ -68,7 +76,9 @@ export function DailyScreen({ onClose, onRanking }: { onClose: () => void; onRan
             <p>
               Racha actual: <b>🔥 {daily.streak} días</b>
             </p>
-            <p className="muted">Nuevo reto en {fmtTime(msUntilTomorrow() / 1000)}</p>
+            <p className="muted">
+              Nuevo reto en <UntilTomorrow date={date} onNewDay={onNewDay} />
+            </p>
             <button className="btn primary" onClick={onRanking}>
               Ver ranking de hoy
             </button>
@@ -86,7 +96,7 @@ export function DailyScreen({ onClose, onRanking }: { onClose: () => void; onRan
                 <small>Tiempo</small>
                 <b>{fmtClock(elapsed)}</b>
               </div>
-              <button className="btn small" onClick={reset} disabled={moves === 0}>
+              <button className="btn small" onClick={reset} disabled={pristine || !!result}>
                 Reiniciar
               </button>
             </div>
@@ -102,7 +112,10 @@ export function DailyScreen({ onClose, onRanking }: { onClose: () => void; onRan
               </div>
               <div className="facade-door" />
             </div>
-            <p className="hint">Todos los jugadores tienen el mismo edificio hoy. ¡Compite por menos movimientos y menos tiempo!</p>
+            <p className="hint">
+              Todos los jugadores tienen el mismo edificio hoy. ¡Compite por menos movimientos y menos tiempo! Reiniciar recoloca el edificio, pero
+              los movimientos y el tiempo siguen contando.
+            </p>
           </>
         )}
       </div>

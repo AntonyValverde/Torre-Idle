@@ -40,9 +40,12 @@ import {
   cupRewards,
   cupScoreOf,
   randomCard,
+  isClaimed,
+  pendingCup,
   registeredFor,
   returnCards,
   seasonReward,
+  slotOpen,
   trackActivity,
   trainingCost,
   type CardId,
@@ -72,7 +75,6 @@ import { memoryTickets } from '../minigames/memory/logic';
 import {
   CHEST_REWARD,
   DAILY_REWARD,
-  DIVISIONS,
   PUZZLE_POINTS,
   WEEKLY_REWARD,
   addPoints,
@@ -80,17 +82,15 @@ import {
   chestReady,
   divisionOf,
   isDone,
+  payLeague,
   syncPeriods,
   type Division,
 } from './missions';
-import { newState, type GameState } from './state';
+import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import { WHEEL, pickSegment } from './wheel';
 
-export interface OfflineReport {
-  earned: number;
-  seconds: number;
-}
+export type { OfflineReport } from './state';
 
 export interface Toast {
   id: number;
@@ -143,16 +143,16 @@ export interface DecreeOffer {
 interface GameStore {
   s: GameState;
   ready: boolean;
-  offline: OfflineReport | null;
   toasts: Toast[];
   decree: DecreeOffer | null;
   init(state: GameState): void;
   tick(): void;
   tap(): { amount: number; crit: boolean };
   buyBuilding(id: string, amount: number): boolean;
-  buyUpgrade(id: string): void;
-  buyGemItem(id: string): void;
-  buyLegacy(id: string): void;
+  /** Las compras devuelven false si no se pudo (sin dinero, ya comprada, al máximo…). */
+  buyUpgrade(id: string): boolean;
+  buyGemItem(id: string): boolean;
+  buyLegacy(id: string): boolean;
   collectOffline(double: boolean): void;
   spendTicket(): boolean;
   rewardStack(score: number): StackReward;
@@ -171,8 +171,8 @@ interface GameStore {
   claimLeague(): { division: Division; points: number } | null;
   /** Marca la inscripción en la Copa de esa semana. */
   cupRegister(week: string): void;
-  /** Gasta un intento de una prueba de la Copa; false si no quedan. */
-  cupAttempt(slot: CupSlot): boolean;
+  /** Gasta un intento de una prueba de la Copa; false si no quedan o si esa prueba no se juega ahora. */
+  cupAttempt(slot: CupSlot, t?: number): boolean;
   /**
    * Guarda el resultado de un intento: aplica el entrenamiento y la carta usada, y con el escudo
    * devuelve el intento si no mejoró. Devuelve la marca que cuenta y la mejor.
@@ -213,16 +213,33 @@ function offlineGain(s: GameState, seconds: number): OfflineReport {
   return { seconds: secs, earned: productionPerSec(s, 0, false) * secs * offlineEfficiency(s) };
 }
 
-function capped(n: number): number {
+/**
+ * Suma una ausencia a las ganancias offline pendientes (guardadas en la partida), sin pasar del tope total.
+ * Las ausencias cortas (de menos de un minuto y sin nada pendiente) se cobran directamente, sin ventana.
+ */
+function accrueOffline(s: GameState, seconds: number): { pending: OfflineReport | null; direct: number } {
+  const prev = s.pendingOffline;
+  const r = offlineGain(s, seconds);
+  const total = Math.min(offlineCapSeconds(s), (prev?.seconds ?? 0) + r.seconds);
+  const added = Math.max(0, total - (prev?.seconds ?? 0));
+  const earned = r.seconds > 0 ? r.earned * (added / r.seconds) : 0;
+  if (prev) return { pending: added > 0 ? { seconds: total, earned: prev.earned + earned } : prev, direct: 0 };
+  if (total < 60 || !(earned > 0)) return { pending: null, direct: earned };
+  return { pending: { seconds: total, earned }, direct: 0 };
+}
+
+/** Infinito se queda en el máximo; NaN nunca se convierte en monedas (se conserva el valor anterior). */
+function capped(n: number, fallback: number): number {
+  if (Number.isNaN(n)) return fallback;
   return Number.isFinite(n) ? n : Number.MAX_VALUE;
 }
 
 function addCoins(s: GameState, amount: number): GameState {
   return {
     ...s,
-    coins: capped(s.coins + amount),
-    totalEarned: capped(s.totalEarned + amount),
-    allTimeEarned: capped(s.allTimeEarned + amount),
+    coins: capped(s.coins + amount, s.coins),
+    totalEarned: capped(s.totalEarned + amount, s.totalEarned),
+    allTimeEarned: capped(s.allTimeEarned + amount, s.allTimeEarned),
   };
 }
 
@@ -248,24 +265,26 @@ function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: strin
 export const useGame = create<GameStore>((set, get) => ({
   s: newState(now()),
   ready: false,
-  offline: null,
   toasts: [],
   decree: null,
 
   init(state) {
     const t = now();
-    const report = offlineGain(state, (t - state.lastTick) / 1000);
+    // La ausencia se suma a lo que ya estuviera pendiente de recoger (se guarda con la partida)
+    const { pending, direct } = accrueOffline(state, (t - state.lastTick) / 1000);
     // Si la partida viene "del futuro" (reloj adelantado), no se retrocede: se espera a que llegue esa hora.
     const lastTick = Math.max(state.lastTick, t);
-    let s: GameState = withActivity(syncPeriods({ ...state, lastTick, ...regenTickets(state, lastTick) }, lastTick), lastTick);
-    const showReport = report.seconds >= 60 && report.earned > 0;
+    let s: GameState = withActivity(
+      syncPeriods({ ...state, lastTick, pendingOffline: pending, ...regenTickets(state, lastTick) }, lastTick),
+      lastTick,
+    );
     // Ausencias de menos de un minuto: se cobran sin ventana
-    if (!showReport && report.earned > 0) s = addCoins(s, report.earned);
-    set({ s, ready: true, decree: null, offline: showReport ? report : null });
+    if (direct > 0) s = addCoins(s, direct);
+    set({ s, ready: true, decree: null });
   },
 
   tick() {
-    const { s, offline, decree } = get();
+    const { s, decree } = get();
     const t = now();
     const dt = (t - s.lastTick) / 1000;
     if (decree && t > decree.expires) set({ decree: null });
@@ -273,19 +292,11 @@ export const useGame = create<GameStore>((set, get) => ({
     if (dt <= 0) return;
     const boosts = s.boosts.some((b) => b.u <= t) ? s.boosts.filter((b) => b.u > t) : s.boosts;
     if (dt > OFFLINE_THRESHOLD_S) {
-      // Tiempo en segundo plano: se acumula en el informe offline, con el tope total respetado
-      const prev = offline ?? { earned: 0, seconds: 0 };
-      const r = offlineGain(s, dt);
-      const seconds = Math.min(offlineCapSeconds(s), prev.seconds + r.seconds);
-      const added = Math.max(0, seconds - prev.seconds);
-      const earned = r.seconds > 0 ? r.earned * (added / r.seconds) : 0;
-      const base = withActivity(syncPeriods({ ...s, boosts, lastTick: t, ...regenTickets(s, t) }, t), t);
-      if (!offline && seconds < 60) {
-        // Ausencias cortas: se cobran directamente, sin ventana
-        set({ s: addCoins(base, earned) });
-      } else {
-        set({ s: base, offline: { seconds, earned: prev.earned + earned } });
-      }
+      // Tiempo en segundo plano: se acumula en el informe offline (guardado en la partida), con el tope total respetado
+      const { pending, direct } = accrueOffline(s, dt);
+      const base = withActivity(syncPeriods({ ...s, boosts, lastTick: t, pendingOffline: pending, ...regenTickets(s, t) }, t), t);
+      // Ausencias cortas: se cobran directamente, sin ventana
+      set({ s: direct > 0 ? addCoins(base, direct) : base });
       return;
     }
     const auto = autoTapsPerSec(s);
@@ -308,11 +319,12 @@ export const useGame = create<GameStore>((set, get) => ({
     const def = BUILDINGS[idx];
     const owned = s.buildings[id] ?? 0;
     const discount = costDiscount(s);
-    let n = amount < 0 ? maxAffordable(def, owned, s.coins, discount) : amount;
+    let n = amount < 0 ? maxAffordable(def, owned, s.coins, discount) : Math.floor(amount);
     let cost = buildingCost(def, owned, n, discount);
     // "Máx" usa logaritmos: por redondeo puede pasarse por una unidad
     while (amount < 0 && n > 0 && cost > s.coins) cost = buildingCost(def, owned, --n, discount);
-    if (n <= 0 || cost > s.coins) return false;
+    // Comparaciones "al revés" a propósito: con NaN dan false y no se compra nada
+    if (!(n > 0) || !(cost <= s.coins)) return false;
     set({ s: bump({ ...s, coins: s.coins - cost, buildings: { ...s.buildings, [id]: owned + n } }, 'build', n) });
     return true;
   },
@@ -320,38 +332,42 @@ export const useGame = create<GameStore>((set, get) => ({
   buyUpgrade(id) {
     const { s } = get();
     const u = UPGRADE_BY_ID.get(id);
-    if (!u || s.upgrades.includes(id) || !u.unlocked(s) || s.coins < u.cost) return;
+    if (!u || s.upgrades.includes(id) || !u.unlocked(s) || s.coins < u.cost) return false;
     set({ s: bump({ ...s, coins: s.coins - u.cost, upgrades: [...s.upgrades, id] }, 'upgrade') });
+    return true;
   },
 
   buyGemItem(id) {
     const { s } = get();
     const item = GEM_SHOP.find((g) => g.id === id);
-    if (!item) return;
+    if (!item) return false;
     const lvl = gemLevel(s, id);
     const cost = item.cost(lvl);
-    if (lvl >= item.max || s.gems < cost) return;
+    if (lvl >= item.max || s.gems < cost) return false;
     set({ s: { ...s, gems: s.gems - cost, gemLevels: { ...s.gemLevels, [id]: lvl + 1 } } });
+    return true;
   },
 
   buyLegacy(id) {
     const { s } = get();
     const item = LEGACY.find((g) => g.id === id);
-    if (!item) return;
+    if (!item) return false;
     const lvl = legacyLevel(s, id);
     const cost = item.cost(lvl);
-    if (lvl >= item.max || availableStars(s) < cost) return;
+    if (lvl >= item.max || availableStars(s) < cost) return false;
     set({ s: { ...s, starsSpent: s.starsSpent + cost, legacy: { ...s.legacy, [id]: lvl + 1 } } });
+    return true;
   },
 
   collectOffline(double) {
-    const { s, offline } = get();
-    if (!offline) return;
+    const { s } = get();
+    const pending = s.pendingOffline;
+    if (!pending) return;
     if (double && s.tickets < 1) return;
-    const earned = offline.earned * (double ? 2 : 1);
-    let next = addCoins(s, earned);
+    const earned = pending.earned * (double ? 2 : 1);
+    let next = addCoins({ ...s, pendingOffline: null }, earned);
     if (double) next = { ...next, tickets: next.tickets - 1 };
-    set({ s: next, offline: null });
+    set({ s: next });
   },
 
   spendTicket() {
@@ -533,7 +549,9 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   prestige() {
-    const { s } = get();
+    const cur = get().s;
+    // Lo offline sin recoger es de esta era: se cobra antes de refundar (cuenta para las estrellas y no pasa a la era nueva)
+    const s = cur.pendingOffline ? addCoins({ ...cur, pendingOffline: null }, cur.pendingOffline.earned) : cur;
     const gain = pendingStars(s);
     if (gain < 1) return 0;
     const t = now();
@@ -634,7 +652,8 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const def = STOCK_BY_ID.get(id);
     const h = s.stocks[id];
-    if (!def || !h || fraction <= 0) return null;
+    // "!(x > 0)" también descarta NaN (que si no acabaría en las monedas)
+    if (!def || !h || !(fraction > 0)) return null;
     const f = Math.min(1, fraction);
     const all = f >= 0.999;
     const units = all ? h.u : h.u * f;
@@ -646,7 +665,7 @@ export const useGame = create<GameStore>((set, get) => ({
     else stocks[id] = { u: h.u - units, c: h.c - cost };
     // La bolsa no cuenta para estrellas ni rankings (sería especulación sin riesgo real):
     // solo lleva su propio balance neto, que también baja con las pérdidas.
-    set({ s: { ...s, coins: capped(s.coins + value), stockProfit: s.stockProfit + profit, stocks } });
+    set({ s: { ...s, coins: capped(s.coins + value, s.coins), stockProfit: s.stockProfit + profit, stocks } });
     return { value, profit };
   },
 
@@ -694,16 +713,9 @@ export const useGame = create<GameStore>((set, get) => ({
     const { s } = get();
     const prev = s.league.prev;
     if (!prev) return null;
-    const division = divisionOf(prev.points);
-    set({
-      s: {
-        ...s,
-        gems: s.gems + division.gems,
-        tickets: s.tickets + division.tickets,
-        league: { ...s.league, prev: null, best: Math.max(s.league.best, DIVISIONS.indexOf(division)) },
-      },
-    });
-    return { division, points: prev.points };
+    const paid = payLeague(s, prev.points);
+    set({ s: { ...paid, league: { ...paid.league, prev: null } } });
+    return { division: divisionOf(prev.points), points: prev.points };
   },
 
   cupRegister(week) {
@@ -711,9 +723,9 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ s: { ...s, cup: registeredFor(s.cup, week) } });
   },
 
-  cupAttempt(slot) {
+  cupAttempt(slot, t = now()) {
     const { s } = get();
-    if (!s.cup.week || s.cup.used[slot] >= attemptsFor(s.cup, s.cup.week, slot)) return false;
+    if (!s.cup.week || !slotOpen(s.cup.week, slot, t) || s.cup.used[slot] >= attemptsFor(s.cup, s.cup.week, slot)) return false;
     set({ s: { ...s, cup: { ...s.cup, used: { ...s.cup.used, [slot]: s.cup.used[slot] + 1 } } } });
     return true;
   },
@@ -778,7 +790,8 @@ export const useGame = create<GameStore>((set, get) => ({
 
   cupPredict(week, uid, name, stake) {
     const { s } = get();
-    if (s.cup.pick?.week === week || s.gems < stake || !PICK_STAKES.includes(stake)) return false;
+    // Un pronóstico anterior aún sin cobrar se perdería al apostar de nuevo: primero hay que cobrarlo
+    if (s.cup.pick?.week === week || pendingCup(s.cup, week) || s.gems < stake || !PICK_STAKES.includes(stake)) return false;
     set({ s: { ...s, gems: s.gems - stake, cup: { ...s.cup, pick: { week, uid, name, stake } } } });
     return true;
   },
@@ -786,7 +799,7 @@ export const useGame = create<GameStore>((set, get) => ({
   cupClaim(week, outcome, pickGems = 0) {
     const { s } = get();
     const c = s.cup;
-    if (c.claimed === week || c.history.some((h) => h.week === week)) return null;
+    if (isClaimed(c, week)) return null;
     const reward = cupRewards(outcome);
     const lines = reward.lines.slice();
     const pick = c.pick?.week === week ? c.pick : null;
@@ -798,7 +811,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const record = { week, group: outcome.groupRank, size: outcome.groupSize, final: outcome.finalRank, gems };
     const cup = {
       ...c,
-      claimed: week,
+      claimed: c.claimed && c.claimed > week ? c.claimed : week,
       prev: c.prev === week ? null : c.prev,
       pick: pick ? null : c.pick,
       cards: card ? { ...c.cards, [card]: c.cards[card] + 1 } : c.cards,

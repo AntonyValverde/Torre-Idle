@@ -38,6 +38,7 @@ import {
   ticketRegenMs,
 } from './economy';
 import { fmt } from './format';
+import { isNameAllowed, sanitizeName } from './names';
 import { newState, normalize } from './state';
 import { STOCKS, STOCK_FEE, stockPrice } from './stocks';
 import { useGame } from './store';
@@ -253,6 +254,10 @@ describe('formato', () => {
     expect(fmt(5_600_000)).toBe('5.60M');
     expect(fmt(999_999)).toBe('999K');
     expect(fmt(1e15)).toBe('1.00Qa');
+    // Justo por debajo de una potencia de mil, log10 redondea hacia arriba: no debe salir "0.99M"
+    expect(fmt(999_999.9999999999)).toBe('999K');
+    expect(fmt(999_999_999.9999999)).toBe('999M');
+    expect(fmt(1e15 - 0.125)).toBe('999T');
   });
 
   it('sigue con letras más allá de los sufijos con nombre, hasta el límite de los números', () => {
@@ -413,18 +418,70 @@ describe('progresión infinita', () => {
     const t = Date.now();
     useGame.getState().init({ ...newState(t), buildings: { casa: 10 }, lastTick: t - 30_000 });
     // 30 s: por debajo del minuto no hay ventana, pero sí monedas
-    expect(useGame.getState().offline).toBeNull();
+    expect(useGame.getState().s.pendingOffline).toBeNull();
     const s0 = useGame.getState().s;
     useGame.setState({ s: { ...s0, lastTick: now() - 30_000 } });
     useGame.getState().tick();
-    expect(useGame.getState().offline).toBeNull();
+    expect(useGame.getState().s.pendingOffline).toBeNull();
     expect(useGame.getState().s.coins).toBeGreaterThan(s0.coins);
     // Muchas ausencias de 1 h seguidas no superan el tope de 2 h
     for (let i = 0; i < 10; i++) {
       useGame.setState({ s: { ...useGame.getState().s, lastTick: now() - 3_600_000 } });
       useGame.getState().tick();
     }
-    expect(useGame.getState().offline!.seconds).toBe(7200);
+    expect(useGame.getState().s.pendingOffline!.seconds).toBe(7200);
+  });
+
+  it('las ganancias offline sin recoger sobreviven a cerrar o recargar la app', () => {
+    const t = Date.now();
+    useGame.getState().init({ ...newState(t), buildings: { casa: 10 }, lastTick: t - 3_600_000 });
+    const pending = useGame.getState().s.pendingOffline!;
+    expect(pending.seconds).toBeCloseTo(3600, 0);
+    expect(pending.earned).toBeGreaterThan(0);
+    // Se cierra sin pulsar "Recoger": la partida guardada lleva lo pendiente y al volver sigue ahí, sumado a la nueva ausencia
+    const saved = normalize(JSON.parse(JSON.stringify(useGame.getState().s)), now());
+    useGame.getState().init({ ...saved, lastTick: now() - 600_000 });
+    const again = useGame.getState().s.pendingOffline!;
+    expect(again.seconds).toBeCloseTo(4200, 0);
+    expect(again.earned).toBeGreaterThan(pending.earned);
+    // Recoger lo cobra una sola vez
+    const coins = useGame.getState().s.coins;
+    useGame.getState().collectOffline(false);
+    expect(useGame.getState().s.coins).toBeCloseTo(coins + again.earned);
+    expect(useGame.getState().s.pendingOffline).toBeNull();
+    useGame.getState().collectOffline(false);
+    expect(useGame.getState().s.coins).toBeCloseTo(coins + again.earned);
+  });
+
+  it('refundar con ganancias offline sin recoger las cobra antes (cuentan para estrellas, no pasan a la era nueva)', () => {
+    const t = Date.now();
+    useGame.getState().init({ ...newState(t), allTimeEarned: 8e9, totalEarned: 8e9, pendingOffline: { earned: 1e9, seconds: 3600 } });
+    expect(useGame.getState().prestige()).toBe(2);
+    const s = useGame.getState().s;
+    expect(s.pendingOffline).toBeNull();
+    expect(s.allTimeEarned).toBeCloseTo(9e9, -1);
+    expect(s.coins).toBe(0);
+  });
+
+  it('NaN nunca se convierte en monedas ni en edificios', () => {
+    const t = Date.now();
+    useGame.getState().init({ ...newState(t), coins: 1000, stocks: { BNC: { u: 5, c: 500 } } });
+    expect(useGame.getState().sellStock('BNC', NaN)).toBeNull();
+    expect(useGame.getState().buyBuilding('choza', NaN)).toBe(false);
+    const s = useGame.getState().s;
+    expect(s.coins).toBe(1000);
+    expect(s.buildings.choza).toBeUndefined();
+    expect(s.stocks.BNC).toEqual({ u: 5, c: 500 });
+  });
+
+  it('los nombres no se cortan a mitad de letra y el filtro no bloquea palabras normales', () => {
+    // Una letra "decorada" ocupa dos unidades: si no cabe entera, se quita entera
+    const cut = sanitizeName('AAAAAAAAAAAAAAA\u{1D4D0}xyz');
+    expect(cut).toBe('AAAAAAAAAAAAAAA');
+    expect(/^[\p{L}\p{N} _.\-]+$/u.test(sanitizeName('El \u{1D4E1}\u{1D4EE}\u{1D502} de la Ciudad'))).toBe(true);
+    for (const ok of ['Computadora', 'ElDiputado', 'Disputa', 'Cómputo', 'Cálculo', 'Penélope', 'Alcalde1234']) expect(isNameAllowed(ok)).toBe(true);
+    for (const bad of ['Puta', 'ElPuto', 'putas', 'PUT4', 'nazi_99', 'Administrador', '\u{1D4F9}\u{1D4FE}\u{1D4FD}\u{1D4EA}', 'ｐｕｔａ'])
+      expect(isNameAllowed(bad)).toBe(false);
   });
 
   it('la rueda da un giro gratis al día y después cuesta un ticket', () => {
@@ -451,5 +508,9 @@ describe('progresión infinita', () => {
     expect(s.roads).toEqual({ last: null, streak: 0, bestStreak: 0 });
     expect(s.trafficBest).toBe(0);
     expect(s.memoryBest).toBe(0);
+    expect(s.pendingOffline).toBeNull();
+    // Un pendiente inválido (corrupto) se descarta
+    expect(normalize({ pendingOffline: { earned: 'x', seconds: 10 } }, 0).pendingOffline).toBeNull();
+    expect(normalize({ pendingOffline: { earned: 50, seconds: 120 } }, 0).pendingOffline).toEqual({ earned: 50, seconds: 120 });
   });
 });

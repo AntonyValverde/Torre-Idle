@@ -131,12 +131,16 @@ export type ConnectResult = { kind: 'new' | 'extend'; line: Line } | { kind: 'no
 export function connect(g: Metro, a: number, b: number, lineId?: number): ConnectResult {
   if (a === b) return { kind: 'none', reason: 'same' };
   const candidates = lineId !== undefined ? g.lines.filter((l) => l.id === lineId) : g.lines;
+  // Extremo de una línea que ya pasa por `b`: al arrastrar desde ahí y rozar `b` no debe
+  // salir una línea nueva repetida (gastaría una de las tres)
+  let alongOwnLine = false;
   for (const line of candidates) {
     const first = line.stops[0];
     const last = line.stops[line.stops.length - 1];
     if (a !== first && a !== last) continue;
     if (line.stops.includes(b)) {
       if (lineId !== undefined) return { kind: 'none', reason: 'inline' };
+      alongOwnLine = true;
       continue;
     }
     if (a === last) {
@@ -151,7 +155,7 @@ export function connect(g: Metro, a: number, b: number, lineId?: number): Connec
     }
     return { kind: 'extend', line };
   }
-  if (lineId !== undefined) return { kind: 'none', reason: 'inline' };
+  if (lineId !== undefined || alongOwnLine) return { kind: 'none', reason: 'inline' };
   if (g.lines.length >= MAX_LINES) return { kind: 'none', reason: 'nolines' };
   const used = new Set(g.lines.map((l) => l.color));
   const color = [0, 1, 2].find((c) => !used.has(c))!;
@@ -160,16 +164,24 @@ export function connect(g: Metro, a: number, b: number, lineId?: number): Connec
   return { kind: 'new', line };
 }
 
-/** Quita una línea. Los viajeros que iban en su tren se bajan en la estación más cercana. */
-export function removeLine(g: Metro, id: number) {
+/**
+ * Quita una línea. Los viajeros que iban en su tren se bajan en la estación más cercana:
+ * los que iban a esa forma ya han llegado (cuentan como entregados) y el resto espera allí.
+ * Devuelve cuántos llegaron así.
+ */
+export function removeLine(g: Metro, id: number): number {
   const line = g.lines.find((l) => l.id === id);
-  if (!line) return;
+  if (!line) return 0;
+  let delivered = 0;
   if (line.train.cargo.length) {
     const p = trainPosition(g, line);
     const near = g.stations.reduce((m, s) => (Math.hypot(s.x - p.x, s.y - p.y) < Math.hypot(m.x - p.x, m.y - p.y) ? s : m));
+    delivered = line.train.cargo.filter((c) => c === near.shape).length;
+    g.score += delivered;
     near.queue.push(...line.train.cargo.filter((c) => c !== near.shape));
   }
   g.lines = g.lines.filter((l) => l.id !== id);
+  return delivered;
 }
 
 function lineShapes(g: Metro, line: Line): Set<Shape> {

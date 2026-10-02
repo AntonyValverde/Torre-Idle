@@ -46,8 +46,11 @@ export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number)
   const startedRef = useRef(false);
 
   // El marcador (tiempo, estaciones, ocupación de los trenes) se refresca dos veces por segundo
+  // mientras se juega (al terminar ya no cambia)
   useEffect(() => {
-    const id = setInterval(() => setFrame((f) => f + 1), 500);
+    const id = setInterval(() => {
+      if (!game.current.over) setFrame((f) => f + 1);
+    }, 500);
     return () => clearInterval(id);
   }, []);
 
@@ -69,7 +72,11 @@ export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
-    const ro = new ResizeObserver(resize);
+    // Cambiar el tamaño borra el lienzo: si la partida ya terminó (sin animación), se redibuja
+    const ro = new ResizeObserver(() => {
+      resize();
+      if (reported) draw(last);
+    });
     ro.observe(canvas);
 
     // Plano centrado: k = píxeles por unidad
@@ -154,6 +161,7 @@ export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number)
         if (ev.lost) {
           overAt = t;
           drag = null;
+          setFrame((f) => f + 1);
           vibrate([60, 40, 140]);
           tone(120, 0.4, 'sawtooth', 0.06);
         }
@@ -163,7 +171,16 @@ export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number)
         cb.current.onScore?.(g.score);
         setFrame((f) => f + 1);
       }
+      // Fin de partida: avisa tras la animación y deja de animar (queda el último fotograma)
+      if (g.over && !reported && t - overAt > 1500) {
+        reported = true;
+        cb.current.onGameOver(g.score);
+      }
+      draw(t);
+      if (!reported) raf = requestAnimationFrame(frame);
+    };
 
+    const draw = (t: number) => {
       const { k, ox, oy } = view();
       ctx.fillStyle = '#100e26';
       ctx.fillRect(0, 0, W, H);
@@ -271,7 +288,8 @@ export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number)
           ctx.stroke();
         }
         const lost = g.lostAt === s.id;
-        ctx.fillStyle = lost && Math.floor(t / 200) % 2 ? '#ff4d6d' : '#fff';
+        // Parpadea en rojo; en el fotograma final se queda en rojo
+        ctx.fillStyle = lost && (reported || Math.floor(t / 200) % 2) ? '#ff4d6d' : '#fff';
         ctx.strokeStyle = INK;
         ctx.lineWidth = 1.3 * k;
         shapePath(ctx, s.shape, x, y, r);
@@ -293,11 +311,6 @@ export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number)
         ctx.fillText('para trazar una línea de metro', W / 2, oy + 48);
       }
 
-      if (g.over && !reported && t - overAt > 1500) {
-        reported = true;
-        cb.current.onGameOver(g.score);
-      }
-      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
 

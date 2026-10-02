@@ -74,7 +74,7 @@ function CoinUpgrades() {
                 style={{ '--p': `${Math.min(100, (s.coins / u.cost) * 100)}%` } as CSSProperties}
                 disabled={!can}
                 onClick={() => {
-                  buyUpgrade(u.id);
+                  if (!buyUpgrade(u.id)) return;
                   sfx('buy');
                   vibrate(12);
                 }}
@@ -100,7 +100,7 @@ function ShopList({
   level: (id: string) => number;
   budget: number;
   currency: string;
-  onBuy: (id: string) => void;
+  onBuy: (id: string) => boolean;
 }) {
   return (
     <ul className="list">
@@ -123,7 +123,7 @@ function ShopList({
               style={{ '--p': `${maxed ? 100 : Math.min(100, (budget / cost) * 100)}%` } as CSSProperties}
               disabled={!can}
               onClick={() => {
-                onBuy(g.id);
+                if (!onBuy(g.id)) return;
                 sfx('win');
                 vibrate(15);
               }}

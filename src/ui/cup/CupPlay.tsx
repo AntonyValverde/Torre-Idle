@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { track } from '../../firebase';
-import { CARDS, CUP_GAME_INFO, TRAINING_BONUS, attemptsFor, type CardId, type CupGame, type CupSlot } from '../../game/cup';
+import { now } from '../../game/clock';
+import { CARDS, CUP_GAME_INFO, TRAINING_BONUS, attemptsFor, slotOpen, type CardId, type CupGame, type CupSlot } from '../../game/cup';
 import { submitCupScore } from '../../game/cupCloud';
 import { useGame } from '../../game/store';
 import { FireGameView } from '../../minigames/fire/FireScreen';
@@ -72,6 +73,11 @@ export function CupPlay({
   };
 
   const again = () => {
+    if (!slotOpen(week, slot, now())) {
+      useGame.getState().toast('⏰ Esta prueba de la Copa ya terminó');
+      onClose();
+      return;
+    }
     if (!useGame.getState().cupAttempt(slot)) return;
     live.current = { score: 0, done: false };
     setCard(null);
