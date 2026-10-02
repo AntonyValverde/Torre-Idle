@@ -98,6 +98,7 @@ import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unit
 import { INCIDENTS, INCIDENT_BONUS, INCIDENT_PENALTY, INCIDENT_PENALTY_KEY, newIncident, type Incident, type IncidentKind } from './incidents';
 import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
+import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
 
@@ -174,6 +175,10 @@ interface GameStore {
   buyUpgrade(id: string): boolean;
   buyGemItem(id: string): boolean;
   buyLegacy(id: string): boolean;
+  /** Devuelve todas las estrellas gastadas en el legado para repartirlas de nuevo (gratis una vez por era). */
+  resetLegacy(): boolean;
+  /** Gasta la partida gratis del Pase VIP si toca; true si se usó. */
+  useVipPlay(): boolean;
   collectOffline(double: boolean): void;
   spendTicket(): boolean;
   rewardStack(score: number): StackReward;
@@ -384,7 +389,7 @@ export const useGame = create<GameStore>((set, get) => ({
   tap() {
     const { s } = get();
     const crit = Math.random() < critChance(s);
-    const amount = tapValue(s, now()) * (crit ? 10 : 1);
+    const amount = tapValue(s, now()) * (crit ? critMultiplier(s) : 1);
     set({ s: bump({ ...addCoins(s, amount), taps: s.taps + 1 }, 'tap') });
     return { amount, crit };
   },
@@ -427,10 +432,27 @@ export const useGame = create<GameStore>((set, get) => ({
     return true;
   },
 
+  resetLegacy() {
+    const { s } = get();
+    const cost = respecCost(s);
+    if (s.starsSpent <= 0 || s.gems < cost) return false;
+    set({ s: { ...s, gems: s.gems - cost, starsSpent: 0, legacy: {}, respecFree: false } });
+    return true;
+  },
+
+  useVipPlay() {
+    const { s } = get();
+    const t = now();
+    if (!vipReady(s, t)) return false;
+    set({ s: { ...s, vipLast: t } });
+    return true;
+  },
+
   buyLegacy(id) {
     const { s } = get();
     const item = LEGACY.find((g) => g.id === id);
-    if (!item) return false;
+    // Rama sin abrir, elección exclusiva ya hecha u otra piedra angular activa
+    if (!item || legacyBlock(s, id)) return false;
     const lvl = legacyLevel(s, id);
     const cost = item.cost(lvl);
     if (lvl >= item.max || availableStars(s) < cost) return false;
@@ -462,7 +484,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const pps = productionPerSec(s, t, false);
     const coins = Math.round(score * Math.max(15, pps * 10) * fxMult(s, 'arcadeCoins'));
     const mult = score >= 60 ? 5 : score >= 40 ? 4 : score >= 25 ? 3 : score >= 10 ? 2 : score >= 5 ? 1.5 : 1;
-    const seconds = Math.min(900, score * 15);
+    const seconds = Math.min(900, score * 15) * arcadeBoostTime(s);
     let next = { ...addCoins(s, coins), stackBest: Math.max(s.stackBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'stack', mult, seconds) };
     set({ s: bump(bump(next, 'arcade'), 'stack', score) });
@@ -528,7 +550,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const bonus = incidentBonus('metro', get().incidentPlay, score, get().toast);
     const coins = Math.round(score * Math.max(25, pps * 8) * bonus * fxMult(s, 'arcadeCoins'));
     const mult = score >= 150 ? 4 : score >= 100 ? 3 : score >= 50 ? 2 : score >= 20 ? 1.5 : 1;
-    const seconds = Math.min(900, score * 12);
+    const seconds = Math.min(900, score * 12) * arcadeBoostTime(s);
     // Fuente propia ('metro'): se multiplica con los boosts de Stack y Semáforo
     let next = { ...addCoins(s, coins), metroBest: Math.max(s.metroBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'metro', mult, seconds) };
@@ -543,7 +565,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const bonus = incidentBonus('traffic', get().incidentPlay, score, get().toast);
     const coins = Math.round(score * Math.max(10, pps * 6) * bonus * fxMult(s, 'arcadeCoins'));
     const mult = score >= 120 ? 5 : score >= 80 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : score >= 10 ? 1.5 : 1;
-    const seconds = Math.min(900, score * 10);
+    const seconds = Math.min(900, score * 10) * arcadeBoostTime(s);
     // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
     let next = { ...addCoins(s, coins), trafficBest: Math.max(s.trafficBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'semaforo', mult, seconds) };
@@ -584,7 +606,7 @@ export const useGame = create<GameStore>((set, get) => ({
     let msg = `${def.emoji} ${def.title}`;
     switch (id) {
       case 'festival':
-        next = { ...s, tapBoostMult: 7, tapBoostUntil: t + 45_000 };
+        next = { ...s, tapBoostMult: festivalMult(s), tapBoostUntil: t + festivalDuration(s, 45_000) };
         break;
       case 'obras':
         next = { ...s, boosts: addBoost(s, t, 'obras', 2, 180) };
@@ -654,6 +676,8 @@ export const useGame = create<GameStore>((set, get) => ({
       stocks: {},
       // Cada era nueva elige su ley
       law: null,
+      // Y una reorganización gratis del legado
+      respecFree: true,
       lastTick: t,
     };
     next.coins = startingCapital(next);
@@ -692,8 +716,8 @@ export const useGame = create<GameStore>((set, get) => ({
         message = `⚡ Producción x${prize.mult} durante ${prize.seconds / 60} min`;
         break;
       case 'festival':
-        next = { ...next, tapBoostMult: 7, tapBoostUntil: t + 60_000 };
-        message = '🎉 ¡Fiesta! Toques x7 durante 60 s';
+        next = { ...next, tapBoostMult: festivalMult(s), tapBoostUntil: t + festivalDuration(s, 60_000) };
+        message = `🎉 ¡Fiesta! Toques x${festivalMult(s)} durante ${festivalDuration(s, 60_000) / 1000} s`;
         break;
       case 'rare': {
         const r = RARE.find((x) => !next.rare.includes(x.id));

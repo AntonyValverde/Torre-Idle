@@ -307,6 +307,87 @@ img.splash-logo {
   gap: 1px;
 }
 
+/* ---------- Árbol de legado ---------- */
+
+.legacy-label {
+  display: block;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  color: var(--star);
+  margin-bottom: 4px;
+}
+
+.legacy-trunk {
+  padding: 10px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 224, 102, 0.08), transparent);
+  border: 1px solid rgba(255, 224, 102, 0.25);
+}
+
+.legacy-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.legacy-tier {
+  position: relative;
+  padding-left: 14px;
+  border-left: 3px solid rgba(255, 224, 102, 0.45);
+}
+
+.legacy-tier.closed {
+  border-left-style: dashed;
+  border-left-color: var(--line);
+}
+
+.legacy-tier.closed .row {
+  opacity: 0.6;
+}
+
+.legacy-tier-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.legacy-progress {
+  height: 6px;
+  margin-bottom: 8px;
+}
+
+.legacy-or {
+  text-align: center;
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 4px 0;
+}
+
+.legacy-chosen {
+  box-shadow: 0 0 0 2px var(--star);
+}
+
+.legacy-excluded {
+  opacity: 0.45;
+}
+
+.legacy-block {
+  color: #ffb4b4;
+  font-weight: 700;
+}
+
+.legacy-note {
+  text-align: center;
+}
+
+.legacy-respec {
+  flex: 0 0 auto;
+}
+
 /* ---------- Consejo (consejeros coleccionables) ---------- */
 
 .r-comun {

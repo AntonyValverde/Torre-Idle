@@ -5,15 +5,12 @@ import { saveCloud, submitScore } from '../game/cloud';
 import {
   BUILDINGS,
   GEM_SHOP,
-  LEGACY,
   RARE,
   STAR_BONUS,
-  availableStars,
   availableUpgrades,
   earnedForStars,
   eraName,
   gemLevel,
-  legacyLevel,
   pendingStars,
   startingCapital,
   starsPotential,
@@ -27,6 +24,7 @@ import { advisorsAlert } from '../game/advisors';
 import { sfx, vibrate } from './haptics';
 import { Council } from './Council';
 import { LawCard } from './LawCard';
+import { LegacyTree } from './LegacyTree';
 import { Modal } from './Modal';
 
 type Section = 'upgrades' | 'council' | 'gems' | 'legacy';
@@ -173,14 +171,12 @@ function GemShop() {
 
 function Legacy() {
   const s = useGame((st) => st.s);
-  const buyLegacy = useGame((st) => st.buyLegacy);
   const [confirm, setConfirm] = useState(false);
   const pending = pendingStars(s);
   const potential = starsPotential(s.allTimeEarned);
   const nextAt = earnedForStars(potential + 1);
   const prevAt = earnedForStars(potential);
   const pct = ((s.allTimeEarned - prevAt) / (nextAt - prevAt)) * 100;
-  const avail = availableStars(s);
   const nextEraUnlock = BUILDINGS.find((b) => b.era === s.era + 1);
 
   const doPrestige = () => {
@@ -239,11 +235,7 @@ function Legacy() {
 
       <LawCard showCurrent />
 
-      <div className="section-head">
-        <h2>Árbol de legado</h2>
-        <small className="muted">⭐ {fmt(avail)} para gastar</small>
-      </div>
-      <ShopList items={LEGACY} level={(id) => legacyLevel(s, id)} budget={avail} currency="⭐" onBuy={buyLegacy} />
+      <LegacyTree />
 
       <div className="section-head">
         <h2>Edificios raros</h2>

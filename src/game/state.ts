@@ -96,6 +96,10 @@ export interface GameState {
   law: string | null;
   /** Consejeros: colección, sillas del consejo y sobres sin abrir. */
   advisors: AdvisorsState;
+  /** Reorganizar el legado sale gratis (una vez por era). */
+  respecFree: boolean;
+  /** Última partida gratis del Pase VIP (hora de confianza). */
+  vipLast: number;
   createdAt: number;
 }
 
@@ -167,6 +171,8 @@ export function newState(t: number): GameState {
     tutorial: newTutorial(),
     law: null,
     advisors: newAdvisors(),
+    respecFree: true,
+    vipLast: 0,
     createdAt: t,
   };
 }
@@ -369,6 +375,9 @@ export function normalize(raw: unknown, t: number): GameState {
     // Una ley que ya no existe (de otra versión) se descarta: se vuelve a elegir
     law: typeof r.law === 'string' && LAW_BY_ID.has(r.law) ? r.law : null,
     advisors: advisorsState(r.advisors),
+    // Sin campo (partidas de antes del árbol con ramas): la primera reorganización es gratis
+    respecFree: r.respecFree !== false,
+    vipLast: num(r.vipLast, 0),
     createdAt: num(r.createdAt, t),
   };
 }

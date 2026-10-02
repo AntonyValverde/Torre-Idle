@@ -90,7 +90,13 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
   - En Logros → Perfil se puede apagar y ajustar el volumen, aparte de los efectos.
 - **16 edificios**. Los 6 últimos se desbloquean en eras avanzadas.
 - **Hitos infinitos**: cada edificio produce x2 al llegar a 25, 50, 100… y después cada 100, sin límite.
-- **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado, que tiene niveles infinitos.
+- **Eras y prestigio**: al refundar la ciudad ganas ⭐ estrellas de legado (raíz cúbica de lo ganado en total) que dan +3% de producción cada una. Se gastan en el árbol de legado.
+- **Árbol de legado** ([legacy.ts](src/game/legacy.ts)):
+  - Un tronco común (Productividad, Capital inicial) y tres ramas: 💤 Magnate (edificios y offline), 👆 Activo (toques, críticos y fiestas) y 🎮 Jugador (minijuegos, tickets y eventos).
+  - El nivel 2 de una rama se abre con 15 ⭐ invertidas en ella y el nivel 3 con 60.
+  - En el nivel 2 hay que elegir una de dos mejoras. El nivel 3 es una piedra angular, y solo puede haber una activa en toda la ciudad: 👑 Ciudad que nunca duerme, ✋ Toque maestro o 🏆 Pase VIP.
+  - Reorganizar devuelve todas las estrellas gastadas. Es gratis una vez por era (se renueva al refundar); si no, cuesta 50 💎.
+  - Las mejoras de legado de antes conservan su nivel dentro de su rama.
 - **Leyes de era**: desde la era 2, cada era se rige por una ley que eliges entre tres (las mismas para todos los que están en esa era). Cada ley tiene una ventaja y una desventaja: industrial (producción x1.75, toques ÷2), activa, turística, tecnológica, lúdica, nocturna, constructora o de feria. Rige hasta la próxima refundación ([laws.ts](src/game/laws.ts)).
 - **Consejeros** (Mejoras → 🧑‍💼 Consejo):
   - 14 consejeros coleccionables: comunes (8, mejoran parejas de edificios), raros (toques, offline, arcade, tickets) y épicos (producción global, suerte).

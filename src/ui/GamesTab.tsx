@@ -4,6 +4,7 @@ import { fmt, fmtClock, fmtTime } from '../game/format';
 import { STOCKS, saleValue, stockPrice } from '../game/stocks';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
+import { vipReady } from '../game/legacy';
 import { CupCard } from './cup/CupCard';
 
 export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro';
@@ -26,6 +27,9 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
   const wheelFree = isNewDay(s.wheelLast, today);
   const nextTicket = ticketRegenMs(s) - (s.lastTick - s.ticketTime);
   const untilTomorrow = fmtTime(msUntilTomorrow(t) / 1000);
+  // Pase VIP (legado): una partida de arcade gratis cada hora
+  const vip = vipReady(s, t);
+  const canPlay = vip || s.tickets >= 1;
   const portfolio = STOCKS.reduce((n, d) => n + (s.stocks[d.id] ? saleValue(s.stocks[d.id].u, stockPrice(d, s.lastTick)) : 0), 0);
 
   const tut = currentStep(s)?.id;
@@ -91,70 +95,70 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
 
       <div className={`section-head${tut === 'arcade' ? ' tut-target' : ''}`}>
         <h2>Arcade</h2>
-        <small className="muted">1 🎟️ por partida</small>
+        <small className="muted">{vip ? '🏆 Partida VIP gratis' : '1 🎟️ por partida'}</small>
       </div>
 
-      <button className="game-card fire" disabled={s.tickets < 1} onClick={() => onPlay('fire')}>
+      <button className="game-card fire" disabled={!canPlay} onClick={() => onPlay('fire')}>
         <span className="game-emoji">🚒</span>
         <div className="game-info">
           <b>Bomberos {NEW_TAG}</b>
           <small>Apaga los incendios antes de que se extiendan. ¡Cuida el agua!</small>
           <small className="game-meta">🏆 Récord: {s.fireBest}</small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
-      <button className="game-card metro" disabled={s.tickets < 1} onClick={() => onPlay('metro')}>
+      <button className="game-card metro" disabled={!canPlay} onClick={() => onPlay('metro')}>
         <span className="game-emoji">🚇</span>
         <div className="game-info">
           <b>Metro {NEW_TAG}</b>
           <small>Traza líneas entre estaciones y lleva a cada viajero a su destino. Gana un boost.</small>
           <small className="game-meta">🏆 Récord: {s.metroBest} viajeros</small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
-      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('thief')}>
+      <button className="game-card" disabled={!canPlay} onClick={() => onPlay('thief')}>
         <span className="game-emoji">🦹</span>
         <div className="game-info">
           <b>Atrapa al ladrón</b>
           <small>30 segundos de reflejos. ¡No toques a los vecinos!</small>
           <small className="game-meta">🏆 Récord: {s.thiefBest}</small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
-      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('stack')}>
+      <button className="game-card" disabled={!canPlay} onClick={() => onPlay('stack')}>
         <span className="game-emoji">🏗️</span>
         <div className="game-info">
           <b>Stack Tower</b>
           <small>Apila pisos con precisión. Gana monedas y un boost de producción.</small>
           <small className="game-meta">🏆 Récord: {s.stackBest} pisos</small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
-      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('traffic')}>
+      <button className="game-card" disabled={!canPlay} onClick={() => onPlay('traffic')}>
         <span className="game-emoji">🚦</span>
         <div className="game-info">
           <b>Semáforo</b>
           <small>Cambia el semáforo para que los coches crucen sin chocar. Gana un boost de producción.</small>
           <small className="game-meta">🏆 Récord: {s.trafficBest} coches</small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
-      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('memory')}>
+      <button className="game-card" disabled={!canPlay} onClick={() => onPlay('memory')}>
         <span className="game-emoji">🧠</span>
         <div className="game-info">
           <b>Memoria de ventanas</b>
           <small>Repite la secuencia de luces. Si llegas lejos, recuperas hasta 4 tickets.</small>
           <small className="game-meta">🏆 Récord: {s.memoryBest} rondas</small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
-      <button className="game-card" disabled={s.tickets < 1} onClick={() => onPlay('merge')}>
+      <button className="game-card" disabled={!canPlay} onClick={() => onPlay('merge')}>
         <span className="game-emoji">🧱</span>
         <div className="game-info">
           <b>Fusión</b>
@@ -163,7 +167,7 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
             🏆 Récord: {fmt(s.mergeBest)} · Mejor: {s.mergeBestTile || '-'}
           </small>
         </div>
-        <span className="game-cost">🎟️1</span>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>
 
       {isUnlocked(s, 'stocks') && (

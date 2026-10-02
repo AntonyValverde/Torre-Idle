@@ -132,7 +132,8 @@ export default function App() {
   }, []);
 
   const play = (g: GameId) => {
-    if (TICKET_GAMES.includes(g) && !useGame.getState().spendTicket()) return;
+    // Los arcade cuestan un ticket, salvo la partida gratis del Pase VIP
+    if (TICKET_GAMES.includes(g) && !useGame.getState().useVipPlay() && !useGame.getState().spendTicket()) return;
     track('minigame_start', { game: g });
     setGame(g);
   };

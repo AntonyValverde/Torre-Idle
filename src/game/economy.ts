@@ -1,11 +1,12 @@
 import { fmt } from './format';
 import { advisorAdd, advisorBuildingMult, advisorMult, type AdvisorKey } from './advisors';
 import { lawAdd, lawMult } from './laws';
+import { LEGACY_TREE, arcadeCoinsMult, hasNode, masterTapPct, milestoneFactor } from './legacy';
 import type { Boost, GameState } from './state';
 
-/** Efecto combinado de la ley de la era y de los consejeros sentados (multiplicador). */
+/** Efecto combinado de la ley de la era, los consejeros sentados y el legado (multiplicador). */
 export function fxMult(s: GameState, key: Parameters<typeof lawMult>[1]): number {
-  return lawMult(s, key) * advisorMult(s, key as AdvisorKey);
+  return lawMult(s, key) * advisorMult(s, key as AdvisorKey) * (key === 'arcadeCoins' ? arcadeCoinsMult(s) : 1);
 }
 
 /** Efecto combinado de la ley de la era y de los consejeros sentados (sumando). */
@@ -238,16 +239,8 @@ export function availableStars(s: GameState): number {
   return s.stars - s.starsSpent;
 }
 
-export const LEGACY: ShopItemDef[] = [
-  { id: 'productividad', name: 'Productividad', desc: 'Producción x1.15 por nivel', emoji: '⚙️', max: Infinity, cost: (l) => Math.ceil(3 * 1.35 ** l) },
-  { id: 'capital', name: 'Capital inicial', desc: 'Empiezas cada era con monedas extra', emoji: '💰', max: Infinity, cost: (l) => Math.ceil(2 * 1.5 ** l) },
-  { id: 'dedos', name: 'Dedos legendarios', desc: 'Toques x2 por nivel', emoji: '👆', max: Infinity, cost: (l) => Math.ceil(2 * 1.45 ** l) },
-  { id: 'arquitecto', name: 'Arquitecto', desc: 'Edificios 4% más baratos por nivel', emoji: '📐', max: 15, cost: (l) => Math.ceil(5 * 1.6 ** l) },
-  { id: 'asistente', name: 'Asistente del alcalde', desc: '+2 toques automáticos por segundo', emoji: '🤖', max: 25, cost: (l) => Math.ceil(4 * 1.45 ** l) },
-  { id: 'suerte', name: 'Trébol', desc: '+1% de probabilidad de crítico', emoji: '🍀', max: 16, cost: (l) => Math.ceil(3 * 1.5 ** l) },
-  { id: 'cielo', name: 'Cielo festivo', desc: 'Globos y decretos 12% más frecuentes', emoji: '🎈', max: 5, cost: (l) => Math.ceil(6 * 1.8 ** l) },
-  { id: 'taquilla', name: 'Taquilla eterna', desc: '+1 ticket máximo', emoji: '🎟️', max: 5, cost: (l) => Math.ceil(10 * 2 ** l) },
-];
+/** Mejoras del árbol de legado (tronco y ramas: ver legacy.ts). */
+export const LEGACY: ShopItemDef[] = LEGACY_TREE;
 
 export function legacyLevel(s: GameState, id: string): number {
   return s.legacy[id] ?? 0;
@@ -489,7 +482,7 @@ export function totalBuildings(s: GameState): number {
 
 export function buildingMultiplier(s: GameState, buildingId: string): number {
   const upgrades = countUpgrades(s, (e) => e.type === 'building' && e.building === buildingId);
-  return 2 ** (upgrades + milestoneCount(s.buildings[buildingId] ?? 0)) * advisorBuildingMult(s, buildingId);
+  return 2 ** upgrades * milestoneFactor(s) ** milestoneCount(s.buildings[buildingId] ?? 0) * advisorBuildingMult(s, buildingId);
 }
 
 export function buildingProduction(s: GameState, def: BuildingDef): number {
@@ -547,7 +540,7 @@ export function productionPerSec(s: GameState, t: number, withBoost = true): num
 
 export function tapValue(s: GameState, t: number): number {
   const mult = 2 ** (countUpgrades(s, (e) => e.type === 'tapMult') + legacyLevel(s, 'dedos'));
-  const pct = 0.01 * countUpgrades(s, (e) => e.type === 'tapPct');
+  const pct = 0.01 * countUpgrades(s, (e) => e.type === 'tapPct') + masterTapPct(s);
   const boost = boostMultiplier(s, t);
   const fest = isTapBoosted(s, t) ? s.tapBoostMult : 1;
   return (mult * globalMultiplier(s) * boost + productionPerSec(s, t) * pct) * fest * fxMult(s, 'tap');
@@ -575,12 +568,14 @@ export function ticketRegenMs(s: GameState): number {
 }
 
 export function offlineCapSeconds(s: GameState): number {
-  return (2 + gemLevel(s, 'offline') + fxAdd(s, 'offlineHours')) * 3600;
+  const hours = 2 + gemLevel(s, 'offline') + fxAdd(s, 'offlineHours') + legacyLevel(s, 'gerente');
+  return hours * 3600 * (hasNode(s, 'nuncaDuerme') ? 2 : 1);
 }
 
 export function offlineEfficiency(s: GameState): number {
   // Nunca más del 100%: cerrar la app no debe rendir más que jugar
-  return Math.min(1, (OFFLINE_EFFICIENCY + 0.1 * gemLevel(s, 'offlineEff')) * fxMult(s, 'offlineEff'));
+  if (hasNode(s, 'nuncaDuerme')) return 1;
+  return Math.min(1, (OFFLINE_EFFICIENCY + 0.1 * gemLevel(s, 'offlineEff') + 0.1 * legacyLevel(s, 'turnoNoche')) * fxMult(s, 'offlineEff'));
 }
 
 /** Recarga tickets según el tiempo transcurrido. */

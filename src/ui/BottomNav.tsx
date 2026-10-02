@@ -2,13 +2,10 @@ import { dateKey, isNewDay } from '../game/clock';
 import { cupAlert } from './cup/CupCard';
 import {
   GEM_SHOP,
-  LEGACY,
   affordableShopItems,
-  availableStars,
   availableUpgrades,
   claimableAchievements,
   gemLevel,
-  legacyLevel,
   maxTickets,
   pendingStars,
   upgradeCost,
@@ -17,6 +14,7 @@ import { claimableMissions } from '../game/missions';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
 import { lawPending } from '../game/laws';
+import { affordableLegacy } from '../game/legacy';
 import { advisorsAlert } from '../game/advisors';
 
 export type TabId = 'city' | 'upgrades' | 'games' | 'ranking' | 'profile';
@@ -35,7 +33,7 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
   const affordable =
     availableUpgrades(s).filter((u) => s.coins >= upgradeCost(s, u)).length +
     affordableShopItems(GEM_SHOP, (id) => gemLevel(s, id), s.gems) +
-    affordableShopItems(LEGACY, (id) => legacyLevel(s, id), availableStars(s)) +
+    affordableLegacy(s) +
     // Sobre de consejero por abrir (o el de regalo)
     (isUnlocked(s, 'shops') && advisorsAlert(s) ? 1 : 0);
   const today = dateKey(s.lastTick);
