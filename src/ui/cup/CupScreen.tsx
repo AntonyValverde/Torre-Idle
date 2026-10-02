@@ -109,8 +109,15 @@ function useCupData(week: string, enabled: boolean, poll: boolean) {
   useEffect(() => {
     load(true);
     if (!enabled || !poll) return;
-    const id = setInterval(() => load(true), 30_000);
-    return () => clearInterval(id);
+    // Con la app en segundo plano no se lee nada; al volver se pone al día
+    const visible = () => document.visibilityState === 'visible';
+    const id = setInterval(() => visible() && load(true), 30_000);
+    const onVisible = () => visible() && load(true);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load, enabled, poll]);
 
   return { view, results, error, reload: load };

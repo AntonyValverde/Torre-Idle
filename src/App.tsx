@@ -6,22 +6,9 @@ import { newState } from './game/state';
 import { claimTab } from './game/tabLock';
 import { useGame } from './game/store';
 import { cityFromUrl } from './game/cities';
-import { DailyScreen } from './minigames/daily/DailyScreen';
-import { FireScreen } from './minigames/fire/FireScreen';
-import { MemoryScreen } from './minigames/memory/MemoryScreen';
-import { MergeScreen } from './minigames/merge/MergeScreen';
-import { MetroScreen } from './minigames/metro/MetroScreen';
-import { ParksScreen } from './minigames/parks/ParksScreen';
-import { RoadsScreen } from './minigames/roads/RoadsScreen';
-import { StackScreen } from './minigames/stack/StackScreen';
-import { StockScreen } from './minigames/stocks/StockScreen';
-import { ThiefScreen } from './minigames/thief/ThiefScreen';
-import { TrafficScreen } from './minigames/traffic/TrafficScreen';
-import { WheelScreen } from './minigames/wheel/WheelScreen';
 import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
 import { CityVisit } from './ui/CityVisit';
-import { CupScreen } from './ui/cup/CupScreen';
 import { useDecreeScheduler } from './ui/DecreeCard';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { setMusicContext } from './ui/music/engine';
@@ -37,6 +24,28 @@ import { useUpdate } from './ui/update';
 
 // El panel solo se descarga si lo abre el administrador
 const AdminPanel = lazy(() => import('./admin/AdminPanel'));
+
+// Los minijuegos y la Copa se descargan al abrirlos por primera vez, así el arranque pesa menos.
+// La PWA los guarda igual con el resto de la versión, así que también funcionan sin conexión.
+const DailyScreen = lazy(() => import('./minigames/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
+const FireScreen = lazy(() => import('./minigames/fire/FireScreen').then((m) => ({ default: m.FireScreen })));
+const MemoryScreen = lazy(() => import('./minigames/memory/MemoryScreen').then((m) => ({ default: m.MemoryScreen })));
+const MergeScreen = lazy(() => import('./minigames/merge/MergeScreen').then((m) => ({ default: m.MergeScreen })));
+const MetroScreen = lazy(() => import('./minigames/metro/MetroScreen').then((m) => ({ default: m.MetroScreen })));
+const ParksScreen = lazy(() => import('./minigames/parks/ParksScreen').then((m) => ({ default: m.ParksScreen })));
+const RoadsScreen = lazy(() => import('./minigames/roads/RoadsScreen').then((m) => ({ default: m.RoadsScreen })));
+const StackScreen = lazy(() => import('./minigames/stack/StackScreen').then((m) => ({ default: m.StackScreen })));
+const StockScreen = lazy(() => import('./minigames/stocks/StockScreen').then((m) => ({ default: m.StockScreen })));
+const ThiefScreen = lazy(() => import('./minigames/thief/ThiefScreen').then((m) => ({ default: m.ThiefScreen })));
+const TrafficScreen = lazy(() => import('./minigames/traffic/TrafficScreen').then((m) => ({ default: m.TrafficScreen })));
+const WheelScreen = lazy(() => import('./minigames/wheel/WheelScreen').then((m) => ({ default: m.WheelScreen })));
+const CupScreen = lazy(() => import('./ui/cup/CupScreen').then((m) => ({ default: m.CupScreen })));
+
+const loading = (
+  <div className="game-screen splash">
+    <div className="spinner" />
+  </div>
+);
 
 export default function App() {
   const ready = useGame((st) => st.ready);
@@ -171,23 +180,27 @@ export default function App() {
       {/* Cada pantalla superpuesta tiene su propia barrera de errores: si falla, se cierra solo esa pantalla */}
       {game && (
         <ErrorBoundary key={game} onClose={() => setGame(null)}>
-          {game === 'stack' && <StackScreen onClose={() => setGame(null)} />}
-          {game === 'merge' && <MergeScreen onClose={() => setGame(null)} />}
-          {game === 'daily' && <DailyScreen onClose={() => setGame(null)} onRanking={() => openRanking('daily')} />}
-          {game === 'wheel' && <WheelScreen onClose={() => setGame(null)} />}
-          {game === 'thief' && <ThiefScreen onClose={() => setGame(null)} />}
-          {game === 'stocks' && <StockScreen onClose={() => setGame(null)} />}
-          {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
-          {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
-          {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
-          {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
-          {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
-          {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
+          <Suspense fallback={loading}>
+            {game === 'stack' && <StackScreen onClose={() => setGame(null)} />}
+            {game === 'merge' && <MergeScreen onClose={() => setGame(null)} />}
+            {game === 'daily' && <DailyScreen onClose={() => setGame(null)} onRanking={() => openRanking('daily')} />}
+            {game === 'wheel' && <WheelScreen onClose={() => setGame(null)} />}
+            {game === 'thief' && <ThiefScreen onClose={() => setGame(null)} />}
+            {game === 'stocks' && <StockScreen onClose={() => setGame(null)} />}
+            {game === 'roads' && <RoadsScreen onClose={() => setGame(null)} onRanking={() => openRanking('roads')} />}
+            {game === 'traffic' && <TrafficScreen onClose={() => setGame(null)} />}
+            {game === 'memory' && <MemoryScreen onClose={() => setGame(null)} />}
+            {game === 'parks' && <ParksScreen onClose={() => setGame(null)} onRanking={() => openRanking('parks')} />}
+            {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
+            {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
+          </Suspense>
         </ErrorBoundary>
       )}
       {cupOpen && !game && (
         <ErrorBoundary onClose={() => setCupOpen(false)}>
-          <CupScreen onClose={() => setCupOpen(false)} onVisit={setVisit} />
+          <Suspense fallback={loading}>
+            <CupScreen onClose={() => setCupOpen(false)} onVisit={setVisit} />
+          </Suspense>
         </ErrorBoundary>
       )}
       {visit && !game && !admin && (
@@ -197,7 +210,7 @@ export default function App() {
       )}
       {admin && (
         <ErrorBoundary onClose={() => setAdmin(false)}>
-          <Suspense fallback={<div className="game-screen splash"><div className="spinner" /></div>}>
+          <Suspense fallback={loading}>
             <AdminPanel onClose={() => setAdmin(false)} />
           </Suspense>
         </ErrorBoundary>

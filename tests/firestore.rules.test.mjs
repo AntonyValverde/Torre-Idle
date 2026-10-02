@@ -1,7 +1,7 @@
 // Pruebas de las reglas de Firestore contra el emulador local (no toca la base de datos real).
 // Requiere Java. Ejecutar con: npm run test:rules
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
 // CUP_SHIFT_DAYS=n mueve la semana de la Copa n días hacia atrás (en las reglas y en las pruebas):
@@ -43,6 +43,10 @@ async function t(name, fn, shouldPass) {
 }
 const ok = (n, f) => t(n, f, true);
 const no = (n, f) => t(n, f, false);
+function check(name, cond) {
+  cond ? pass++ : fail++;
+  console.log(`  ${cond ? 'ok  ' : 'FAIL'} ${name}`);
+}
 
 const pad = (n) => String(n).padStart(2, '0');
 const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -214,6 +218,25 @@ if (cupPhaseNow === 'signup') {
 }
 await ok('copa: lectura pública de resultados', () => getDocs(collection(anon, `cup/${cupWeek}/results`)));
 await ok('copa: el admin borra marcas', () => deleteDoc(doc(admin, `cup/${cupWeek}/results/alice`)));
+// Lecturas incrementales (src/game/cupCloud.ts): solo las marcas subidas después de cierta hora
+{
+  const col = `cup/${cupWeek}/results`;
+  const base = Date.now() - 120_000;
+  const seeded = { 'inc-old': base, 'inc-new': base + 60_000, 'inc-now': null };
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    for (const [id, at] of Object.entries(seeded)) {
+      await setDoc(doc(ctx.firestore(), col, id), { name: id, g1: 1, updatedAt: at === null ? serverTimestamp() : Timestamp.fromMillis(at) });
+    }
+  });
+  const since = (ms) => getDocs(query(collection(anon, col), where('updatedAt', '>', Timestamp.fromMillis(ms)), limit(2000)));
+  const ids = async (ms) => (await since(ms)).docs.map((d) => d.id).sort().join(',');
+  await ok('copa: lectura pública de solo las marcas nuevas', () => since(base));
+  check('copa: llegan solo las marcas posteriores', (await ids(base)) === 'inc-new,inc-now');
+  check('copa: también las que puso la hora del servidor', (await ids(base + 60_000)) === 'inc-now');
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    for (const id of Object.keys(seeded)) await deleteDoc(doc(ctx.firestore(), col, id));
+  });
+}
 
 console.log('suggestions');
 const suggestion = (db, uid, extra = {}) => {

@@ -27,6 +27,7 @@ import {
   groupStandings,
   isClaimed,
   makeGroups,
+  mergeResults,
   slotOpen,
   unsyncedBest,
   newCup,
@@ -431,5 +432,32 @@ describe('estado de la Copa en la partida', () => {
     expect(unsyncedBest(best, { f: 10 }, 'final')).toEqual({ f: 300 });
     expect(unsyncedBest(best, undefined, 'signup')).toEqual({});
     expect(unsyncedBest({ ...best, g1: 9999 }, undefined, 'groups').g1).toBe(5000);
+  });
+
+  it('las lecturas parciales de marcas se suman a las que ya había', () => {
+    const full = mergeResults(null, [
+      { uid: 'a', result: { g1: 10 }, at: 1000 },
+      { uid: 'b', result: { g1: 20 }, at: 3000 },
+    ]);
+    expect(full.maxAt).toBe(3000);
+    expect([...full.data.keys()]).toEqual(['a', 'b']);
+
+    // Llega una marca nueva de 'a' y un jugador nuevo; 'b' no cambió y se conserva
+    const next = mergeResults(full, [
+      { uid: 'a', result: { g1: 15, g2: 5 }, at: 5000 },
+      { uid: 'c', result: { g1: 1 }, at: 4000 },
+    ]);
+    expect(next.data.get('a')).toEqual({ g1: 15, g2: 5 });
+    expect(next.data.get('b')).toEqual({ g1: 20 });
+    expect(next.data.get('c')).toEqual({ g1: 1 });
+    expect(next.maxAt).toBe(5000);
+    // No toca la anterior y siempre es un Map nuevo (la pantalla tiene que notar el cambio)
+    expect(full.data.get('a')).toEqual({ g1: 10 });
+    expect(mergeResults(next, []).data).not.toBe(next.data);
+
+    // Una marca repetida por el margen de solapamiento no cambia nada ni hace retroceder maxAt
+    const again = mergeResults(next, [{ uid: 'c', result: { g1: 1 }, at: 4000 }]);
+    expect(again.data).toEqual(next.data);
+    expect(again.maxAt).toBe(5000);
   });
 });

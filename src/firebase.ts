@@ -1,7 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { GoogleAuthProvider, connectAuthEmulator, getAuth, linkWithCredential, type Auth } from 'firebase/auth';
 import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore';
-import { getAnalytics, isSupported, logEvent, type Analytics } from 'firebase/analytics';
+import type { Analytics } from 'firebase/analytics';
 import { ReCaptchaV3Provider, initializeAppCheck } from 'firebase/app-check';
 
 const firebaseConfig = {
@@ -45,19 +45,30 @@ if (cloudEnabled) {
   console.warn('Firebase no configurado: faltan variables VITE_FIREBASE_*. Solo guardado local.');
 }
 
-let analytics: Analytics | null = null;
+type Params = Record<string, string | number | boolean>;
+
+// La analítica se descarga aparte para no pesar en el arranque. Los eventos que llegan mientras
+// tanto esperan en la cola (con tope) y se envían al cargar; si no hay analítica, se descartan.
+let analytics: { a: Analytics; log: typeof import('firebase/analytics').logEvent } | null = null;
+let queue: [string, Params | undefined][] | null = [];
 if (app && firebaseConfig.measurementId) {
   const a = app;
-  isSupported()
-    .then((ok) => {
-      if (ok) analytics = getAnalytics(a);
+  import('firebase/analytics')
+    .then(async ({ getAnalytics, isSupported, logEvent }) => {
+      if (!(await isSupported())) return;
+      analytics = { a: getAnalytics(a), log: logEvent };
+      for (const [name, params] of queue ?? []) track(name, params);
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => (queue = null));
+} else {
+  queue = null;
 }
 
-export function track(name: string, params?: Record<string, string | number | boolean>) {
+export function track(name: string, params?: Params) {
   try {
-    if (analytics) logEvent(analytics, name, params);
+    if (analytics) analytics.log(analytics.a, name, params);
+    else if (queue && queue.length < 30) queue.push([name, params]);
   } catch {
     /* la analítica nunca debe romper el juego */
   }

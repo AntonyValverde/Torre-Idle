@@ -93,6 +93,33 @@ export interface CupEntry {
 
 export type CupResult = Partial<Record<CupSlot, number>>;
 
+/** Marcas de un jugador tal como llegan de la nube, con la hora (ms) de su última subida (0 si no la trae). */
+export interface ResultDoc {
+  uid: string;
+  result: CupResult;
+  at: number;
+}
+
+/** Resultados acumulados de una Copa y la última subida vista (para pedir después solo lo nuevo). */
+export interface ResultsSnapshot {
+  data: Map<string, CupResult>;
+  maxAt: number;
+}
+
+/**
+ * Junta los resultados recibidos con los que ya se tenían (sin `prev`, los recibidos son la lista entera).
+ * Siempre devuelve un Map nuevo, para que la pantalla note el cambio.
+ */
+export function mergeResults(prev: ResultsSnapshot | null, docs: ResultDoc[]): ResultsSnapshot {
+  const data = new Map(prev?.data);
+  let maxAt = prev?.maxAt ?? 0;
+  for (const d of docs) {
+    data.set(d.uid, d.result);
+    maxAt = Math.max(maxAt, d.at);
+  }
+  return { data, maxAt };
+}
+
 /**
  * Reparte a los inscritos en grupos de hasta 8, juntando a los de nivel parecido. El desempate es un
  * hash del UID y la semana: así todos los móviles obtienen exactamente los mismos grupos.

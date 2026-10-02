@@ -1,4 +1,16 @@
-import { collection, doc, getCountFromServer, getDocFromServer, getDocsFromServer, limit, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  Timestamp,
+  collection,
+  doc,
+  getCountFromServer,
+  getDocFromServer,
+  getDocsFromServer,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from 'firebase/firestore';
 import { db } from '../firebase';
 import { now } from './clock';
 import { currentUid, ensureUser } from './cloud';
@@ -7,6 +19,7 @@ import {
   buildCup,
   cupStart,
   cupWeekKey,
+  mergeResults,
   seasonWeeks,
   summarizeCup,
   tierOf,
@@ -14,6 +27,7 @@ import {
   type CupResult,
   type CupSlot,
   type CupSummary,
+  type ResultsSnapshot,
 } from './cup';
 import type { GameState } from './state';
 
@@ -23,7 +37,15 @@ import type { GameState } from './state';
 
 const MAX_PLAYERS = 2000;
 const RESULTS_MS = 20_000;
-const resultsCache = new Map<string, { at: number; data: Map<string, CupResult> }>();
+/** Cada cuánto se vuelve a leer la lista entera de marcas en vez de solo las nuevas. */
+const RESULTS_FULL_MS = 10 * 60_000;
+/**
+ * Margen al pedir solo las marcas nuevas: la hora que pone el servidor es la de la petición, y una
+ * subida puede terminar de guardarse un instante después de que otra más reciente ya se leyera.
+ */
+const RESULTS_OVERLAP_MS = 30_000;
+/** at: última lectura; fullAt: última lectura completa. */
+const resultsCache = new Map<string, { at: number; fullAt: number; snap: ResultsSnapshot }>();
 const entriesCache = new Map<string, { at: number; data: CupEntry[] }>();
 
 function need() {
@@ -122,18 +144,40 @@ export async function fetchCupEntries(week: string): Promise<CupEntry[]> {
   return data;
 }
 
+/**
+ * Marcas de la Copa. Tras una lectura completa, las siguientes piden solo las marcas subidas desde
+ * entonces: cada recarga cuesta lo que se movió y no una lectura por inscrito.
+ */
 export async function fetchCupResults(week: string, fresh = false): Promise<Map<string, CupResult>> {
   const d = need();
   const hit = resultsCache.get(week);
-  if (!fresh && hit && Date.now() - hit.at < RESULTS_MS) return hit.data;
+  const t = Date.now();
+  if (!fresh && hit && t - hit.at < RESULTS_MS) return hit.snap.data;
   await ensureUser();
-  const snap = await getDocsFromServer(query(collection(d, 'cup', week, 'results'), limit(MAX_PLAYERS)));
-  const data = new Map<string, CupResult>(snap.docs.map((x) => {
+  // Cada cierto tiempo se vuelve a leer todo: así se notan las marcas que el administrador borró
+  const base = hit && t - hit.fullAt < RESULTS_FULL_MS ? hit : null;
+  const col = collection(d, 'cup', week, 'results');
+  const q = base
+    ? query(col, where('updatedAt', '>', Timestamp.fromMillis(Math.max(0, base.snap.maxAt - RESULTS_OVERLAP_MS))), limit(MAX_PLAYERS))
+    : query(col, limit(MAX_PLAYERS));
+  const res = await getDocsFromServer(q);
+  const docs = res.docs.map((x) => {
     const v = x.data();
-    return [x.id, { g1: int(v.g1), g2: int(v.g2), g3: int(v.g3), f: int(v.f) }];
-  }));
-  resultsCache.set(week, { at: Date.now(), data });
-  return data;
+    return {
+      uid: x.id,
+      result: { g1: int(v.g1), g2: int(v.g2), g3: int(v.g3), f: int(v.f) },
+      at: v.updatedAt instanceof Timestamp ? v.updatedAt.toMillis() : 0,
+    };
+  });
+  const snap = mergeResults(base?.snap ?? null, docs);
+  resultsCache.set(week, { at: t, fullAt: base ? base.fullAt : t, snap });
+  return snap.data;
+}
+
+/** La próxima lectura de marcas va a la nube aunque la última sea reciente (y sigue pidiendo solo lo nuevo). */
+function staleResults(week: string) {
+  const hit = resultsCache.get(week);
+  if (hit) hit.at = 0;
 }
 
 /**
@@ -184,7 +228,7 @@ export async function syncCupBest(week: string, scores: Partial<Record<CupSlot, 
   const fields = Object.fromEntries(Object.entries(scores).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => [k, Math.floor(v!)]));
   if (!uid || !Object.keys(fields).length) return;
   await setDoc(doc(d, 'cup', week, 'results', uid), { name, ...fields, updatedAt: serverTimestamp() }, { merge: true });
-  resultsCache.delete(week);
+  staleResults(week);
 }
 
 const retries = new Map<CupSlot, ReturnType<typeof setTimeout>>();
@@ -199,7 +243,7 @@ export async function submitCupScore(week: string, slot: CupSlot, score: number,
   if (!uid || score <= 0) return;
   try {
     await setDoc(doc(d, 'cup', week, 'results', uid), { name, [slot]: Math.floor(score), updatedAt: serverTimestamp() }, { merge: true });
-    resultsCache.delete(week);
+    staleResults(week);
   } catch (e) {
     if ((e as { code?: string })?.code === 'permission-denied' && attempt < 2) {
       clearTimeout(retries.get(slot));
