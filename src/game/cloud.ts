@@ -6,6 +6,7 @@ import {
   onIdTokenChanged,
   signInAnonymously,
   signInWithCredential,
+  signOut,
   type AuthError,
   type User,
 } from 'firebase/auth';
@@ -77,6 +78,8 @@ export function loadLocal(): GameState | null {
 let lastBackup = 0;
 
 export function saveLocal(s: GameState): boolean {
+  // Cuenta eliminada: no se vuelve a guardar nada mientras se recarga
+  if (wiping) return false;
   try {
     const json = JSON.stringify(s);
     localStorage.setItem(LOCAL_KEY, json);
@@ -88,6 +91,59 @@ export function saveLocal(s: GameState): boolean {
   } catch (e) {
     console.warn('No se pudo guardar en el dispositivo', e);
     return false;
+  }
+}
+
+// =====================================================================
+// Cuenta eliminada por el administrador
+// =====================================================================
+
+/** true desde que se detecta que el administrador eliminó la cuenta: ya no se guarda ni se sube nada. */
+let wiping = false;
+const DELETED_NOTICE_KEY = 'torre-account-deleted';
+
+/**
+ * El administrador eliminó la cuenta (en la nube solo queda la marca `deleted`): se borra también lo
+ * que hay en el dispositivo y la cuenta de Firebase, y se recarga para empezar de cero.
+ * Si se detecta al entrar con Google desde una partida de invitado, esa partida se conserva.
+ */
+async function wipeDeletedAccount(): Promise<never> {
+  const keepLocal = switching;
+  wiping = true;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('torre-') && !(keepLocal && k.startsWith('torre-save'))) keys.push(k);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+    sessionStorage.setItem(DELETED_NOTICE_KEY, keepLocal ? 'kept' : 'reset');
+  } catch {
+    /* sin almacenamiento */
+  }
+  const a = auth;
+  const user = a?.currentUser;
+  if (a && user) {
+    // Borrarla libera también su cuenta de Google. Si Firebase pide un inicio de sesión reciente, basta con salir
+    await withTimeout(user.delete(), 5000)
+      .catch(() => signOut(a))
+      .catch(() => {});
+  }
+  location.reload();
+  return new Promise<never>(() => {});
+}
+
+/** Tras la recarga: avisa de por qué se empieza de cero. */
+function noticeDeleted() {
+  try {
+    const v = sessionStorage.getItem(DELETED_NOTICE_KEY);
+    if (!v) return;
+    sessionStorage.removeItem(DELETED_NOTICE_KEY);
+    useGame
+      .getState()
+      .toast(v === 'kept' ? '🗑️ Esa cuenta de Google fue eliminada. Sigues con tu partida de invitado' : '🗑️ Tu cuenta fue eliminada. Empiezas una partida nueva');
+  } catch {
+    /* sin almacenamiento */
   }
 }
 
@@ -160,6 +216,7 @@ async function fetchCloud(): Promise<CloudData | null> {
   }
   const snap = await getDoc(ref);
   const data = snap.data();
+  if (data?.deleted === true) await wipeDeletedAccount();
   const serverNow: number | null = pinged ? (data?.ping?.toMillis?.() ?? null) : null;
   return { state: data?.state ? normalize(data.state, now()) : null, serverNow };
 }
@@ -172,7 +229,9 @@ let cloudRead = false;
 
 /** Elige entre la partida local y la de la nube: gana la que tenga más progreso total. */
 export async function loadBestState(local: GameState | null): Promise<GameState> {
-  return (await pickBest(local)).best ?? newState(now());
+  const best = (await pickBest(local)).best ?? newState(now());
+  noticeDeleted();
+  return best;
 }
 
 /** Como loadBestState, pero también devuelve la partida de la nube (null si no hay o no se pudo leer). */
@@ -237,7 +296,7 @@ let pendingSave = false;
  * entonces se carga esa partida (la buena) en lugar de perderla.
  */
 export async function saveCloud(s: GameState): Promise<void> {
-  if (!auth || !db) return;
+  if (!auth || !db || wiping) return;
   if (!auth.currentUser) {
     // El inicio de sesión de invitado pudo fallar al arrancar (p. ej. sin conexión): se reintenta
     try {
@@ -280,6 +339,8 @@ export async function saveCloud(s: GameState): Promise<void> {
 async function resolveConflict(uid: string) {
   if (!db) return;
   const snap = await getDoc(doc(db, 'users', uid));
+  // El administrador eliminó la cuenta mientras se jugaba
+  if (snap.data()?.deleted === true) await wipeDeletedAccount();
   const raw = snap.data()?.state;
   const cloud = raw ? normalize(raw, now()) : null;
   const local = useGame.getState().s;
@@ -380,6 +441,8 @@ export interface ScoreEntry {
 }
 
 export function currentUid(): string | null {
+  // Cuenta eliminada: sin uid no se sube nada a los rankings, la liga, la ciudad ni la Copa
+  if (wiping) return null;
   return auth?.currentUser?.uid ?? null;
 }
 

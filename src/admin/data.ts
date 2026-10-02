@@ -1,4 +1,20 @@
-import { collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, updateDoc, type Timestamp } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getCountFromServer,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+  type Timestamp,
+} from 'firebase/firestore';
 import { db } from '../firebase';
 import { dateKey, now, prevDateKey, weekKey } from '../game/clock';
 import { BOARDS, DAILY_KINDS, type Board, type DailyKind } from '../game/cloud';
@@ -136,5 +152,65 @@ export async function removeFromRankings(uid: string) {
     // Copa: sus marcas siempre; la inscripción solo se puede borrar antes de que se formen los grupos
     deleteDoc(doc(d, 'cup', cupWeekKey(now()), 'results', uid)),
   ]);
+  await deleteDoc(doc(d, 'cup', cupWeekKey(now()), 'entries', uid)).catch(() => {});
+}
+
+/** Primer día con datos en la nube: desde aquí se buscan los retos diarios y las semanas de liga de un jugador. */
+export const FIRST_DAY = '2026-09-26';
+
+function addDays(key: string, n: number): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return dateKey(new Date(y, m - 1, d + n, 12).getTime());
+}
+
+/** Días desde `first` hasta `last` (ambos incluidos). */
+export function daysBetween(first: string, last: string): string[] {
+  const out: string[] = [];
+  for (let k = first; k <= last; k = addDays(k, 1)) out.push(k);
+  return out;
+}
+
+/** Lunes desde la semana de `first` hasta la de `last` (ambos incluidos). */
+export function mondaysBetween(first: string, last: string): string[] {
+  const at = (key: string) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d, 12).getTime();
+  };
+  const out: string[] = [];
+  for (let k = weekKey(at(first)); k <= last; k = addDays(k, 7)) out.push(k);
+  return out;
+}
+
+/**
+ * Elimina del todo la cuenta de un jugador: su partida queda sustituida por una marca `deleted`
+ * (su juego la ve y borra también lo que tiene en el dispositivo) y se borran sus rankings, retos
+ * diarios y semanas de liga de todas las fechas, su ciudad pública, la Copa de esta semana y sus
+ * sugerencias. Las Copas ya jugadas no se tocan: cambiarían los grupos y el podio de los demás.
+ * Se puede repetir sin problema si algo falla a medias.
+ */
+export async function deleteAccount(uid: string): Promise<void> {
+  const d = need();
+  // Primero la marca: si el jugador sigue jugando, desde ahora las reglas rechazan sus guardados
+  await setDoc(doc(d, 'users', uid), { deleted: true, deletedAt: serverTimestamp() });
+
+  // Un día de margen a cada lado: los retos van por la fecha local del jugador
+  const tomorrow = addDays(dateKey(), 1);
+  const sugg = await getDocs(query(collection(d, 'suggestions'), where('uid', '==', uid)));
+  const refs = [
+    ...BOARDS.map((b) => doc(d, 'leaderboards', b, 'scores', uid)),
+    ...DAILY_KINDS.flatMap((k) => daysBetween(FIRST_DAY, tomorrow).map((day) => doc(d, k, day, 'scores', uid))),
+    ...mondaysBetween(FIRST_DAY, tomorrow).map((w) => doc(d, 'league', w, 'scores', uid)),
+    doc(d, 'cup', cupWeekKey(now()), 'results', uid),
+    doc(d, 'cities', uid),
+    doc(d, 'suggestionMeta', uid),
+    ...sugg.docs.map((x) => x.ref),
+  ];
+  // Borrar un documento que no existe no da error: así no hace falta mirar antes cuáles hay
+  for (let i = 0; i < refs.length; i += 450) {
+    const batch = writeBatch(d);
+    for (const r of refs.slice(i, i + 450)) batch.delete(r);
+    await batch.commit();
+  }
+  // La inscripción de la Copa solo se puede borrar antes de que se formen los grupos
   await deleteDoc(doc(d, 'cup', cupWeekKey(now()), 'entries', uid)).catch(() => {});
 }

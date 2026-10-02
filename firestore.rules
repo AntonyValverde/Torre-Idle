@@ -55,14 +55,25 @@ service cloud.firestore {
           && serverTime(d, old, 'ping');
       }
 
-      // El administrador puede leer las partidas para el panel (nunca modificarlas)
+      // Cuenta eliminada por el administrador: la partida se sustituye por esta marca y nada más.
+      // El juego del jugador la ve al leer su partida y borra también lo que tiene en el dispositivo.
+      function tombstone() {
+        let d = incoming();
+        return d.keys().hasOnly(['deleted', 'deletedAt'])
+          && d.deleted == true
+          && d.deletedAt == request.time;
+      }
+
+      // El administrador puede leer las partidas para el panel (no modificarlas, solo eliminar la cuenta)
       allow read: if isOwner(uid) || isAdmin();
       allow create: if isOwner(uid) && validUser();
       // El progreso total nunca puede bajar: evita que un dispositivo con una partida
       // más antigua sobrescriba la buena (el juego detecta el rechazo y recarga la nube).
       allow update: if isOwner(uid) && validUser()
+        && !('deleted' in resource.data)
         && (!('totalEarned' in resource.data) || !('totalEarned' in incoming())
             || incoming().totalEarned >= resource.data.totalEarned);
+      allow create, update: if isAdmin() && request.auth.uid != uid && tombstone();
       allow delete: if false;
     }
 
@@ -331,6 +342,8 @@ service cloud.firestore {
       allow read: if isOwner(uid);
       allow create: if isOwner(uid) && validMeta();
       allow update: if isOwner(uid) && validMeta() && request.time > resource.data.lastAt + duration.value(60, 's');
+      // Al eliminar una cuenta
+      allow delete: if isAdmin();
     }
 
     // Todo lo demás está cerrado

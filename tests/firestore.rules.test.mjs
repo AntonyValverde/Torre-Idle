@@ -295,6 +295,34 @@ await ok('el admin quita a alguien de la liga', () => deleteDoc(doc(admin, `leag
 await ok('el admin quita un resultado del plan verde', () => deleteDoc(doc(admin, `parks/${today}/scores/alice`)));
 await ok('el admin borra una ciudad pública', () => deleteDoc(doc(admin, 'cities/alice')));
 
+console.log('eliminar cuenta');
+const tomb = () => ({ deleted: true, deletedAt: serverTimestamp() });
+await no('un jugador no elimina la cuenta de otro', () => setDoc(doc(bob, 'users/alice'), tomb()));
+await no('un jugador no se pone la marca a sí mismo', () => setDoc(ua, tomb()));
+await no('marca con campos extra', () => setDoc(doc(admin, 'users/alice'), { ...tomb(), state: {} }));
+await no('marca con hora del cliente', () => setDoc(doc(admin, 'users/alice'), { deleted: true, deletedAt: Timestamp.now() }));
+await no('marca a medias (merge con la partida)', () => setDoc(doc(admin, 'users/alice'), tomb(), { merge: true }));
+await no('el admin no elimina su propia cuenta', () => setDoc(doc(admin, 'users/boss'), tomb()));
+await ok('el admin elimina la cuenta', () => setDoc(doc(admin, 'users/alice'), tomb()));
+await ok('repetirlo no falla', () => setDoc(doc(admin, 'users/alice'), tomb()));
+await ok('el admin elimina una cuenta que nunca guardó', () => setDoc(doc(admin, 'users/ghost'), tomb()));
+await ok('el dueño aún lee la marca (así su juego se entera)', () => getDoc(ua));
+await no('el dueño no guarda encima de la marca', () => setDoc(ua, { ping: serverTimestamp() }, { merge: true }));
+await no('ni sustituyendo el documento entero', () =>
+  setDoc(ua, { state: { coins: 1 }, name: 'Alice', totalEarned: 999, savedAt: serverTimestamp() }),
+);
+await no('ni borrándola', () => deleteDoc(ua));
+await no('un jugador no borra su suggestionMeta', () => deleteDoc(doc(alice, 'suggestionMeta/alice')));
+await ok('el admin borra su suggestionMeta', () => deleteDoc(doc(admin, 'suggestionMeta/alice')));
+await ok('el admin borra en lote (también documentos que no existen)', () => {
+  const b = writeBatch(admin);
+  b.delete(doc(admin, 'daily/2026-09-27/scores/alice'));
+  b.delete(doc(admin, 'roads/2026-09-27/scores/alice'));
+  b.delete(doc(admin, 'league/2026-09-28/scores/alice'));
+  b.delete(doc(admin, 'leaderboards/metro/scores/alice'));
+  return b.commit();
+});
+
 console.log('otros');
 await no('colección inventada', () => setDoc(doc(alice, 'admin/config'), { x: 1 }));
 

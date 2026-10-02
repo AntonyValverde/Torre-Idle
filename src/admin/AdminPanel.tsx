@@ -3,7 +3,7 @@ import { now } from '../game/clock';
 import { eraName, totalAchievements, totalBuildings } from '../game/economy';
 import { fmt } from '../game/format';
 import { citySnapshot } from '../game/cities';
-import { DAILY_KINDS } from '../game/cloud';
+import { DAILY_KINDS, currentUid } from '../game/cloud';
 import { useGame } from '../game/store';
 import { CityVisit } from '../ui/CityVisit';
 import { GameScreen, Modal } from '../ui/Modal';
@@ -12,6 +12,7 @@ import { BarList, ColumnChart } from './charts';
 import {
   PLAYER_LIMIT,
   dailyParticipation,
+  deleteAccount,
   deleteSuggestion,
   cupCount,
   leagueCount,
@@ -99,7 +100,15 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         </div>
         {error && <p className="empty">{error}</p>}
         {tab === 'summary' && <SummaryView players={players} daily={daily} league={league} cup={cup} suggestionsNew={fresh} />}
-        {tab === 'players' && <PlayersView players={players} />}
+        {tab === 'players' && (
+          <PlayersView
+            players={players}
+            onDeleted={(uid) => {
+              setPlayers((list) => list?.filter((x) => x.uid !== uid) ?? null);
+              setSuggestions((list) => list?.filter((x) => x.uid !== uid) ?? null);
+            }}
+          />
+        )}
         {tab === 'suggestions' && <SuggestionsView items={suggestions} onChange={setSuggestions} />}
       </div>
     </GameScreen>
@@ -306,7 +315,7 @@ function SummaryView({
 
 type Sort = 'recent' | 'earned' | 'era';
 
-function PlayersView({ players }: { players: Player[] | null }) {
+function PlayersView({ players, onDeleted }: { players: Player[] | null; onDeleted: (uid: string) => void }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<Sort>('recent');
   const [open, setOpen] = useState<Player | null>(null);
@@ -355,7 +364,16 @@ function PlayersView({ players }: { players: Player[] | null }) {
           </li>
         ))}
       </ol>
-      {open && <PlayerDetail p={open} onClose={() => setOpen(null)} />}
+      {open && (
+        <PlayerDetail
+          p={open}
+          onClose={() => setOpen(null)}
+          onDeleted={(uid) => {
+            setOpen(null);
+            onDeleted(uid);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -377,7 +395,7 @@ const BOARD_LABEL: Record<string, string> = {
   cup: '🏆 Copa (semana)',
 };
 
-function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {
+function PlayerDetail({ p, onClose, onDeleted }: { p: Player; onClose: () => void; onDeleted: (uid: string) => void }) {
   const toast = useGame((st) => st.toast);
   const [ranks, setRanks] = useState<RankEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -401,6 +419,24 @@ function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {
     } catch (e) {
       toast(`⚠️ ${errorText(e)}`);
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const self = currentUid() === p.uid;
+
+  const erase = async () => {
+    const answer = prompt(
+      `Vas a ELIMINAR la cuenta de ${p.name}: su partida (también la de su dispositivo), rankings, retos, liga, ciudad, Copa de esta semana y sugerencias. No se puede deshacer.\n\nEscribe ELIMINAR para confirmar.`,
+    );
+    if (answer?.trim().toUpperCase() !== 'ELIMINAR') return;
+    setBusy(true);
+    try {
+      await deleteAccount(p.uid);
+      toast(`🗑️ Cuenta de ${p.name} eliminada`);
+      onDeleted(p.uid);
+    } catch (e) {
+      toast(`⚠️ ${errorText(e)}`);
       setBusy(false);
     }
   };
@@ -465,6 +501,11 @@ function PlayerDetail({ p, onClose }: { p: Player; onClose: () => void }) {
             </button>
             <button className="btn danger" onClick={remove} disabled={busy || !ranks?.length}>
               Quitar de rankings
+            </button>
+          </div>
+          <div className="btn-row">
+            <button className="btn danger" onClick={erase} disabled={busy || self} title={self ? 'Es tu propia cuenta' : undefined}>
+              🗑️ Eliminar cuenta
             </button>
           </div>
         </div>
