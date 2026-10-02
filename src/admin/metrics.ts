@@ -1,6 +1,7 @@
 import { dateKey } from '../game/clock';
 import { totalAchievements, totalBuildings } from '../game/economy';
 import type { GameState } from '../game/state';
+import { TUTORIAL, TUTORIAL_SINCE, stepsCompleted } from '../game/tutorial';
 
 // Métricas del panel de administración, calculadas a partir de las partidas guardadas en Firestore.
 // Funciones puras: no leen la red, así se pueden probar.
@@ -76,6 +77,23 @@ export interface Summary {
   eras: Bucket[];
   adoption: Bucket[];
   records: { game: string; value: number; name: string }[];
+  /** Embudo del tutorial (solo partidas creadas desde que existe): cuántos completaron cada paso. */
+  tutorial: Bucket[];
+  /** Partidas que pudieron ver el tutorial, y cuántas lo saltaron. */
+  tutorialPlayers: number;
+  tutorialSkipped: number;
+}
+
+export function tutorialFunnel(players: Player[]): { funnel: Bucket[]; players: number; skipped: number } {
+  const fresh = players.filter((p) => p.s.createdAt >= TUTORIAL_SINCE);
+  return {
+    funnel: TUTORIAL.map((step, i) => ({
+      label: `${i + 1}. ${step.label}`,
+      value: fresh.filter((p) => stepsCompleted(p.s.tutorial) > i).length,
+    })),
+    players: fresh.length,
+    skipped: fresh.filter((p) => p.s.tutorial.skip !== undefined).length,
+  };
 }
 
 export function summarize(players: Player[], nowMs: number): Summary {
@@ -110,6 +128,7 @@ export function summarize(players: Player[], nowMs: number): Summary {
     for (const p of players) if (!best || g.best!(p.s) > g.best!(best.s)) best = p;
     return { game: g.label, value: best ? g.best!(best.s) : 0, name: best?.name ?? '-' };
   });
+  const tut = tutorialFunnel(players);
 
   return {
     total,
@@ -128,6 +147,9 @@ export function summarize(players: Player[], nowMs: number): Summary {
     eras,
     adoption: GAMES.map((g) => ({ label: g.label, value: players.filter((p) => g.played(p.s)).length })),
     records: records.filter((r) => r.value > 0),
+    tutorial: tut.funnel,
+    tutorialPlayers: tut.players,
+    tutorialSkipped: tut.skipped,
   };
 }
 

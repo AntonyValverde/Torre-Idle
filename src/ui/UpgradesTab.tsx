@@ -21,6 +21,7 @@ import {
 } from '../game/economy';
 import { fmt } from '../game/format';
 import { useGame } from '../game/store';
+import { currentStep, isUnlocked } from '../game/tutorial';
 import { sfx, vibrate } from './haptics';
 import { Modal } from './Modal';
 
@@ -30,6 +31,15 @@ export function UpgradesTab() {
   const [section, setSection] = useState<Section>('upgrades');
   const s = useGame((st) => st.s);
   const upgradesCount = availableUpgrades(s).filter((u) => s.coins >= u.cost).length;
+
+  // Durante el tutorial solo están las mejoras con monedas; Gemas y Legado llegan al terminarlo
+  if (!isUnlocked(s, 'shops')) {
+    return (
+      <div className="tab">
+        <CoinUpgrades />
+      </div>
+    );
+  }
 
   return (
     <div className="tab">
@@ -55,15 +65,16 @@ function CoinUpgrades() {
   const s = useGame((st) => st.s);
   const buyUpgrade = useGame((st) => st.buyUpgrade);
   const upgrades = availableUpgrades(s).slice(0, 15);
+  const tutStep = currentStep(s)?.id === 'upgrade';
 
   return (
     <>
       {upgrades.length === 0 && <p className="empty">Compra más edificios para desbloquear mejoras.</p>}
       <ul className="list">
-        {upgrades.map((u) => {
+        {upgrades.map((u, i) => {
           const can = s.coins >= u.cost;
           return (
-            <li key={u.id} className={`row${can ? ' can' : ''}`}>
+            <li key={u.id} className={`row${can ? ' can' : ''}${tutStep && i === 0 ? ' tut-target' : ''}`}>
               <span className="row-emoji">{u.emoji}</span>
               <div className="row-main">
                 <b>{u.name}</b>

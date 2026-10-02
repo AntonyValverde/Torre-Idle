@@ -4,6 +4,7 @@ import { now } from '../game/clock';
 import { eventFrequency } from '../game/economy';
 import { DECREE_BY_ID } from '../game/events';
 import { useGame } from '../game/store';
+import { isUnlocked } from '../game/tutorial';
 import { sfx, vibrate } from './haptics';
 
 /** Programa un decreto del consejo cada 4–7 minutos (más seguido con "Cielo festivo"). */
@@ -13,7 +14,8 @@ export function useDecreeScheduler(onOffer: () => void) {
     // Solo se propone si el jugador puede verlo: con la app visible y sin la ventana de ganancias offline
     const offer = () => {
       const st = useGame.getState();
-      if (document.visibilityState === 'visible' && !st.decree && !st.s.pendingOffline) {
+      // Durante el tutorial, los decretos esperan a que Clara los presente
+      if (document.visibilityState === 'visible' && !st.decree && !st.s.pendingOffline && isUnlocked(st.s, 'decrees')) {
         st.offerDecree();
         onOffer();
       }

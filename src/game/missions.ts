@@ -1,6 +1,7 @@
 import { hashString, mulberry32 } from '../minigames/rng';
 import { dateKey, isNewDay, weekKey } from './clock';
 import type { GameState } from './state';
+import { tutorialProgress } from './tutorial';
 
 // Misiones diarias y semanales, y la liga semanal que se alimenta de ellas.
 // Las misiones del día (y de la semana) son las mismas para todos: salen de la fecha.
@@ -190,12 +191,13 @@ function advance(slots: MissionSlot[], ev: MissionEvent, n: number): MissionSlot
   return changed ? out : slots;
 }
 
-/** Suma progreso a las misiones activas que cuenten ese evento. */
+/** Suma progreso a las misiones activas que cuenten ese evento (y al paso del tutorial). */
 export function bump(s: GameState, ev: MissionEvent, n = 1): GameState {
   if (!(n > 0)) return s;
   const daily = advance(s.missions.daily, ev, n);
   const weekly = advance(s.missions.weekly, ev, n);
-  return daily === s.missions.daily && weekly === s.missions.weekly ? s : { ...s, missions: { ...s.missions, daily, weekly } };
+  const next = daily === s.missions.daily && weekly === s.missions.weekly ? s : { ...s, missions: { ...s.missions, daily, weekly } };
+  return tutorialProgress(next, ev, n);
 }
 
 export function isDone(slot: MissionSlot): boolean {

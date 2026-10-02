@@ -1,6 +1,7 @@
 import { MISSION_BY_ID, newLeague, newMissions, type LeagueState, type MissionSlot, type MissionsState } from './missions';
 import { isNameAllowed, randomName, sanitizeName } from './names';
 import { CARD_IDS, HISTORY_MAX, TRAINING_MAX, newCup, type CardId, type CupState } from './cup';
+import { newTutorial, tutorialState, type TutorialState } from './tutorial';
 
 export interface Boost {
   k: string;
@@ -87,6 +88,8 @@ export interface GameState {
    * la app sin pulsar "Recoger", no se pierden (lastTick ya avanzó y no se volverían a contar).
    */
   pendingOffline: OfflineReport | null;
+  /** Tutorial de Clara: paso actual y su progreso. */
+  tutorial: TutorialState;
   createdAt: number;
 }
 
@@ -155,6 +158,7 @@ export function newState(t: number): GameState {
     league: newLeague(),
     cup: newCup(),
     pendingOffline: null,
+    tutorial: newTutorial(),
     createdAt: t,
   };
 }
@@ -352,6 +356,8 @@ export function normalize(raw: unknown, t: number): GameState {
     league: leagueState(r.league),
     cup: cupState(r.cup),
     pendingOffline: offlineReport(r.pendingOffline),
+    // Sin campo: partida de antes del tutorial, que ya no lo necesita
+    tutorial: tutorialState(r.tutorial),
     createdAt: num(r.createdAt, t),
   };
 }

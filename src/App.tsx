@@ -19,6 +19,8 @@ import { ProfileTab } from './ui/ProfileTab';
 import { RankingTab, type BoardTab } from './ui/RankingTab';
 import { Toasts } from './ui/Toasts';
 import { TopBar } from './ui/TopBar';
+import { TutorialBubble, useTutorialEffects } from './ui/Tutorial';
+import { TUTORIAL_DONE } from './game/tutorial';
 import { UpgradesTab } from './ui/UpgradesTab';
 import { useUpdate } from './ui/update';
 
@@ -68,6 +70,8 @@ export default function App() {
     if (tabRef.current !== 'city') useGame.getState().toast('📜 ¡El consejo tiene una propuesta! Ve a Ciudad');
   }, []);
   useDecreeScheduler(onDecree);
+  useTutorialEffects();
+  const tutorialOn = useGame((st) => st.s.tutorial.step < TUTORIAL_DONE);
 
   // Música de la era: más baja mientras hay un minijuego abierto
   useEffect(() => {
@@ -165,7 +169,7 @@ export default function App() {
   }
 
   return (
-    <div className="app" style={{ '--hue': eraHue(era) } as CSSProperties}>
+    <div className={`app${tutorialOn ? ' tutorial-on' : ''}`} style={{ '--hue': eraHue(era) } as CSSProperties}>
       <TopBar />
       <main className="content" key={tab}>
         {tab === 'city' && <CityTab paused={!!game || !!visit || cupOpen || admin} />}
@@ -174,6 +178,7 @@ export default function App() {
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
         {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} onVisit={setVisit} />}
       </main>
+      {tutorialOn && <TutorialBubble tab={tab} onTab={setTab} />}
       <BottomNav tab={tab} onTab={setTab} />
 
       {tab === 'city' && !game && <GoldenBalloon />}

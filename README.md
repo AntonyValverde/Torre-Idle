@@ -52,6 +52,15 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - En Logros → Perfil → **Tu ciudad** puedes ver cómo la ven los demás y compartir un enlace (`?ciudad=UID`) que abre tu ciudad directamente.
 - El panel de administración también puede abrir la ciudad de cualquier jugador.
 
+## Tutorial de Clara
+
+- Un jugador nuevo conoce el juego con **Clara, su consejera**, en 9 pasos: tocar la ciudad, construir, comprar una mejora, firmar un decreto, girar la rueda, jugar un arcade y conocer las misiones. Cada paso da un pequeño premio y el último, 10 💎 y 2 🎟️.
+- Los pasos avanzan con los mismos eventos que las misiones ([tutorial.ts](src/game/tutorial.ts)).
+- Las secciones se abren poco a poco: Mejoras, decretos, Juegos y misiones durante el tutorial; Ranking, Logros, la Copa, la Bolsa, las Gemas y el Legado al terminarlo. Las pestañas cerradas muestran 🔒.
+- Se puede saltar en cualquier momento (se abre todo, sin los premios).
+- Las partidas de antes del tutorial no lo ven.
+- El panel de administración muestra el embudo: cuántos jugadores nuevos completan cada paso y cuántos lo saltan.
+
 ## Misiones y liga semanal
 
 - **Misiones diarias**: 3 al día, iguales para todos (una de ciudad, una de minijuego y una libre). Cada una da 💎, 🎟️ y puntos de liga. Completar las tres abre el **cofre del día** (gemas, boost x2 de 15 min y más puntos).

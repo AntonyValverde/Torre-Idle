@@ -389,6 +389,121 @@ img.splash-logo {
   font-size: 28px;
 }
 
+/* ---------- Tutorial (Clara) ---------- */
+
+.tutorial {
+  display: flex;
+  gap: 10px;
+  margin: 0 10px 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, hsl(var(--hue) 45% 22% / 0.97), hsl(calc(var(--hue) + 30) 45% 18% / 0.97));
+  border: 1px solid var(--accent);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.4),
+    0 0 18px rgba(255, 194, 61, 0.18);
+  animation: popIn 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.tut-avatar {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: radial-gradient(circle at 40% 35%, #ffe7a8, #f0a53c);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.tut-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tut-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tut-skip {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+.tut-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+.tut-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tut-progress .progress {
+  flex: 1;
+  height: 8px;
+}
+
+.tut-progress small {
+  font-weight: 800;
+  min-width: 38px;
+  text-align: right;
+}
+
+.tut-cta {
+  align-self: flex-start;
+}
+
+.tut-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tut-foot:empty {
+  display: none;
+}
+
+.tut-go {
+  font-weight: 800;
+  color: var(--accent);
+  font-size: 0.85rem;
+  padding: 2px 0;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.tut-reward {
+  margin-left: auto;
+  color: var(--good);
+  font-weight: 700;
+}
+
+/* Lo que señala Clara en el paso actual */
+.tut-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  animation: glowPulse 1.6s ease-in-out infinite;
+}
+
+/* Con la burbuja de Clara abajo, los avisos suben para no taparla */
+.tutorial-on .toasts {
+  bottom: calc(var(--nav-h) + 150px + var(--safe-bottom));
+}
+
 /* ---------- Listas ---------- */
 
 .section-head {
@@ -1170,6 +1285,24 @@ img.splash-logo {
 
 .badge.dot {
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* Pestañas que se abren con el tutorial */
+.bottom-nav button.locked {
+  opacity: 0.4;
+}
+
+.nav-lock {
+  position: absolute;
+  bottom: -4px;
+  right: -10px;
+  font-size: 13px;
+}
+
+/* La pestaña donde hay que ir en el paso actual del tutorial */
+.bottom-nav button.hint .nav-icon {
+  animation: pulse 0.9s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px var(--accent));
 }
 
 /* ---------- Modales y overlays ---------- */

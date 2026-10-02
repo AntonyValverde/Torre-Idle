@@ -3,6 +3,7 @@ import { maxTickets, ticketRegenMs } from '../game/economy';
 import { fmt, fmtClock, fmtTime } from '../game/format';
 import { STOCKS, saleValue, stockPrice } from '../game/stocks';
 import { useGame } from '../game/store';
+import { currentStep, isUnlocked } from '../game/tutorial';
 import { CupCard } from './cup/CupCard';
 
 export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro';
@@ -27,9 +28,11 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
   const untilTomorrow = fmtTime(msUntilTomorrow(t) / 1000);
   const portfolio = STOCKS.reduce((n, d) => n + (s.stocks[d.id] ? saleValue(s.stocks[d.id].u, stockPrice(d, s.lastTick)) : 0), 0);
 
+  const tut = currentStep(s)?.id;
+
   return (
     <div className="tab">
-      <CupCard onOpen={onCup} />
+      {isUnlocked(s, 'cup') && <CupCard onOpen={onCup} />}
 
       <div className="ticket-banner">
         <span className="ticket-big">🎟️ {s.tickets}/{max}</span>
@@ -76,7 +79,7 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
         <span className="game-cost">{parksDone ? '✅' : 'GRATIS'}</span>
       </button>
 
-      <button className={`game-card fortune${wheelFree ? '' : ' done'}`} onClick={() => onPlay('wheel')}>
+      <button className={`game-card fortune${wheelFree ? '' : ' done'}${tut === 'wheel' ? ' tut-target' : ''}`} onClick={() => onPlay('wheel')}>
         <span className="game-emoji">🎡</span>
         <div className="game-info">
           <b>Rueda de la fortuna</b>
@@ -86,7 +89,7 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
         <span className="game-cost">{wheelFree ? 'GRATIS' : '🎟️1'}</span>
       </button>
 
-      <div className="section-head">
+      <div className={`section-head${tut === 'arcade' ? ' tut-target' : ''}`}>
         <h2>Arcade</h2>
         <small className="muted">1 🎟️ por partida</small>
       </div>
@@ -163,19 +166,23 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
         <span className="game-cost">🎟️1</span>
       </button>
 
-      <div className="section-head">
-        <h2>Estrategia</h2>
-      </div>
+      {isUnlocked(s, 'stocks') && (
+        <>
+          <div className="section-head">
+            <h2>Estrategia</h2>
+          </div>
 
-      <button className="game-card stocks" onClick={() => onPlay('stocks')}>
-        <span className="game-emoji">📈</span>
-        <div className="game-info">
-          <b>Bolsa de la ciudad</b>
-          <small>Compra barato, vende caro. El mercado es el mismo para todos los jugadores.</small>
-          <small className="game-meta">{portfolio > 0 ? `Tu cartera: ${fmt(portfolio)} 🪙` : 'Invierte tus monedas'}</small>
-        </div>
-        <span className="game-cost">LIBRE</span>
-      </button>
+          <button className="game-card stocks" onClick={() => onPlay('stocks')}>
+            <span className="game-emoji">📈</span>
+            <div className="game-info">
+              <b>Bolsa de la ciudad</b>
+              <small>Compra barato, vende caro. El mercado es el mismo para todos los jugadores.</small>
+              <small className="game-meta">{portfolio > 0 ? `Tu cartera: ${fmt(portfolio)} 🪙` : 'Invierte tus monedas'}</small>
+            </div>
+            <span className="game-cost">LIBRE</span>
+          </button>
+        </>
+      )}
     </div>
   );
 }

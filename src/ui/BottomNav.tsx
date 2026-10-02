@@ -14,6 +14,7 @@ import {
 } from '../game/economy';
 import { claimableMissions } from '../game/missions';
 import { useGame } from '../game/store';
+import { currentStep, isUnlocked } from '../game/tutorial';
 
 export type TabId = 'city' | 'upgrades' | 'games' | 'ranking' | 'profile';
 
@@ -53,17 +54,34 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
     return null;
   };
 
+  // Tutorial: pestañas aún cerradas y la pestaña donde hay que hacer el paso actual
+  const step = currentStep(s);
+  const locked = (id: TabId) => id !== 'city' && !isUnlocked(s, id);
+
   return (
     <nav className="bottom-nav">
-      {TABS.map((t) => (
-        <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => onTab(t.id)}>
-          <span className="nav-icon">
-            {t.icon}
-            {badge(t.id)}
-          </span>
-          <span className="nav-label">{t.label}</span>
-        </button>
-      ))}
+      {TABS.map((t) => {
+        const closed = locked(t.id);
+        const hint = !!step?.event && step.tab === t.id && tab !== t.id;
+        const cls = [tab === t.id && 'active', closed && 'locked', hint && 'hint'].filter(Boolean).join(' ');
+        return (
+          <button
+            key={t.id}
+            className={cls}
+            aria-disabled={closed || undefined}
+            onClick={() => {
+              if (closed) useGame.getState().toast('🔒 Clara te lo enseñará muy pronto');
+              else onTab(t.id);
+            }}
+          >
+            <span className="nav-icon">
+              {t.icon}
+              {closed ? <span className="nav-lock">🔒</span> : badge(t.id)}
+            </span>
+            <span className="nav-label">{t.label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

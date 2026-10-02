@@ -88,6 +88,7 @@ import {
 } from './missions';
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
+import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
 
 export type { OfflineReport } from './state';
@@ -198,6 +199,9 @@ interface GameStore {
   /** Devuelve las monedas realmente invertidas (0 si no se pudo). */
   buyStock(id: string, coins: number): number;
   sellStock(id: string, fraction: number): { value: number; profit: number } | null;
+  /** Avanza un paso del tutorial que se completa con su botón. */
+  tutorialNext(): void;
+  tutorialSkip(): void;
   /** Devuelve un mensaje de error, o null si el nombre se guardó. */
   setName(name: string): string | null;
   toast(text: string): void;
@@ -834,6 +838,14 @@ export const useGame = create<GameStore>((set, get) => ({
     const flag = !!r?.flag;
     set({ s: { ...s, gems: s.gems + gems, cup: { ...s.cup, seasonClaimed: season, seasons: s.cup.seasons + (flag ? 1 : 0) } } });
     return { gems, flag };
+  },
+
+  tutorialNext() {
+    set({ s: tutorialNext(get().s) });
+  },
+
+  tutorialSkip() {
+    set({ s: tutorialSkip(get().s) });
   },
 
   setName(name) {

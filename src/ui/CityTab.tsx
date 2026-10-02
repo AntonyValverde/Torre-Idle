@@ -19,6 +19,7 @@ import {
 } from '../game/economy';
 import { fmt, fmtClock } from '../game/format';
 import { useGame } from '../game/store';
+import { currentStep, isUnlocked } from '../game/tutorial';
 import { CityScene } from './CityScene';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
@@ -41,10 +42,11 @@ export function CityTab({ paused = false }: { paused?: boolean }) {
 
   // Primer edificio bloqueado por era: se muestra como teaser de la próxima era
   const nextEraBuilding = BUILDINGS.find((_, i) => isBuildingEraLocked(s, i));
+  const tut = currentStep(s)?.id;
 
   return (
     <div className="tab city-tab">
-      <div className="scene-wrap">
+      <div className={`scene-wrap${tut === 'tap' ? ' tut-target' : ''}`}>
         <CityScene paused={paused} />
         <div className="scene-badge">
           Era {s.era} · {eraName(s.era)}
@@ -60,11 +62,11 @@ export function CityTab({ paused = false }: { paused?: boolean }) {
         </div>
       </div>
 
-      <MissionsCard />
+      {isUnlocked(s, 'missions') && <MissionsCard />}
 
       <DecreeCard />
 
-      <div className="section-head">
+      <div className={`section-head${tut === 'build' ? ' tut-target' : ''}`}>
         <h2>Edificios</h2>
         <div className="segmented">
           {AMOUNTS.map((a) => (

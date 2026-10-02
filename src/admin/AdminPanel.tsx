@@ -186,6 +186,16 @@ function SummaryView({
       </div>
 
       <div className="card">
+        <b>Tutorial de Clara</b>
+        <small className="muted">
+          {sum.tutorialPlayers
+            ? `Pasos completados por las ${sum.tutorialPlayers} partidas nuevas · ${sum.tutorialSkipped} lo saltaron`
+            : 'Aún no hay partidas creadas desde que existe el tutorial'}
+        </small>
+        {sum.tutorialPlayers > 0 && <BarList data={sum.tutorial} total={sum.tutorialPlayers} />}
+      </div>
+
+      <div className="card">
         <b>Jugadores por minijuego</b>
         <small className="muted">Cuántos lo han jugado al menos una vez</small>
         <BarList data={sum.adoption} total={sum.total} />
