@@ -62,6 +62,13 @@ export function headlines(s: GameState, d: PaperDelta | null): Story[] {
   if ((d.conqWins ?? 0) > 0) {
     out.push({ emoji: '⚔️', title: `¡${mayor} gana la Conquista de la semana!`, text: 'Una nueva bandera azul ondea junto al ayuntamiento.' });
   }
+  if ((d.conqTaken ?? 0) > 0) {
+    out.push({
+      emoji: '🏰',
+      title: `Las tropas de ${mayor} toman ${d.conqTaken} ${d.conqTaken === 1 ? 'territorio' : 'territorios'}`,
+      text: 'El mapa de la región se tiñe de azul. Los cronistas ya hablan de una campaña histórica.',
+    });
+  }
   if ((d.conqLost ?? 0) > 0) {
     out.push({
       emoji: '🏴',

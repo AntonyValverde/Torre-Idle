@@ -287,10 +287,23 @@ console.log('conquest (Conquista)');
     return b.commit();
   };
   // Ataque: el territorio de origen baja (y dice a dónde mandó) y el objetivo pasa al atacante, en el mismo lote
-  const attack = (db, uid, name, target, from, sent, left, g, { skipFrom = false } = {}) => {
+  // `p`: fuerza con bono de asalto; `assault`: apunta el bono en el alcalde (aAt) en el mismo lote
+  const attack = (db, uid, name, target, from, sent, left, g, { skipFrom = false, p, assault = false } = {}) => {
     const b = writeBatch(db);
     if (!skipFrom) b.update(doc(db, `${W}/tiles/${from}`), { name, g: left, t: serverTimestamp(), to: target, sent, from: '' });
-    b.set(doc(db, `${W}/tiles/${target}`), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, from, to: '' });
+    b.set(doc(db, `${W}/tiles/${target}`), {
+      owner: uid,
+      name,
+      g,
+      t: serverTimestamp(),
+      ct: serverTimestamp(),
+      capital: false,
+      sent,
+      ...(p === undefined ? {} : { p }),
+      from,
+      to: '',
+    });
+    if (assault) b.update(doc(db, `${W}/players/${uid}`), { aAt: serverTimestamp() });
     return b.commit();
   };
   // Refuerzo desde la reserva: la reserva baja y el territorio propio sube, en el mismo lote
@@ -360,6 +373,33 @@ console.log('conquest (Conquista)');
   await no('conquista: atacar diciendo que sale del propio objetivo', () => attack(bob, 'bob', 'Bob', '-2_2', '-2_2', 5, 0, 1));
   await no('conquista: escribir territorios a nombre de otro', () => attack(bob, 'alice', 'Alice', '-2_2', '-3_3', 5, 5, 0));
 
+  // Asalto: la fuerza `p` llega a x1,5 de los enviados si el alcalde apunta el bono (uno cada 10 min).
+  // -2_2 tiene 10 bandidos; alice ataca desde -3_3 con 20 soldados
+  await seed(`${W}/tiles/-3_3`, tileSeed('alice', 20, 0, 3600000));
+  await no('asalto: fuerza de más sin apuntar el bono', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 2, { p: 12 }));
+  await no('asalto: bono de más de x1,5', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 3, { p: 13, assault: true }));
+  await no('asalto: menos fuerza que soldados', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 12, 8, 2, { p: 11, assault: true }));
+  await no('asalto: sobreviven más de los enviados', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 8, { p: 12, assault: true }));
+  await no('asalto: guarnición inflada con el bono', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 3, { p: 12, assault: true }));
+  await ok('asalto: tomar bandidos con bono x1,5', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 2, { p: 12, assault: true }));
+  // 2_1 tiene 7 bandidos; alice ataca desde 1_1
+  await seed(`${W}/tiles/1_1`, tileSeed('alice', 20, 0, 3600000));
+  await no('asalto: otro bono antes de 10 min', () => attack(alice, 'alice', 'Alice', '2_1', '1_1', 6, 14, 2, { p: 9, assault: true }));
+  await no('asalto: apuntar otro bono suelto antes de 10 min', () =>
+    updateDoc(doc(alice, `${W}/players/alice`), { aAt: serverTimestamp() }),
+  );
+  await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `${W}/players/alice`), { aAt: ago(11 * 60000) }));
+  await no('asalto: mover la hora del bono al pasado', () =>
+    updateDoc(doc(alice, `${W}/players/alice`), { troops: 0, t: serverTimestamp(), last: '1_1', sent: 1, aAt: ago(3600000) }),
+  );
+  await ok('asalto: pasados 10 min, otro bono', () => attack(alice, 'alice', 'Alice', '2_1', '1_1', 6, 14, 2, { p: 9, assault: true }));
+  // Contra otro alcalde: alice tiene -1_3 con 10; bob ataca desde 0_2 con 20
+  await seed(`${W}/tiles/-1_3`, tileSeed('alice', 10, 0, 3600000));
+  await seed(`${W}/tiles/0_2`, tileSeed('bob', 20, 0, 3600000));
+  await no('asalto: sin bono, 8 no bastan contra 10', () => attack(bob, 'bob', 'Bob', '-1_3', '0_2', 8, 12, 0));
+  await no('asalto: con fuerza de más pero sin apuntar el bono', () => attack(bob, 'bob', 'Bob', '-1_3', '0_2', 8, 12, 1, { p: 12 }));
+  await ok('asalto: conquistar a otro alcalde con bono', () => attack(bob, 'bob', 'Bob', '-1_3', '0_2', 8, 12, 1, { p: 12, assault: true }));
+
   // Partes de batalla: van en el mismo lote que la conquista y solo los lee quien perdió el territorio
   await seed(`${W}/tiles/-2_1`, tileSeed('alice', 1, 3600000, 3600000));
   await seed(`${W}/tiles/-3_2`, tileSeed('bob', 30, 0, 3600000));
@@ -379,10 +419,10 @@ console.log('conquest (Conquista)');
   await ok('conquista: el que perdió lee sus partes', () => getDocs(collection(alice, `${W}/players/alice/reports`)));
   await no('conquista: nadie más los lee', () => getDocs(collection(bob, `${W}/players/alice/reports`)));
 
-  // Reclutas: hasta 30 al día, sumados a la reserva
+  // Reclutas: hasta 30 al día (45 con la ley Militar), sumados a la reserva
   const rec = (troops, rDay, rToday) => updateDoc(doc(alice, `${W}/players/alice`), { troops, t: serverTimestamp(), rDay, rToday });
   await no('conquista: reclutas de otro día', () => rec(5, future, 5));
-  await no('conquista: más de 30 reclutas', () => rec(31, today, 31));
+  await no('conquista: más de 45 reclutas', () => rec(46, today, 46));
   await no('conquista: tropas de más con los reclutas', () => rec(9, today, 5));
   await ok('conquista: sumar reclutas', () => rec(5, today, 5));
   await no('conquista: cobrar los mismos reclutas otra vez', () => rec(10, today, 5));

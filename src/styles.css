@@ -790,6 +790,17 @@ img.splash-logo {
   padding: 8px 12px;
 }
 
+.btn.conquest-assault {
+  flex: 0 0 auto;
+  border-color: #ffb02e;
+  color: #ffd27a;
+}
+
+.conquest-bonus {
+  color: #ffd27a;
+  font-weight: 700;
+}
+
 .conquest-ranking ol {
   list-style: none;
   margin: 0;

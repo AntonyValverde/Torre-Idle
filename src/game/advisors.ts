@@ -7,7 +7,7 @@ import type { GameState } from './state';
 export type Rarity = 'comun' | 'rara' | 'epica';
 
 /** Claves de efecto compartidas con las leyes de era (ver economy.ts). */
-export type AdvisorKey = 'prod' | 'tap' | 'crit' | 'offlineEff' | 'offlineHours' | 'arcadeCoins' | 'ticketRegen' | 'events';
+export type AdvisorKey = 'prod' | 'tap' | 'crit' | 'offlineEff' | 'offlineHours' | 'arcadeCoins' | 'ticketRegen' | 'events' | 'recruits';
 
 export type AdvisorEffect =
   /** Producción de unos edificios: x(1 + per·nivel). */
@@ -80,6 +80,14 @@ export const ADVISORS: AdvisorDef[] = [
     role: 'Taquillera',
     rarity: 'rara',
     effects: [{ type: 'div', key: 'ticketRegen', per: 0.1 }],
+  },
+  {
+    id: 'valeria',
+    emoji: '🎖️',
+    name: 'Valeria',
+    role: 'Generala',
+    rarity: 'rara',
+    effects: [{ type: 'mult', key: 'recruits', per: 0.5 }],
   },
   {
     id: 'aurelio',
@@ -227,6 +235,7 @@ const KEY_TEXT: Record<AdvisorKey, string> = {
   arcadeCoins: 'Monedas de arcade',
   ticketRegen: 'Recarga de tickets',
   events: 'Globos, decretos e incidentes',
+  recruits: 'Reclutas de la Conquista',
 };
 
 const num = (n: number) => String(Math.round(n * 100) / 100);

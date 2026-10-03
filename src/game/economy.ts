@@ -382,6 +382,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     desc: (v) => `Consigue ${v} puntos en Guerra de torres`,
   },
   {
+    id: 'conquer',
+    name: 'Señor de la guerra',
+    emoji: '⚔️',
+    threshold: fromList([1, 10, 25, 50, 100, 200, 350, 500], (k) => 750 + 250 * k),
+    stat: (s) => s.conquest.captured,
+    desc: (v) => `Conquista ${fmt(v)} ${v === 1 ? 'territorio' : 'territorios'} en la Conquista`,
+  },
+  {
     id: 'missions',
     name: 'Funcionario ejemplar',
     emoji: '📋',

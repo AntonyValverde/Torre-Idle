@@ -59,6 +59,8 @@ export interface TowersGame {
   packets: Packet[];
   /** Tiempo jugado en la batalla actual (ms). */
   t: number;
+  /** Duración máxima de la batalla (ms). */
+  limit: number;
   /** ms hasta que piensa cada rival (índice = dueño). */
   aiTimer: number[];
   /** Multiplicador de crecimiento de los rivales en esta batalla. */
@@ -178,6 +180,7 @@ function startBattle(g: Pick<TowersGame, 'battle'> & Partial<TowersGame>, rand: 
     adj,
     packets: [],
     t: 0,
+    limit: g.limit ?? BATTLE_MS,
     // El primer movimiento del rival llega un poco después que el tuyo
     aiTimer: [0, 0, think * 1.2, think * 1.5],
     aiRate: Math.min(1.6, 1 + 0.07 * (g.battle - 1)),
@@ -282,7 +285,7 @@ function finish(g: TowersGame, ev: TowersEvents, won: boolean) {
   if (won) {
     g.state = 'won';
     g.won++;
-    g.score += WIN_POINTS + Math.floor(Math.max(0, BATTLE_MS - g.t) / 15_000);
+    g.score += WIN_POINTS + Math.floor(Math.max(0, g.limit - g.t) / 15_000);
     ev.battleWon = true;
   } else {
     g.state = 'lost';
@@ -350,7 +353,7 @@ export function step(g: TowersGame, dt: number, rand: () => number): TowersEvent
   const meAlive = ownedBy(g, PLAYER) > 0 || g.packets.some((p) => p.owner === PLAYER);
   if (!meAlive) finish(g, ev, false);
   else if (!enemyAlive) finish(g, ev, true);
-  else if (g.t >= BATTLE_MS) finish(g, ev, ownedBy(g, PLAYER) > aiOwned(g));
+  else if (g.t >= g.limit) finish(g, ev, ownedBy(g, PLAYER) > aiOwned(g));
   return ev;
 }
 
@@ -367,3 +370,35 @@ export function randomTowers(): { game: TowersGame; rand: () => number } {
   const rand = mulberry32(Math.floor(Math.random() * 2 ** 32));
   return { game: newTowers(rand), rand };
 }
+
+// ---------- Asalto (Conquista) ----------
+// Antes de atacar un territorio en la Conquista se puede jugar una batalla corta: cuanto mejor sale,
+// más fuerza tienen los soldados enviados (como mucho x1,5, que es lo que aceptan las reglas).
+
+export const ASSAULT_MS = 40_000;
+export const ASSAULT_MAX = 1.5;
+
+/** Dificultad del asalto según los defensores del territorio: 1 (pocos) a 6 (la Torre central). */
+export function assaultLevel(defenders: number): number {
+  return Math.max(1, Math.min(6, 1 + Math.floor(defenders / 8)));
+}
+
+/** Batalla de asalto: una sola, más corta, sin pasar a la siguiente. */
+export function newAssault(level: number, rand: () => number): TowersGame {
+  return startBattle({ battle: level, limit: ASSAULT_MS }, rand);
+}
+
+/**
+ * Bono del asalto: x1,5 si eliminas al rival; si no, según las torres que acabes teniendo (sin contar
+ * la tuya del principio). Perder todas no da bono. Se redondea hacia abajo a pasos de 0,05.
+ */
+export function assaultMult(g: TowersGame): number {
+  const mine = ownedBy(g, PLAYER);
+  if (mine === 0) return 1;
+  if (aiOwned(g) === 0 && !g.packets.some((p) => isAi(p.owner))) return ASSAULT_MAX;
+  const share = (mine - 1) / Math.max(1, g.towers.length - 1);
+  return Math.min(ASSAULT_MAX - 0.05, 1 + Math.floor(share * 0.4 * 20 + 1e-9) / 20);
+}
+
+/** x1,25 · x1,3 · x1,5 */
+export const fmtMult = (m: number) => `x${String(Math.round(m * 100) / 100).replace('.', ',')}`;

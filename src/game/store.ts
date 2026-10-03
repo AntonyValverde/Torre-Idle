@@ -118,6 +118,7 @@ import {
   addRecruits,
   applyReports,
   applySeason,
+  withCapture,
   withReserve,
   withWorld,
   type Report,
@@ -225,6 +226,8 @@ interface GameStore {
   noteReserve(p: Reserve): void;
   readReports(): void;
   seeConquestIntro(): void;
+  /** Conquista: apunta un territorio conquistado (logro y periódico). */
+  noteCapture(): void;
   /** Conquista: cobra el premio de una temporada terminada (una vez). */
   claimConquest(week: string, rank: number, size: number, points: number): ReturnType<typeof seasonPrize> | null;
   /** Reclama una misión completada; devuelve el texto del premio o null. */
@@ -641,6 +644,10 @@ export const useGame = create<GameStore>((set, get) => ({
   seeConquestIntro() {
     const { s } = get();
     if (!s.conquest.intro) set({ s: { ...s, conquest: { ...s.conquest, intro: true } } });
+  },
+
+  noteCapture() {
+    set({ s: withCapture(get().s) });
   },
 
   claimConquest(week, rank, size, points) {

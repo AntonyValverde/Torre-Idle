@@ -346,7 +346,8 @@ service cloud.firestore {
     // Las reglas hacen de árbitro con las mismas cifras que src/game/conquest.ts: se ataca desde un territorio
     // propio con sus soldados (crecen 1 cada 4 min hasta 30; la capital, 1 cada 2 min hasta 60), la reserva
     // (1 cada 3 min hasta 60, más reclutas) solo refuerza, vecindad en la cuadrícula hexagonal y escudo de
-    // 30 min tras una conquista. Solo cuentan comparaciones: "x <= min(a, b)" se escribe "x <= a && x <= b".
+    // 30 min tras una conquista. El asalto (minijuego) multiplica la fuerza hasta x1,5, uno cada 10 min.
+    // Solo cuentan comparaciones: "x <= min(a, b)" se escribe "x <= a && x <= b".
     // ------------------------------------------------------------------
     function conqOpen(week) {
       return cupWeekOk(week) && cupElapsed(week) >= 0 && cupElapsed(week) < 604800000;
@@ -425,12 +426,13 @@ service cloud.firestore {
 
     match /conquest/{week}/worlds/{w}/players/{uid} {
       function shape(d) {
-        return d.keys().hasOnly(['name', 'slot', 'troops', 't', 'rDay', 'rToday', 'last', 'sent'])
+        return d.keys().hasOnly(['name', 'slot', 'troops', 't', 'rDay', 'rToday', 'last', 'sent', 'aAt'])
           && d.keys().hasAll(['name', 'slot', 'troops', 't', 'rDay', 'rToday', 'last', 'sent'])
           && validName(d.name)
           && d.troops is number && d.troops >= 0 && d.troops <= 200
-          && d.rToday is int && d.rToday >= 0 && d.rToday <= 30
-          && d.sent is int && d.last is string && d.rDay is string;
+          && d.rToday is int && d.rToday >= 0 && d.rToday <= 45
+          && d.sent is int && d.last is string && d.rDay is string
+          && (!('aAt' in d) || d.aAt is timestamp);
       }
 
       function joined() {
@@ -438,7 +440,7 @@ service cloud.firestore {
         return d.slot is int && d.slot >= 0 && d.slot < 16
           && d.slot == getAfter(/databases/$(database)/documents/conquest/$(week)/worlds/$(w)).data.members - 1
           && d.troops == 20 && d.t == request.time
-          && d.rDay == '' && d.rToday == 0 && d.last == '' && d.sent == 0
+          && d.rDay == '' && d.rToday == 0 && d.last == '' && d.sent == 0 && !('aAt' in d)
           && getAfter(/databases/$(database)/documents/conquest/$(week)/members/$(uid)).data.w == w
           && getAfter(conqDoc(week, w, 'tiles', conqSlots()[d.slot])).data.owner == uid;
       }
@@ -452,7 +454,15 @@ service cloud.firestore {
           && conqTroopsFit(old, d.troops + d.sent);
       }
 
-      // Reclutas por jugar: hasta 30 al día (los declara el móvil; las reglas solo ponen el tope)
+      // Ataque con bono de asalto: solo cambia `aAt`, y como mucho uno cada 10 min (el territorio lo comprueba)
+      function assault() {
+        let old = resource.data;
+        return onlyChanged(['aAt'])
+          && incoming().aAt == request.time
+          && (!('aAt' in old) || request.time > old.aAt + duration.value(10, 'm'));
+      }
+
+      // Reclutas por jugar: hasta 30 al día, 45 con la ley Militar (los declara el móvil; las reglas solo ponen el tope)
       function recruits() {
         let d = incoming();
         let old = resource.data;
@@ -466,7 +476,8 @@ service cloud.firestore {
       allow create: if isOwner(uid) && conqOpen(week) && shape(incoming()) && joined();
       allow update: if isOwner(uid) && conqOpen(week) && shape(incoming())
         && incoming().slot == resource.data.slot
-        && (sends() || recruits() || onlyChanged(['name']));
+        && (assault()
+          || (incoming().get('aAt', null) == resource.data.get('aAt', null) && (sends() || recruits() || onlyChanged(['name']))));
       allow delete: if isAdmin();
     }
 
@@ -479,17 +490,27 @@ service cloud.firestore {
     }
 
     match /conquest/{week}/worlds/{w}/tiles/{tid} {
-      // `to`/`sent`: el último ataque que salió de aquí; `from`/`sent`: de dónde llegaron los soldados
+      // `to`/`sent`: el último ataque que salió de aquí; `from`/`sent`: de dónde llegaron los soldados;
+      // `p`: fuerza con la que llegaron (los soldados por el bono del asalto)
       function shape(d) {
-        return d.keys().hasOnly(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from', 'to'])
+        return d.keys().hasOnly(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from', 'to', 'p'])
           && d.keys().hasAll(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from', 'to'])
           && d.owner == request.auth.uid && validName(d.name)
           && d.g is number && d.g >= 0 && d.capital is bool && d.sent is int && d.from is string && d.to is string
+          && (!('p' in d) || d.p is int)
           && d.t == request.time;
       }
 
       function me() {
         return getAfter(conqDoc(week, w, 'players', request.auth.uid)).data;
+      }
+
+      // Fuerza del ataque: los soldados enviados, o hasta x1,5 con un bono de asalto apuntado en este lote
+      function power() {
+        let d = incoming();
+        let p = d.get('p', d.sent);
+        return p >= d.sent && p * 2 <= d.sent * 3
+          && (p == d.sent || me().get('aAt', null) == request.time);
       }
 
       // Ataque: los soldados salen en este mismo lote de un territorio propio vecino (`from`), que baja
@@ -517,12 +538,15 @@ service cloud.firestore {
           && d.capital == true && d.g == 20 && d.ct == request.time && d.sent == 0 && d.from == '' && d.to == '';
       }
 
-      // Territorio de bandidos (sin documento): hay que mandar más que su guarnición fija
+      // Territorio de bandidos (sin documento): la fuerza tiene que pasar su guarnición fija; quedan los
+      // que sobran, sin pasar de los enviados
       function bandits() {
         let d = incoming();
-        return !(tid in conqSlots()) && fromTile()
+        let p = d.get('p', d.sent);
+        return !(tid in conqSlots()) && fromTile() && power()
           && d.capital == false && d.ct == request.time
-          && d.sent > conqBandits(tid) && d.g == d.sent - conqBandits(tid);
+          && p > conqBandits(tid) && d.g <= d.sent && d.g + conqBandits(tid) <= p
+          && (d.g == d.sent || d.g + conqBandits(tid) == p);
       }
 
       // Salida de un ataque: el territorio propio pierde los soldados que manda al vecino `to`
@@ -548,11 +572,12 @@ service cloud.firestore {
         let d = incoming();
         let old = resource.data;
         let grown = old.g + conqSince(old) / 240000.0;
+        let p = d.get('p', d.sent);
         return old.owner != request.auth.uid && old.capital == false
-          && request.time > old.ct + duration.value(30, 'm') && fromTile()
+          && request.time > old.ct + duration.value(30, 'm') && fromTile() && power()
           && d.capital == false && d.ct == request.time
-          && d.sent > old.g && (d.sent > 30 || d.sent > grown)
-          && d.g + old.g <= d.sent && (d.g + 30 <= d.sent || d.g + grown <= d.sent);
+          && p > old.g && (p > 30 || p > grown)
+          && d.g <= d.sent && d.g + old.g <= p && (d.g + 30 <= p || d.g + grown <= p);
       }
 
       allow read: if true;

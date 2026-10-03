@@ -25,6 +25,7 @@ import {
   START_TROOPS,
   TROOP_MAX,
   WORLD_MAX,
+  attackPower,
   banditGarrison,
   garrisonAt,
   standings,
@@ -126,6 +127,7 @@ function parsePlayer(uid: string, x: DocumentData): Player {
     t: ms(x.t),
     rDay: str(x.rDay),
     rToday: Math.floor(num(x.rToday)),
+    aAt: x.aAt ? ms(x.aAt) : 0,
   };
 }
 
@@ -172,21 +174,37 @@ export function watchWorld(week: string, w: string, onData: (data: WorldData) =>
 /**
  * Ataca `target` con `sent` soldados del territorio propio vecino `from`. Las cuentas usan el margen de
  * reloj (SKEW_MS) para que el servidor nunca vea más soldados en el origen ni menos en el objetivo.
+ * `mult`: bono del asalto (1 = sin asalto); la fuerza `p` es lo que cuenta contra los defensores, pero
+ * nunca sobreviven más soldados de los enviados.
  */
-export async function attackFrom(week: string, w: string, uid: string, name: string, from: string, target: string, sent: number, world: WorldData, at: number) {
+export async function attackFrom(
+  week: string,
+  w: string,
+  uid: string,
+  name: string,
+  from: string,
+  target: string,
+  sent: number,
+  world: WorldData,
+  at: number,
+  mult = 1,
+) {
   const d = need();
   const src = world.tiles.get(from);
   if (!src || src.owner !== uid) throw new Error('Ese territorio ya no es tuyo');
   const left = garrisonAt(src, at - SKEW_MS) - sent;
   if (left < 0) throw new Error('No tiene tantos soldados');
+  const p = attackPower(sent, mult);
   const tile = world.tiles.get(target);
-  const g = tile ? sent - Math.ceil(garrisonAt(tile, at + SKEW_MS)) : sent - banditGarrison(target);
+  const g = Math.min(sent, tile ? p - Math.ceil(garrisonAt(tile, at + SKEW_MS)) : p - banditGarrison(target));
   if (g < 0 || (!tile && g === 0)) throw new Error('No son suficientes soldados');
   const base = ['conquest', week, 'worlds', w] as const;
   const b = writeBatch(d);
   // El origen baja (y dice a dónde mandó cuántos); el objetivo pasa a ser tuyo con lo que sobra
   b.update(doc(d, ...base, 'tiles', from), { name, g: left, t: serverTimestamp(), to: target, sent, from: '' });
-  b.set(doc(d, ...base, 'tiles', target), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, from, to: '' });
+  b.set(doc(d, ...base, 'tiles', target), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, p, from, to: '' });
+  // Con bono de asalto: queda apuntado (las reglas solo dejan uno cada 10 min)
+  if (p > sent) b.update(doc(d, ...base, 'players', uid), { aAt: serverTimestamp() });
   // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver)
   if (tile) b.set(doc(collection(d, ...base, 'players', tile.owner, 'reports')), { by: uid, name, tile: target, at: serverTimestamp() });
   await b.commit();

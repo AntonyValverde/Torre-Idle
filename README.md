@@ -64,7 +64,9 @@ Pestaña ⚔️ Conquista del Mapa del mundo. Va en la misma semana que la Copa 
 - **Mapa** hexagonal de 61 territorios. Los que no tienen dueño son de bandidos, con 4 de guarnición en el borde y hasta 13 junto a la **Torre central**, que tiene 40 y vale 3 puntos.
 - **Soldados**: como en la Guerra de torres, cada territorio genera soldados. Tu capital, 1 cada 2 min hasta 60; los demás, 1 cada 4 min hasta 30.
 - **Combate**: tocas un territorio tuyo (el origen, con borde blanco) y luego un vecino con borde claro, y lo atacas con los soldados del origen. Si mandas más de los que tiene, es tuyo, con la diferencia y un **escudo** de 30 min. Si no eliges origen, ataca el vecino tuyo con más soldados. Si al origen le faltan soldados, el botón dice cuándo los tendrá.
-- **Reserva**: se recarga sola (1 cada 3 min, hasta 60) y solo sirve para **reforzar** tus territorios. Las misiones (+5), los retos diarios (+5) y los incidentes resueltos (+3) dan **reclutas** extra para la reserva, como mucho 30 al día. Se suman al abrir la Conquista.
+- **Asalto**: antes de atacar puedes jugar una batalla corta (40 s) de la Guerra de torres, más difícil cuantos más defensores haya. Si eliminas al rival, tus soldados atacan con x1,5 de fuerza; si no, el bono depende de las torres que tengas al final. Sobreviven como mucho los soldados enviados. Se puede usar un bono cada 10 min. Las reglas no ven el minijuego: solo aceptan una fuerza `p` de hasta 1,5 veces los enviados y exigen que el alcalde apunte `aAt` en el mismo lote, una vez cada 10 min ([AssaultScreen.tsx](src/minigames/towers/AssaultScreen.tsx)).
+- **Reserva**: se recarga sola (1 cada 3 min, hasta 60) y solo sirve para **reforzar** tus territorios. Las misiones (+5), los retos diarios (+5) y los incidentes resueltos (+3) dan **reclutas** extra para la reserva, como mucho 30 al día. Se suman al abrir la Conquista. La **ley Militar** dobla los reclutas y sube el tope a 45, y la **Generala Valeria** (consejera rara) los multiplica x1,5 por nivel.
+- **Logro** ⚔️ *Señor de la guerra*: territorios conquistados en total. Las conquistas también salen en La Gaceta.
 - **Clasificación**: un punto por territorio, en vivo.
 - **Firestore**:
   - `conquest/{lunes}/members/{uid}`: en qué mundo juega cada alcalde.
@@ -139,9 +141,9 @@ Pestaña ⚔️ Conquista del Mapa del mundo. Va en la misma semana que la Copa 
   - En el nivel 2 hay que elegir una de dos mejoras. El nivel 3 es una piedra angular, y solo puede haber una activa en toda la ciudad: 👑 Ciudad que nunca duerme, ✋ Toque maestro o 🏆 Pase VIP.
   - Reorganizar devuelve todas las estrellas gastadas. Es gratis una vez por era (se renueva al refundar); si no, cuesta 50 💎.
   - Las mejoras de legado de antes conservan su nivel dentro de su rama.
-- **Leyes de era**: desde la era 2, cada era se rige por una ley que eliges entre tres (las mismas para todos los que están en esa era). Cada ley tiene una ventaja y una desventaja: industrial (producción x1.75, toques ÷2), activa, turística, tecnológica, lúdica, nocturna, constructora o de feria. Rige hasta la próxima refundación ([laws.ts](src/game/laws.ts)).
+- **Leyes de era**: desde la era 2, cada era se rige por una ley que eliges entre tres (las mismas para todos los que están en esa era). Cada ley tiene una ventaja y una desventaja: industrial (producción x1.75, toques ÷2), activa, turística, tecnológica, lúdica, nocturna, constructora, de feria, del azar o militar (reclutas de la Conquista). Rige hasta la próxima refundación ([laws.ts](src/game/laws.ts)).
 - **Consejeros** (Mejoras → 🧑‍💼 Consejo):
-  - 14 consejeros coleccionables: comunes (8, mejoran parejas de edificios), raros (toques, offline, arcade, tickets) y épicos (producción global, suerte).
+  - 15 consejeros coleccionables: comunes (8, mejoran parejas de edificios), raros (toques, offline, arcade, tickets, reclutas de la Conquista) y épicos (producción global, suerte).
   - Salen en sobres: el primero es de regalo, y hay uno en el cofre del día y en cada misión semanal; también se compran por 20 💎.
   - Las copias repetidas los suben de nivel sin límite (nivel 2 con 3 copias, nivel 3 con 6…).
   - Solo dan su ventaja los que se sientan en el consejo: 2 sillas, y una más en las eras 3, 6 y 10. Sus efectos se combinan con la ley de la era ([advisors.ts](src/game/advisors.ts)).

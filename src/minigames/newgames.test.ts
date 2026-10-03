@@ -137,6 +137,38 @@ describe('Guerra de torres', () => {
     expect(towers.step(h, 20, mulberry32(1)).battleLost).toBe(true);
   });
 
+  it('asalto: una batalla corta cuya dificultad sube con los defensores', () => {
+    expect(towers.assaultLevel(4)).toBe(1);
+    expect(towers.assaultLevel(13)).toBe(2);
+    expect(towers.assaultLevel(40)).toBe(6);
+    expect(towers.assaultLevel(999)).toBe(6);
+    const g = towers.newAssault(3, mulberry32(5));
+    expect(g.limit).toBe(towers.ASSAULT_MS);
+    expect(g.towers).toHaveLength(towers.towerCount(3));
+    g.aiTimer = [0, 0, 1e9, 1e9];
+    g.t = towers.ASSAULT_MS - 10;
+    expect(towers.step(g, 20, mulberry32(1)).battleLost).toBe(true);
+    expect(towers.newTowers(mulberry32(5)).limit).toBe(towers.BATTLE_MS);
+  });
+
+  it('asalto: el bono va de x1 (sin torres nuevas) a x1,5 (rival eliminado)', () => {
+    const g = towers.newAssault(1, mulberry32(7));
+    expect(towers.assaultMult(g)).toBe(1);
+    const neutrals = g.towers.map((t, i) => (t.owner === towers.NEUTRAL ? i : -1)).filter((i) => i >= 0);
+    g.towers[neutrals[0]].owner = towers.PLAYER;
+    g.towers[neutrals[1]].owner = towers.PLAYER;
+    const two = towers.assaultMult(g);
+    expect(two).toBeGreaterThan(1);
+    expect(two).toBeLessThan(1.5);
+    expect(Math.round(two * 20)).toBeCloseTo(two * 20, 6);
+    for (const t of g.towers) if (t.owner !== towers.PLAYER) t.owner = towers.PLAYER;
+    expect(towers.assaultMult(g)).toBe(1.5);
+    for (const t of g.towers) t.owner = 2;
+    expect(towers.assaultMult(g)).toBe(1);
+    expect(towers.fmtMult(1.5)).toBe('x1,5');
+    expect(towers.fmtMult(1.25)).toBe('x1,25');
+  });
+
   it('el rival ataca si puede ganar una torre vecina', () => {
     const g = towers.newTowers(mulberry32(11));
     const ai = g.towers.findIndex((t) => t.owner === 2);

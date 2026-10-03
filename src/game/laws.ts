@@ -31,9 +31,13 @@ export interface LawEffects {
   casinoBonus?: number;
   /** Precio en monedas de las fichas del casino. */
   chipPrice?: number;
+  /** Reclutas de la Conquista por cada actividad. */
+  recruits?: number;
+  /** Tope diario de reclutas de la Conquista (no es multiplicador: sustituye al normal). */
+  recruitCap?: number;
 }
 
-type MultKey = Exclude<keyof LawEffects, 'crit' | 'offlineHours'>;
+type MultKey = Exclude<keyof LawEffects, 'crit' | 'offlineHours' | 'recruitCap'>;
 type AddKey = 'crit' | 'offlineHours';
 
 export interface LawDef {
@@ -110,6 +114,14 @@ export const LAWS: LawDef[] = [
     pro: 'Casino: bono diario x3 y fichas 30% más baratas',
     con: 'Edificios 10% más caros',
     fx: { casinoBonus: 3, chipPrice: 0.7, buildCost: 1.1 },
+  },
+  {
+    id: 'militar',
+    emoji: '⚔️',
+    name: 'Ciudad militar',
+    pro: 'Conquista: reclutas x2 y hasta 45 al día',
+    con: 'Producción x0.9',
+    fx: { recruits: 2, recruitCap: 45, prod: 0.9 },
   },
 ];
 

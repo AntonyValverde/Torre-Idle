@@ -1,5 +1,7 @@
 import { hashString } from '../minigames/rng';
+import { advisorMult } from './advisors';
 import { cupStart, cupWeekKey } from './cup';
+import { currentLaw, lawMult } from './laws';
 import type { GameState } from './state';
 
 // Conquista: una temporada por semana (lunes a domingo, hora de Costa Rica, como la Copa) en mundos de
@@ -17,8 +19,9 @@ export const TROOP_MS = 180_000;
 export const TROOP_CAP = 60;
 export const TROOP_MAX = 200;
 export const START_TROOPS = 20;
-/** Reclutas por actividad: como mucho tantos al día. */
+/** Reclutas por actividad: como mucho tantos al día (45 con la ley Militar; las reglas aceptan 45). */
 export const RECRUITS_DAY = 30;
+export const RECRUITS_MAX = 45;
 export const RECRUIT_MISSION = 5;
 export const RECRUIT_DAILY = 5;
 export const RECRUIT_INCIDENT = 3;
@@ -39,6 +42,13 @@ export const CENTER_VALUE = 3;
  * como si fuera un poco antes y las guarniciones enemigas, un poco después.
  */
 export const SKEW_MS = 20_000;
+/**
+ * Asalto: antes de atacar se puede jugar una batalla corta de la Guerra de torres que multiplica la
+ * fuerza de los soldados enviados, como mucho x1,5. Las reglas no pueden ver el minijuego, así que solo
+ * ponen el tope y dejan usar un ataque con bono cada 10 min por alcalde.
+ */
+export const ASSAULT_MAX = 1.5;
+export const ASSAULT_COOLDOWN_MS = 10 * 60_000;
 
 /** Casillas de capital (en el anillo exterior), en el orden en que se reparten. */
 export const CAPITAL_SLOTS = [
@@ -131,6 +141,28 @@ export interface Player {
   t: number;
   rDay: string;
   rToday: number;
+  /** Último ataque con bono de asalto (0 si nunca). */
+  aAt: number;
+}
+
+/** Fuerza de un ataque: los soldados por el bono del asalto (con tope), redondeada hacia abajo. */
+export function attackPower(sent: number, mult = 1): number {
+  const m = Math.min(ASSAULT_MAX, Math.max(1, mult));
+  return Math.floor(sent * m + 1e-9);
+}
+
+/** Soldados que hay que enviar para llegar a una fuerza `need` con un bono dado. */
+export function soldiersFor(need: number, mult = 1): number {
+  let n = Math.max(1, Math.ceil(need / Math.min(ASSAULT_MAX, Math.max(1, mult))));
+  while (n > 1 && attackPower(n - 1, mult) >= need) n--;
+  while (attackPower(n, mult) < need) n++;
+  return n;
+}
+
+/** Milisegundos hasta poder usar otro bono de asalto (0 si ya se puede). Cuenta el margen de reloj. */
+export function assaultWaitMs(p: Pick<Player, 'aAt'>, ms: number): number {
+  if (!p.aAt) return 0;
+  return Math.max(0, p.aAt + ASSAULT_COOLDOWN_MS + SKEW_MS - ms);
 }
 
 /** Soldados de un territorio con dueño (crecen hasta su tope; lo que pasa del tope por refuerzos se queda). */
@@ -286,6 +318,8 @@ export interface ConquestState {
   reserve: Reserve | null;
   /** Clara ya presentó la Conquista. */
   intro: boolean;
+  /** Territorios conquistados en total (logro y periódico). */
+  captured: number;
 }
 
 export type Reserve = Pick<Player, 'troops' | 't' | 'rDay' | 'rToday'>;
@@ -309,6 +343,7 @@ export function newConquest(): ConquestState {
     unread: 0,
     reserve: null,
     intro: false,
+    captured: 0,
   };
 }
 
@@ -327,7 +362,7 @@ export function conquestState(v: unknown): ConquestState {
   const r = v as Partial<ConquestState>;
   return {
     day: text(r.day),
-    recruits: Math.min(RECRUITS_DAY, count(r.recruits)),
+    recruits: Math.min(RECRUITS_MAX, count(r.recruits)),
     week: text(r.week),
     w: text(r.w),
     seenAt: count(r.seenAt),
@@ -350,7 +385,13 @@ export function conquestState(v: unknown): ConquestState {
     unread: count(r.unread),
     reserve: reserveOf(r.reserve),
     intro: r.intro === true,
+    captured: count(r.captured),
   };
+}
+
+/** Apunta un territorio conquistado. */
+export function withCapture(s: GameState): GameState {
+  return { ...s, conquest: { ...s.conquest, captured: s.conquest.captured + 1 } };
 }
 
 /** Guarda la foto de la reserva (solo si cambió). */
@@ -424,10 +465,20 @@ export function applySeason(s: GameState, week: string, rank: number, size: numb
   return { s: { ...s, gems: s.gems + prize.gems, tickets: s.tickets + prize.tickets, conquest }, prize };
 }
 
-/** Suma reclutas de hoy por jugar (con el tope diario). */
+/** Tope diario de reclutas: 30, o el de la ley de la era (la Militar lo sube a 45). */
+export function recruitCap(s: GameState): number {
+  return Math.min(RECRUITS_MAX, currentLaw(s)?.fx.recruitCap ?? RECRUITS_DAY);
+}
+
+/** Multiplicador de reclutas: ley Militar y la Generala en el consejo. */
+export function recruitMult(s: GameState): number {
+  return lawMult(s, 'recruits') * advisorMult(s, 'recruits');
+}
+
+/** Suma reclutas de hoy por jugar (con el multiplicador y el tope diario). */
 export function addRecruits(s: GameState, n: number, day: string): GameState {
   const before = s.conquest.day === day ? s.conquest.recruits : 0;
-  const recruits = Math.min(RECRUITS_DAY, before + n);
+  const recruits = Math.max(before, Math.min(recruitCap(s), before + Math.round(n * recruitMult(s))));
   if (recruits === s.conquest.recruits && s.conquest.day === day) return s;
   return { ...s, conquest: { ...s.conquest, day, recruits } };
 }

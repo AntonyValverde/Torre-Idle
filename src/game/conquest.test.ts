@@ -9,6 +9,14 @@ import {
   GROW_MS,
   msUntilGarrison,
   RECRUITS_DAY,
+  RECRUITS_MAX,
+  ASSAULT_COOLDOWN_MS,
+  ASSAULT_MAX,
+  assaultWaitMs,
+  attackPower,
+  recruitCap,
+  soldiersFor,
+  withCapture,
   SHIELD_MS,
   SKEW_MS,
   TILE_CAP,
@@ -40,7 +48,7 @@ import {
   type Tile,
 } from './conquest';
 import { citySnapshot } from './cities';
-import { newState, normalize } from './state';
+import { newState, normalize, type GameState } from './state';
 
 const tile = (id: string, owner: string, extra: Partial<Tile> = {}): Tile => ({ id, owner, name: owner, g: 10, t: 0, ct: -1e9, capital: false, ...extra });
 const map = (...ts: Tile[]) => new Map(ts.map((t) => [t.id, t]));
@@ -80,7 +88,10 @@ describe('Conquista: mapa', () => {
     expect(rules).toContain(`/ ${GROW_MS}.0`);
     expect(rules).toContain(`x <= ${TROOP_CAP}`);
     expect(rules).toContain(`duration.value(${SHIELD_MS / 60_000}, 'm')`);
-    expect(rules).toContain(`d.rToday <= ${RECRUITS_DAY}`);
+    expect(rules).toContain(`d.rToday <= ${RECRUITS_MAX}`);
+    expect(rules).toContain(`duration.value(${ASSAULT_COOLDOWN_MS / 60_000}, 'm')`);
+    expect(rules).toContain(`p * 2 <= d.sent * 3`);
+    expect(ASSAULT_MAX).toBe(1.5);
   });
 });
 
@@ -153,9 +164,9 @@ describe('Conquista: clasificación, colores y temporada', () => {
     const rows = standings(
       [tile('-4_4', 'a', { capital: true }), tile(CENTER, 'b'), tile('4_-4', 'b', { capital: true }), tile('-4_3', 'a'), tile('-3_3', 'a')],
       [
-        { uid: 'a', name: 'Ana', slot: 0, troops: 0, t: 0, rDay: '', rToday: 0 },
-        { uid: 'b', name: 'Beto', slot: 1, troops: 0, t: 0, rDay: '', rToday: 0 },
-        { uid: 'c', name: 'Caro', slot: 2, troops: 0, t: 0, rDay: '', rToday: 0 },
+        { uid: 'a', name: 'Ana', slot: 0, troops: 0, t: 0, rDay: '', rToday: 0, aAt: 0 },
+        { uid: 'b', name: 'Beto', slot: 1, troops: 0, t: 0, rDay: '', rToday: 0, aAt: 0 },
+        { uid: 'c', name: 'Caro', slot: 2, troops: 0, t: 0, rDay: '', rToday: 0, aAt: 0 },
       ],
     );
     expect(rows.map((r) => [r.name, r.tiles, r.points, r.center])).toEqual([
@@ -202,7 +213,7 @@ describe('Conquista: reclutas en la partida', () => {
     expect(normalize({ coins: 1 }, 0).conquest).toEqual(newConquest());
     expect(conquestState({ day: '2026-10-02', recruits: 999, wins: -3, reports: [{ by: 'x' }, { by: 'b', name: 'Bruno', tile: '1_0', at: 5 }] })).toMatchObject({
       day: '2026-10-02',
-      recruits: RECRUITS_DAY,
+      recruits: RECRUITS_MAX,
       wins: 0,
       reports: [{ by: 'b', name: 'Bruno', tile: '1_0', at: 5 }],
     });
@@ -265,5 +276,58 @@ describe('Conquista: partes de batalla y premios', () => {
     expect(applySeason(s, '2026-09-28', 1, 4, 10)).toBeNull();
     expect(citySnapshot(s).conq).toBe(1);
     expect(citySnapshot(newState(0)).conq).toBeUndefined();
+  });
+});
+
+describe('Conquista: asalto, ley Militar, Generala y logro (F3)', () => {
+  it('el bono del asalto multiplica la fuerza con tope x1,5, redondeando hacia abajo', () => {
+    expect(attackPower(10)).toBe(10);
+    expect(attackPower(10, 1.25)).toBe(12);
+    expect(attackPower(10, 1.5)).toBe(15);
+    expect(attackPower(10, 3)).toBe(15);
+    expect(attackPower(10, 0.5)).toBe(10);
+    // Siempre dentro de lo que aceptan las reglas: p * 2 <= enviados * 3
+    for (let n = 1; n < 80; n++) for (const m of [1, 1.05, 1.2, 1.35, 1.45, 1.5]) expect(attackPower(n, m) * 2).toBeLessThanOrEqual(n * 3);
+  });
+
+  it('con bono bastan menos soldados, y nunca menos de los justos', () => {
+    expect(soldiersFor(11)).toBe(11);
+    expect(soldiersFor(11, 1.5)).toBe(8);
+    for (let need = 1; need < 70; need++)
+      for (const m of [1, 1.1, 1.25, 1.4, 1.5]) {
+        const n = soldiersFor(need, m);
+        expect(attackPower(n, m)).toBeGreaterThanOrEqual(need);
+        if (n > 1) expect(attackPower(n - 1, m)).toBeLessThan(need);
+      }
+  });
+
+  it('un bono cada 10 min (más el margen de reloj)', () => {
+    expect(assaultWaitMs({ aAt: 0 }, 5)).toBe(0);
+    expect(assaultWaitMs({ aAt: 1000 }, 1000)).toBe(ASSAULT_COOLDOWN_MS + SKEW_MS);
+    expect(assaultWaitMs({ aAt: 1000 }, 1000 + ASSAULT_COOLDOWN_MS + SKEW_MS)).toBe(0);
+  });
+
+  it('la ley Militar dobla los reclutas y sube el tope a 45; la Generala los multiplica', () => {
+    const day = '2026-10-02';
+    const militar: GameState = { ...newState(0), law: 'militar' };
+    expect(recruitCap(newState(0))).toBe(RECRUITS_DAY);
+    expect(recruitCap(militar)).toBe(RECRUITS_MAX);
+    expect(addRecruits(militar, 5, day).conquest.recruits).toBe(10);
+    let s = militar;
+    for (let i = 0; i < 10; i++) s = addRecruits(s, 5, day);
+    expect(s.conquest.recruits).toBe(RECRUITS_MAX);
+    // Si cambia la ley a mitad del día, no se pierde lo ganado
+    expect(addRecruits({ ...s, law: null }, 5, day).conquest.recruits).toBe(RECRUITS_MAX);
+    const base = newState(0);
+    const general = { ...base, advisors: { ...base.advisors, copies: { valeria: 1 }, seats: ['valeria'] } };
+    expect(addRecruits(general, 5, day).conquest.recruits).toBe(8);
+  });
+
+  it('cada conquista cuenta para el logro Señor de la guerra', () => {
+    let s = newState(0);
+    expect(s.conquest.captured).toBe(0);
+    s = withCapture(withCapture(s));
+    expect(s.conquest.captured).toBe(2);
+    expect(conquestState({ captured: 7.9 }).captured).toBe(7);
   });
 });

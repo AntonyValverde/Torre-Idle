@@ -6,14 +6,17 @@ import { useGame, type ThiefReward } from '../../game/store';
 import { celebrate } from '../../ui/celebrate';
 import { sfx, tone, vibrate } from '../../ui/haptics';
 import { GameScreen, Modal } from '../../ui/Modal';
+import { mulberry32 } from '../rng';
 import {
-  BATTLE_MS,
   FIELD_H,
   FIELD_W,
   NEUTRAL,
   PLAYER,
+  assaultMult,
+  fmtMult,
   isAi,
   linked,
+  newAssault,
   nextBattle,
   ownedBy,
   packetPos,
@@ -44,15 +47,35 @@ export interface TowersSummary {
   score: number;
   won: number;
   captured: number;
+  /** Bono del asalto (en una partida normal no se usa). */
+  mult: number;
 }
 
 let flashId = 0;
 
 const radius = (t: Tower) => (t.big ? 7.5 : 6);
 
-export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary) => void; onScore: (r: TowersSummary) => void }) {
+/**
+ * Pantalla de la Guerra de torres. Con `assault` es una sola batalla corta (el asalto de la Conquista)
+ * que termina al ganarla, perderla o acabarse el tiempo; lo que cuenta es el bono.
+ */
+export function TowersGameView({
+  onOver,
+  onScore,
+  assault,
+}: {
+  onOver: (r: TowersSummary) => void;
+  onScore: (r: TowersSummary) => void;
+  assault?: { level: number };
+}) {
   const init = useRef<ReturnType<typeof randomTowers> | null>(null);
-  if (!init.current) init.current = randomTowers();
+  if (!init.current) {
+    if (assault) {
+      const r = mulberry32(Math.floor(Math.random() * 2 ** 32));
+      init.current = { game: newAssault(assault.level, r), rand: r };
+    } else init.current = randomTowers();
+  }
+  const single = !!assault;
   const rand = init.current.rand;
   const game = useRef<TowersGame>(init.current.game);
   const start = useRef(performance.now() + COUNTDOWN);
@@ -67,7 +90,7 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
     cb.current = { onOver, onScore };
   });
 
-  const summary = (g: TowersGame): TowersSummary => ({ score: g.score, won: g.won, captured: g.captured });
+  const summary = (g: TowersGame): TowersSummary => ({ score: g.score, won: g.won, captured: g.captured, mult: assaultMult(g) });
 
   useEffect(() => {
     let raf = 0;
@@ -77,7 +100,7 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
       const dt = Math.min(50, t - last);
       last = t;
       let g = game.current;
-      if (g.state === 'won' && t >= nextAt.current) {
+      if (g.state === 'won' && !single && t >= nextAt.current) {
         g = game.current = nextBattle(g, rand);
         start.current = t + NEXT_COUNTDOWN;
         drag.current = null;
@@ -101,6 +124,7 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
           nextAt.current = t + BETWEEN;
           sfx('win');
           celebrate(2);
+          if (single) endTimer = setTimeout(() => cb.current.onOver(summary(g)), 1400);
         }
         if (ev.battleLost) {
           vibrate([80, 50, 160]);
@@ -110,7 +134,7 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
       }
       flashes.current = flashes.current.filter((x) => t - x.at < 900);
       setFrame((f) => f + 1);
-      if (g.over && flashes.current.length === 0) return;
+      if ((g.over || (single && g.state !== 'play')) && flashes.current.length === 0) return;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -118,7 +142,7 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
       cancelAnimationFrame(raf);
       clearTimeout(endTimer);
     };
-  }, [rand]);
+  }, [rand, single]);
 
   const toField = (e: ReactPointerEvent) => {
     const el = svg.current;
@@ -190,7 +214,7 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
   const t = performance.now();
   const counting = g.state === 'play' && t < start.current;
   const countNum = Math.ceil((start.current - t) / 800);
-  const left = Math.max(0, BATTLE_MS - g.t);
+  const left = Math.max(0, g.limit - g.t);
   const total = g.towers.length;
   const mine = ownedBy(g, PLAYER);
   const neutral = ownedBy(g, NEUTRAL);
@@ -203,14 +227,23 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
   return (
     <div className="towers-wrap">
       <div className="thief-hud">
-        <div>
-          <small>Puntos</small>
-          <b>{g.score}</b>
-        </div>
-        <div>
-          <small>Batalla</small>
-          <b>{g.battle}</b>
-        </div>
+        {single ? (
+          <div>
+            <small>Bono</small>
+            <b>{fmtMult(assaultMult(g))}</b>
+          </div>
+        ) : (
+          <>
+            <div>
+              <small>Puntos</small>
+              <b>{g.score}</b>
+            </div>
+            <div>
+              <small>Batalla</small>
+              <b>{g.battle}</b>
+            </div>
+          </>
+        )}
         <div>
           <small>Tiempo</small>
           <b className={left < 15_000 ? 'hot' : ''}>{fmtClock(left)}</b>
@@ -289,22 +322,28 @@ export function TowersGameView({ onOver, onScore }: { onOver: (r: TowersSummary)
         ))}
       </svg>
       <p className="hint">
-        Arrastra desde una torre azul hasta una vecina (o toca una y luego la otra) para enviar todos sus soldados. Ojo: la torre queda vacía. Gana quien conquiste
-        todas las torres rivales.
+        {single
+          ? 'Asalto: cada torre que tomes sube el bono de tus soldados, y si eliminas al rival es x1,5. Arrastra desde una torre azul hasta una vecina para enviar todos sus soldados.'
+          : 'Arrastra desde una torre azul hasta una vecina (o toca una y luego la otra) para enviar todos sus soldados. Ojo: la torre queda vacía. Gana quien conquiste todas las torres rivales.'}
       </p>
       {counting && (
         <div className="countdown">
-          <span key={countNum}>{g.battle > 1 && countNum >= 2 ? `Batalla ${g.battle}` : countNum > 0 ? countNum : '¡Ya!'}</span>
+          <span key={countNum}>
+            {countNum >= 2 && single ? '¡Al asalto!' : g.battle > 1 && countNum >= 2 ? `Batalla ${g.battle}` : countNum > 0 ? countNum : '¡Ya!'}
+          </span>
         </div>
       )}
       {g.state === 'won' && (
         <div className="countdown towers-banner">
-          <span>🏰 ¡Batalla ganada!</span>
+          <span>{single ? `🏰 ¡Asalto perfecto! ${fmtMult(assaultMult(g))}` : '🏰 ¡Batalla ganada!'}</span>
         </div>
       )}
       {g.state === 'lost' && (
         <div className="countdown towers-banner">
-          <span>{g.t >= BATTLE_MS ? '⏱️ ¡Se acabó el tiempo!' : '💥 ¡Te conquistaron!'}</span>
+          <span>
+            {g.t >= g.limit ? '⏱️ ¡Se acabó el tiempo!' : '💥 ¡Te conquistaron!'}
+            {single && ` Bono ${fmtMult(assaultMult(g))}`}
+          </span>
         </div>
       )}
     </div>
@@ -316,7 +355,7 @@ export function TowersScreen({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<{ sum: TowersSummary; reward: ThiefReward } | null>(null);
   const tickets = useGame((st) => st.s.tickets);
   const best = useGame((st) => st.s.towersBest);
-  const live = useRef<{ sum: TowersSummary; rewarded: boolean }>({ sum: { score: 0, won: 0, captured: 0 }, rewarded: false });
+  const live = useRef<{ sum: TowersSummary; rewarded: boolean }>({ sum: { score: 0, won: 0, captured: 0, mult: 1 }, rewarded: false });
 
   const handleOver = (sum: TowersSummary) => {
     if (live.current.rewarded) return;
@@ -333,7 +372,7 @@ export function TowersScreen({ onClose }: { onClose: () => void }) {
   const again = () => {
     if (!useGame.getState().spendTicket()) return;
     track('minigame_start', { game: 'towers' });
-    live.current = { sum: { score: 0, won: 0, captured: 0 }, rewarded: false };
+    live.current = { sum: { score: 0, won: 0, captured: 0, mult: 1 }, rewarded: false };
     setResult(null);
     setRun((r) => r + 1);
   };
