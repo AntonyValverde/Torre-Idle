@@ -506,35 +506,59 @@ img.splash-logo {
   display: block;
 }
 
-.world-grid line {
-  stroke: rgba(255, 255, 255, 0.06);
-  stroke-width: 1;
+.world-shallow {
+  fill: #2d74a8;
+  opacity: 0.35;
 }
 
 .world-shore circle {
-  fill: #d9c993;
+  fill: #e4d29c;
 }
 
 .world-land circle {
-  fill: #3f7a45;
+  fill: #4f9150;
 }
 
-.world-decor .tree {
-  fill: #2b5a32;
+.world-high circle {
+  fill: #468849;
+}
+
+.world-decor .pine {
+  fill: #24552e;
 }
 
 .world-decor .mountain {
-  fill: #7d8a7a;
+  fill: #7b8378;
+}
+
+.world-decor .snow {
+  fill: #f2f5f7;
+}
+
+.world-shadow {
+  fill: rgba(0, 10, 20, 0.35);
 }
 
 .world-cluster circle {
-  fill: rgba(255, 194, 61, 0.9);
-  stroke: #0b1020;
+  stroke: #1a2340;
+}
+
+.world-cluster .back {
+  fill: #c9d3e6;
+}
+
+.world-cluster .front {
+  fill: #ffffff;
 }
 
 .world-cluster text {
-  fill: #2a1a00;
-  font-weight: 800;
+  fill: #1a2544;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.world-sky {
+  fill: rgba(255, 255, 255, 0.92);
   pointer-events: none;
 }
 
@@ -543,8 +567,8 @@ img.splash-logo {
 }
 
 .world-me-ring {
-  fill: none;
-  stroke: #fff;
+  fill: rgba(47, 143, 255, 0.18);
+  stroke: #8cc6ff;
   animation: worldRing 1.6s ease-in-out infinite;
 }
 
@@ -555,10 +579,129 @@ img.splash-logo {
 
 .world-label {
   fill: #fff;
-  font-weight: 700;
+  font-weight: 800;
   stroke: rgba(8, 14, 30, 0.85);
   paint-order: stroke;
   pointer-events: none;
+}
+
+/* Viñeta: los bordes del mapa, más oscuros */
+.world-map::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 50px rgba(0, 6, 20, 0.6);
+}
+
+.world-clouds {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.world-clouds i {
+  position: absolute;
+  left: -40%;
+  width: 150px;
+  height: 46px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.13);
+  filter: blur(6px);
+  animation: worldCloud 70s linear infinite;
+}
+
+.world-clouds i::before,
+.world-clouds i::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.world-clouds i::before {
+  width: 70px;
+  height: 60px;
+  left: 22px;
+  top: -26px;
+}
+
+.world-clouds i::after {
+  width: 54px;
+  height: 46px;
+  left: 74px;
+  top: -16px;
+}
+
+.world-clouds i:nth-child(1) {
+  top: 18%;
+}
+
+.world-clouds i:nth-child(2) {
+  top: 52%;
+  transform: scale(0.75);
+  animation-duration: 95s;
+  animation-delay: -40s;
+}
+
+.world-clouds i:nth-child(3) {
+  top: 80%;
+  transform: scale(1.15);
+  animation-duration: 120s;
+  animation-delay: -85s;
+}
+
+@keyframes worldCloud {
+  to {
+    left: 120%;
+  }
+}
+
+.world-compass {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 52px;
+  height: 52px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.world-compass circle {
+  fill: rgba(10, 20, 40, 0.55);
+  stroke: rgba(228, 210, 156, 0.7);
+  stroke-width: 1.2;
+}
+
+.world-compass .ns,
+.world-compass .ew {
+  fill: rgba(228, 210, 156, 0.75);
+}
+
+.world-compass .ew {
+  opacity: 0.6;
+}
+
+.world-compass .n {
+  fill: #ff6b5b;
+}
+
+.world-compass text {
+  fill: #fff;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-clouds i,
+  .cq-near,
+  .cq-arrow,
+  .cq-center-glow,
+  .btn.conquest-assault::after {
+    animation: none;
+  }
 }
 
 .world-controls {
@@ -602,12 +745,42 @@ img.splash-logo {
   animation: tabIn 0.2s ease-out;
 }
 
-.world-card-dot {
-  width: 16px;
-  height: 16px;
+/* Insignia de la ciudad elegida: el color de su marcador y su era */
+.world-card-badge {
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   flex: 0 0 auto;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow:
+    inset 0 -4px 0 rgba(0, 0, 0, 0.18),
+    0 3px 8px rgba(0, 0, 0, 0.35);
+  line-height: 1;
+}
+
+.world-card-badge small {
+  font-size: 0.55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.world-card-badge b {
+  font-size: 1.15rem;
+}
+
+.world-card-badge.small {
+  width: 38px;
+  height: 38px;
+  border-width: 1.5px;
+}
+
+.world-card-badge.small b {
+  font-size: 0.95rem;
 }
 
 .world-card-main {
@@ -682,91 +855,287 @@ img.splash-logo {
   gap: 6px;
 }
 
-.conquest-hud > div {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 6px 8px;
+.cq-stat {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 7px 9px 6px;
   display: flex;
   flex-direction: column;
+  gap: 2px;
   min-width: 0;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  --meter: #59b6ff;
 }
 
-.conquest-hud small {
-  color: var(--muted);
-  font-size: 0.7rem;
+.cq-stat.reserve {
+  background: linear-gradient(160deg, #1f4477, #13203f);
+}
+
+.cq-stat.recruits {
+  background: linear-gradient(160deg, #4d3c12, #211a0b);
+  --meter: #ffc23d;
+}
+
+.cq-stat.season {
+  background: linear-gradient(160deg, #432763, #1b1330);
+  --meter: #c48cff;
+}
+
+.cq-stat small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.68rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.conquest-hud b {
-  font-size: 1.15rem;
+.cq-stat b {
+  font-size: 1.35rem;
+  line-height: 1.15;
 }
 
-.conquest-hud b span {
+.cq-stat b span {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.6);
 }
 
+.cq-stat b.cq-time {
+  font-size: 1rem;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.cq-meter {
+  display: block;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  margin: 2px 0 1px;
+}
+
+.cq-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--meter);
+  box-shadow: 0 0 6px var(--meter);
+  transition: width 0.4s;
+}
+
+/* Tablero: fichas hexagonales con relieve sobre el mar */
 .conquest-map {
   width: 100%;
   display: block;
   user-select: none;
-  background: radial-gradient(ellipse at 50% 50%, #1d2a50, #0d1430);
-  border-radius: 16px;
-  border: 1px solid var(--line);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0a1530;
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.55),
+    0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.cq-depth polygon {
+  fill: #070c1c;
 }
 
 .conquest-hex {
   cursor: pointer;
 }
 
-.conquest-hex polygon {
-  stroke: rgba(8, 12, 28, 0.9);
-  stroke-width: 0.8;
-}
-
-.conquest-hex.mine polygon {
-  stroke: rgba(255, 255, 255, 0.55);
-}
-
-.conquest-hex.near polygon {
-  stroke: rgba(255, 255, 255, 0.85);
-  stroke-width: 1;
-  stroke-dasharray: 2 1.4;
-}
-
-.conquest-hex.reserved polygon {
-  stroke: rgba(255, 255, 255, 0.18);
-  stroke-dasharray: 1.2 1.2;
-}
-
-/* Territorio propio elegido como origen de los ataques */
-.conquest-hex.src polygon {
-  stroke: #ffffff;
-  stroke-width: 1.8;
-  stroke-dasharray: none;
-}
-
-.conquest-hex.sel polygon {
-  stroke: #ffc23d;
-  stroke-width: 1.6;
-  stroke-dasharray: none;
-}
-
-.conquest-hex text {
+.conquest-hex text,
+.cq-shade,
+.cq-near,
+.cq-decor,
+.cq-shield,
+.cq-badge,
+.cq-borders,
+.cq-arrow,
+.cq-burst,
+.cq-center-glow,
+.cq-capital {
   pointer-events: none;
 }
 
-.conquest-g {
+.cq-face {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 0.5;
+}
+
+.cq-shade {
+  fill: url(#cq-shade-g);
+}
+
+.conquest-hex.reserved .cq-face {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-dasharray: 1.2 1.2;
+}
+
+.conquest-hex.src .cq-face {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.conquest-hex.sel .cq-face {
+  stroke: #ffc23d;
+  stroke-width: 1.5;
+}
+
+.cq-decor path {
+  fill: rgba(16, 38, 20, 0.8);
+}
+
+.cq-decor.hills path {
+  fill: rgba(40, 34, 20, 0.7);
+}
+
+.cq-decor.meadow circle {
+  fill: rgba(255, 238, 160, 0.6);
+}
+
+.conquest-hex.owned .cq-decor path,
+.conquest-hex.owned .cq-decor circle {
+  fill: rgba(0, 0, 0, 0.2);
+}
+
+/* Se puede atacar: la ficha late */
+.cq-near {
+  fill: #fff;
+  animation: cqNear 1.4s ease-in-out infinite;
+}
+
+.cq-reserved {
+  fill: rgba(255, 255, 255, 0.28);
+}
+
+.cq-badge rect {
+  fill: rgba(8, 12, 28, 0.8);
+}
+
+.cq-badge text {
   fill: #fff;
   font-weight: 800;
 }
 
-.conquest-g.bandit {
-  fill: rgba(255, 255, 255, 0.55);
-  font-weight: 700;
+.cq-badge.bandit rect {
+  fill: rgba(48, 16, 14, 0.78);
+}
+
+.cq-badge.bandit text {
+  fill: #ffd2c4;
+}
+
+.cq-badge.center rect {
+  fill: #3a2a05;
+}
+
+.cq-badge.center text {
+  fill: #ffe08a;
+}
+
+.conquest-hex.mine .cq-badge rect {
+  fill: #f2f7ff;
+}
+
+.conquest-hex.mine .cq-badge text {
+  fill: #0f2547;
+}
+
+.cq-borders path {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.cq-borders path.mine {
+  stroke-width: 1.6;
+}
+
+.cq-shield {
+  fill: rgba(120, 200, 255, 0.1);
+  stroke: rgba(150, 215, 255, 0.75);
+  stroke-width: 0.5;
+  stroke-dasharray: 1.4 1;
+}
+
+.cq-center-glow {
+  animation: cqGlow 2.4s ease-in-out infinite;
+}
+
+.cq-arrow {
+  fill: none;
+  stroke: #ffc23d;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-dasharray: 3 2;
+  animation: cqDash 0.5s linear infinite;
+  filter: drop-shadow(0 0 1.5px rgba(255, 194, 61, 0.9));
+}
+
+/* Destello al cambiar de dueño */
+.cq-burst circle,
+.cq-burst polygon {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.cq-burst circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  animation: cqRing 1.2s ease-out forwards;
+}
+
+.cq-burst polygon {
+  fill: currentColor;
+  animation: cqFlash 1s ease-out forwards;
+}
+
+@keyframes cqNear {
+  0%,
+  100% {
+    opacity: 0.04;
+  }
+  50% {
+    opacity: 0.24;
+  }
+}
+
+@keyframes cqGlow {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes cqDash {
+  to {
+    stroke-dashoffset: -5;
+  }
+}
+
+@keyframes cqRing {
+  from {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes cqFlash {
+  from {
+    opacity: 0.75;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 .card.conquest-panel {
@@ -794,8 +1163,124 @@ img.splash-logo {
 
 .btn.conquest-assault {
   flex: 0 0 auto;
-  border-color: #ffb02e;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #5a3d0e, #2a1c08);
+  border: 1px solid #ffb02e;
   color: #ffd27a;
+}
+
+/* Un brillo que cruza el botón de vez en cuando */
+.btn.conquest-assault:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 230, 160, 0.35) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: cqShine 2.8s ease-in-out infinite;
+}
+
+.btn.conquest-assault:disabled {
+  opacity: 0.55;
+}
+
+@keyframes cqShine {
+  60%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.cq-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cq-panel-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* Ficha hexagonal con el icono del territorio */
+.cq-chip {
+  width: 42px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%);
+}
+
+.cq-versus {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.cq-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cq-side small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.cq-side b {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.cq-side.me b {
+  color: #7cc4ff;
+}
+
+.cq-side.foe {
+  text-align: right;
+}
+
+.cq-side.foe b {
+  color: #ff8f7f;
+}
+
+.cq-vs {
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  color: #ffc23d;
+  background: rgba(255, 194, 61, 0.14);
+  border-radius: 99px;
+  padding: 3px 9px;
+}
+
+.cq-odds {
+  grid-column: 1 / -1;
+  display: block;
+  height: 6px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(255, 110, 95, 0.55);
+}
+
+.cq-odds i {
+  display: block;
+  height: 100%;
+  background: #3fa2ff;
+  transition: width 0.25s;
+}
+
+.cq-odds.win i {
+  background: linear-gradient(90deg, #3fa2ff, #5be3a0);
 }
 
 .conquest-bonus {
@@ -813,10 +1298,39 @@ img.splash-logo {
 }
 
 .conquest-ranking li {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
   font-size: 0.9rem;
+}
+
+/* Barra del color del alcalde, larga según sus puntos */
+.conquest-ranking li::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--w, 0);
+  background: linear-gradient(90deg, var(--c), transparent);
+  opacity: 0.3;
+  z-index: -1;
+  transition: width 0.4s;
+}
+
+.conquest-ranking li.me {
+  box-shadow: inset 0 0 0 1px rgba(124, 196, 255, 0.5);
+}
+
+.cq-rank {
+  width: 22px;
+  text-align: center;
+  font-weight: 800;
+  flex: 0 0 auto;
 }
 
 .conquest-ranking li.me .conquest-name {
@@ -927,20 +1441,64 @@ img.splash-logo {
   display: block;
   touch-action: none;
   user-select: none;
-  background: radial-gradient(ellipse at 50% 40%, #1f2a52, #0f1430);
+  /* Campo de batalla: hierba, más oscura en los bordes */
+  background: radial-gradient(ellipse at 50% 45%, #3c6b3f, #22402a 70%, #172b1d);
   border-radius: 16px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.45);
 }
 
 .towers-links line {
-  stroke: rgba(255, 255, 255, 0.16);
-  stroke-width: 0.9;
-  stroke-dasharray: 1.6 1.4;
+  stroke-linecap: round;
 }
 
-.towers-links line.hot {
-  stroke: rgba(63, 180, 255, 0.75);
-  stroke-width: 1.2;
+.towers-links line.edge {
+  stroke: rgba(30, 24, 14, 0.75);
+  stroke-width: 3.6;
+}
+
+.towers-links line.road {
+  stroke: #9a7f55;
+  stroke-width: 2.4;
+}
+
+.towers-links line.road.hot {
+  stroke: #e2c487;
+}
+
+.towers-hit {
+  fill: transparent;
+}
+
+.towers-shadow {
+  fill: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.towers-body {
+  stroke: rgba(10, 14, 28, 0.85);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.towers-body.neutral {
+  fill: #8d8f9a;
+}
+
+.towers-shine,
+.towers-door,
+.towers-flag {
+  pointer-events: none;
+}
+
+.towers-door {
+  fill: rgba(15, 12, 10, 0.7);
+}
+
+.towers-flag path:first-child {
+  stroke: #e9e4d8;
+  stroke-width: 0.45;
 }
 
 .towers-aim {
@@ -954,6 +1512,12 @@ img.splash-logo {
   fill: #fff;
   font-weight: 800;
   pointer-events: none;
+}
+
+.towers-units {
+  stroke: rgba(10, 14, 28, 0.75);
+  stroke-width: 0.6;
+  paint-order: stroke;
 }
 
 .towers-packet text {
@@ -975,7 +1539,7 @@ img.splash-logo {
 }
 
 .towers-flash {
-  fill: #7dff9c;
+  fill: #ffe066;
   font-weight: 800;
   stroke: rgba(8, 14, 30, 0.85);
   stroke-width: 0.6;
