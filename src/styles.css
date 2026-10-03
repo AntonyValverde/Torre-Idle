@@ -1697,20 +1697,41 @@ img.splash-logo {
   inset: 0;
   z-index: 70;
   overflow-y: auto;
+  /* La hoja que gira asoma por la izquierda: sin barra horizontal */
+  overflow-x: hidden;
+  /* Centrado en vertical con márgenes automáticos: si no cabe, se desplaza desde arriba sin recortar */
+  display: flex;
+  flex-direction: column;
   background: rgba(10, 8, 20, 0.75);
   padding: calc(12px + var(--safe-top)) 10px calc(16px + var(--safe-bottom));
   animation: tabIn 0.25s ease-out;
 }
 
-.paper {
+/* Las páginas se apilan en la misma celda: el libro mide lo que la más alta y no salta al hojear */
+.paper-book {
   --ink: #2b2418;
   --ink-soft: #5e4f35;
   --rule: rgba(43, 36, 24, 0.32);
   --paper: #f3ead3;
   position: relative;
+  display: grid;
+  /* minmax(0, …): que el contenido sin cortes (white-space: nowrap) no ensanche la columna */
+  grid-template-columns: minmax(0, 1fr);
+  flex-shrink: 0;
+  width: 100%;
   max-width: 500px;
-  margin: 0 auto;
-  padding: 18px 18px 20px;
+  margin: auto auto 0;
+  perspective: 2000px;
+  animation: paperIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+.paper {
+  grid-area: 1 / 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  visibility: hidden;
+  padding: 18px 18px 12px;
   background-color: var(--paper);
   background-image:
     radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.6), transparent 55%),
@@ -1723,7 +1744,6 @@ img.splash-logo {
     0 14px 40px rgba(0, 0, 0, 0.55),
     inset 0 0 50px rgba(140, 100, 40, 0.16);
   user-select: text;
-  animation: paperIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
 
 @keyframes paperIn {
@@ -1733,15 +1753,99 @@ img.splash-logo {
   }
 }
 
+/* Pasar página: la hoja gira sobre su lomo (borde izquierdo) y se levanta hacia el lector */
+
+.paper.current,
+.paper.under,
+.paper.turn-out,
+.paper.turn-in {
+  visibility: visible;
+}
+
+.paper.under {
+  z-index: 1;
+}
+
+.paper.turn-out,
+.paper.turn-in {
+  z-index: 2;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+.paper.turn-out {
+  animation: pageOut 0.52s cubic-bezier(0.5, 0, 0.85, 0.4) forwards;
+}
+
+.paper.turn-in {
+  animation: pageIn 0.52s cubic-bezier(0.15, 0.6, 0.5, 1) both;
+}
+
+@keyframes pageOut {
+  to {
+    transform: rotateY(-90deg);
+  }
+}
+
+@keyframes pageIn {
+  from {
+    transform: rotateY(-90deg);
+  }
+}
+
+/* Luz y sombra: la hoja se oscurece al ponerse de canto y proyecta sombra en la de debajo */
+.paper.under::after,
+.paper.turn-out::after,
+.paper.turn-in::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.paper.turn-out::after,
+.paper.turn-in::after {
+  background: linear-gradient(to right, rgba(255, 250, 235, 0.25), rgba(60, 40, 10, 0.55));
+}
+
+.paper.under::after {
+  background: linear-gradient(to right, rgba(20, 12, 0, 0.5), rgba(20, 12, 0, 0.12) 70%, rgba(20, 12, 0, 0.3));
+}
+
+.paper.turn-out::after,
+.paper.under.cover::after {
+  animation: shadeIn 0.52s ease-in forwards;
+}
+
+.paper.turn-in::after,
+.paper.under.reveal::after {
+  animation: shadeOut 0.52s ease-out forwards;
+}
+
+@keyframes shadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .paper {
+  .paper-book {
     animation: none;
   }
 }
 
 .paper-close {
   position: absolute;
-  z-index: 1;
+  z-index: 5;
   top: 8px;
   right: 8px;
   width: 34px;
@@ -2154,10 +2258,152 @@ img.splash-logo {
   letter-spacing: 0.04em;
 }
 
-.paper-done {
+.paper .paper-done {
+  /* .btn trae flex: 1, que en la columna de la página lo estiraría hasta el pie */
+  flex: none;
   width: 100%;
   margin-top: 14px;
   font-family: var(--font);
+}
+
+/* Páginas interiores: cintillo y pie con el folio */
+
+.paper-runhead {
+  text-align: center;
+}
+
+.paper-runhead-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 40px 4px 0;
+  border-bottom: 1px solid var(--ink);
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.paper-runhead-logo {
+  font-family: 'UnifrakturMaguntia', 'Old English Text MT', Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.paper-runhead h2 {
+  margin: 0;
+  padding: 6px 0 5px;
+  border-bottom: 3px double var(--ink);
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1.1;
+}
+
+.paper-folio {
+  /* Se queda al pie aunque la página tenga menos contenido que la más larga */
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.paper-folio button {
+  padding: 4px 0 4px 8px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.paper-folio button span {
+  display: inline-block;
+  font-style: normal;
+  animation: folioNudge 1.6s ease-in-out infinite;
+}
+
+@keyframes folioNudge {
+  50% {
+    translate: 3px 0;
+  }
+}
+
+/* Navegación bajo el periódico */
+
+.paper-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 500px;
+  margin: 12px auto auto;
+}
+
+.paper-nav > button {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f3ead3;
+  color: #2b2418;
+  font-family: Georgia, serif;
+  font-size: 1.6rem;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.paper-nav > button:disabled {
+  opacity: 0.3;
+}
+
+.paper-nav-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #f3ead3;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.paper-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.paper-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 4px;
+  background: rgba(243, 234, 211, 0.35);
+  transition: width 0.25s, background 0.25s;
+}
+
+.paper-dots button.on {
+  width: 22px;
+  background: #f3ead3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-folio button span {
+    animation: none;
+  }
 }
 
 @media (max-width: 380px) {

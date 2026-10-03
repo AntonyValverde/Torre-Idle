@@ -89,6 +89,34 @@ export function tone(freq: number, dur = 0.09, type: OscillatorType = 'triangle'
   }
 }
 
+/** Roce de papel al pasar una página: un golpe de ruido filtrado que barre hacia los agudos. */
+export function rustle() {
+  if (!soundOn) return;
+  try {
+    const ctx = audio();
+    const dur = 0.28;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 0.8;
+    const t0 = ctx.currentTime;
+    filter.frequency.setValueAtTime(900, t0);
+    filter.frequency.exponentialRampToValueAtTime(3200, t0 + dur);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.09, t0 + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start(t0);
+  } catch {
+    /* audio no disponible */
+  }
+}
+
 export function sfx(kind: Sfx) {
   if (!soundOn) return;
   try {
