@@ -71,7 +71,9 @@ Pestaña ⚔️ Conquista del Mapa del mundo. Va en la misma semana que la Copa 
   - `.../players/{uid}`: la reserva de tropas.
   - `.../tiles/{q_r}`: los territorios con dueño.
 - **Reglas como árbitro**: comprueban con la hora del servidor la recarga, la vecindad, la guarnición, el escudo y el tope de reclutas, sin Cloud Functions. Los reclutas los declara el móvil y las reglas solo garantizan el tope diario. Las cifras están repetidas en las reglas y en `conquest.ts`, y un test comprueba que coinciden.
-- **Pendiente**: partes de batalla ("mientras no estabas…") y premios de fin de temporada.
+- **Partes de batalla**: quien te quita un territorio deja un parte en `.../players/{uid}/reports` (en el mismo lote que la conquista; solo lo lees tú). Al abrir el juego, y cada 5 min, se avisa de los nuevos. También aparecen en la pestaña y en La Gaceta.
+- **Fin de temporada**: cierra el domingo a medianoche (hora de Costa Rica). Al volver a entrar se cobra el premio según la clasificación final: 5 💎 + 1 por punto (hasta 20) para todos, y extra para el podio. El 1º recibe +45 💎 y 3 🎟️ (si hubo al menos 2 alcaldes), el 2º +25 💎 y 2 🎟️ (con 3 o más) y el 3º +10 💎 y 1 🎟️ (con 4 o más).
+- **Palmarés**: victorias, podios y las últimas temporadas. Cada temporada ganada cuelga un estandarte azul en la fachada del ayuntamiento, que también ven quienes visitan tu ciudad (campo `conq` de `cities/{uid}`). Ganar sale en La Gaceta.
 
 ## Tutorial de Clara
 

@@ -780,6 +780,34 @@ img.splash-logo {
   font-weight: 800;
 }
 
+.conquest-reports ul,
+.conquest-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conquest-reports li,
+.conquest-history li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.conquest-history li .muted {
+  text-align: right;
+}
+
+.conquest-join .conquest-history {
+  width: 100%;
+  text-align: left;
+}
+
 .conquest-dot {
   width: 12px;
   height: 12px;

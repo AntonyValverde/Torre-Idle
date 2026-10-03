@@ -59,6 +59,16 @@ export function headlines(s: GameState, d: PaperDelta | null): Story[] {
     const t = { gold: ['🏆', 'gana la Copa de Alcaldes'], silver: ['🥈', 'es subcampeón de la Copa'], bronze: ['🥉', 'sube al podio de la Copa'] }[d.trophy];
     out.push({ emoji: t[0], title: `¡${mayor} ${t[1]}!`, text: 'La plaza ya luce el trofeo. Los vecinos no hablan de otra cosa.' });
   }
+  if ((d.conqWins ?? 0) > 0) {
+    out.push({ emoji: '⚔️', title: `¡${mayor} gana la Conquista de la semana!`, text: 'Una nueva bandera azul ondea junto al ayuntamiento.' });
+  }
+  if ((d.conqLost ?? 0) > 0) {
+    out.push({
+      emoji: '🏴',
+      title: `La ciudad pierde ${d.conqLost} ${d.conqLost === 1 ? 'territorio' : 'territorios'} en la Conquista`,
+      text: 'Los vecinos piden recuperarlos. Las tropas esperan en el Mapa del mundo → Conquista.',
+    });
+  }
   if (d.league >= 0) {
     const div = DIVISIONS[d.league];
     if (div) out.push({ emoji: div.emoji, title: `Ascenso histórico a la liga ${div.name}`, text: 'Mejor división de la liga semanal alcanzada hasta hoy.' });
@@ -75,7 +85,7 @@ export function headlines(s: GameState, d: PaperDelta | null): Story[] {
     out.push({
       emoji: '❤️',
       title: `${d.gifts} ${d.gifts === 1 ? 'alcalde te dejó un regalo' : 'alcaldes te dejaron regalos'}`,
-      text: 'Tu ciudad cae bien en la región. Devuelve la visita desde Logros → Perfil → Explorar ciudades.',
+      text: 'Tu ciudad cae bien en la región. Devuelve la visita desde el Mapa del mundo.',
     });
   }
   if (d.achievements > 0) {

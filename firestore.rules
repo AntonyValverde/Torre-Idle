@@ -171,7 +171,7 @@ service cloud.firestore {
     match /cities/{uid} {
       function validCity() {
         let d = incoming();
-        return d.keys().hasOnly(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'cups', 'gifts', 'updatedAt'])
+        return d.keys().hasOnly(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'cups', 'gifts', 'conq', 'updatedAt'])
           && d.keys().hasAll(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'updatedAt'])
           && validName(d.name)
           && d.era is int && d.era >= 1 && d.era <= 1000000
@@ -184,6 +184,8 @@ service cloud.firestore {
           && (!('cups' in d) || (d.cups is string && d.cups.matches('^[0-9]{1,5}(,[0-9]{1,5}){2,3}$')))
           // Regalos recibidos (❤️): opcional, las versiones anteriores no lo envían
           && (!('gifts' in d) || (d.gifts is int && d.gifts >= 0 && d.gifts <= 10000000))
+          // Temporadas de Conquista ganadas (bandera en la ciudad): opcional
+          && (!('conq' in d) || (d.conq is int && d.conq >= 0 && d.conq <= 10000))
           && d.updatedAt == request.time;
       }
 
@@ -533,6 +535,24 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null && conqOpen(week) && conqTile(tid) && shape(incoming()) && (capital() || bandits());
       allow update: if request.auth != null && conqOpen(week) && shape(incoming()) && (reinforce() || capture());
+      allow delete: if isAdmin();
+    }
+
+    // Partes de batalla: los escribe quien conquista un territorio de {uid}, en el mismo lote que la
+    // conquista. Solo los lee el alcalde que lo perdió.
+    match /conquest/{week}/worlds/{w}/players/{uid}/reports/{rid} {
+      function validReport() {
+        let d = incoming();
+        let tile = /databases/$(database)/documents/conquest/$(week)/worlds/$(w)/tiles/$(d.tile);
+        return d.keys().hasOnly(['by', 'name', 'tile', 'at']) && d.keys().hasAll(['by', 'name', 'tile', 'at'])
+          && d.by == request.auth.uid && uid != request.auth.uid
+          && validName(d.name) && conqTile(d.tile) && d.at == request.time
+          && get(tile).data.owner == uid
+          && getAfter(tile).data.owner == request.auth.uid && getAfter(tile).data.t == request.time;
+      }
+
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if request.auth != null && conqOpen(week) && validReport();
       allow delete: if isAdmin();
     }
 

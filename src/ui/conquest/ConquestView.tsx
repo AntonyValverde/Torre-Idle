@@ -17,6 +17,7 @@ import {
   parseTile,
   recruitsToSend,
   seasonOf,
+  seasonPrize,
   standings,
   targetInfo,
   troopsAt,
@@ -27,6 +28,7 @@ import { fmtClock, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
 import { sfx, vibrate } from '../haptics';
 import { celebrate } from '../celebrate';
+import { ago } from '../../admin/metrics';
 
 /** Tamaño de un hexágono en el dibujo (radio). */
 const SIZE = 10;
@@ -51,7 +53,10 @@ export function ConquestView({ onVisit }: { onVisit: (uid: string) => void }) {
     let alive = true;
     setWorld(undefined);
     myWorld(season.week).then(
-      (w) => alive && setWorld(w),
+      (w) => {
+        if (w) useGame.getState().setConquestWorld(season.week, w);
+        if (alive) setWorld(w);
+      },
       (e) => {
         console.warn(e);
         if (alive) setWorld('error');
@@ -85,6 +90,7 @@ function JoinCard({ week, endsAt, onJoined }: { week: string; endsAt: number; on
     setBusy(true);
     try {
       const w = await joinConquest(week, name);
+      useGame.getState().setConquestWorld(week, w);
       track('conquest_join', { week, w });
       sfx('win');
       celebrate(3);
@@ -110,6 +116,59 @@ function JoinCard({ week, endsAt, onJoined }: { week: string; endsAt: number; on
       <button className="btn primary big" disabled={busy} onClick={join}>
         {busy ? 'Uniéndote…' : '⚔️ Unirme a la conquista'}
       </button>
+      <ConquestHistory />
+    </div>
+  );
+}
+
+/** Palmarés: temporadas ganadas, podios y los últimos resultados. */
+function ConquestHistory() {
+  const c = useGame((st) => st.s.conquest);
+  if (!c.history.length) return null;
+  return (
+    <div className="card conquest-history">
+      <b>
+        ⚔️ Tu palmarés: {c.wins} {c.wins === 1 ? 'victoria' : 'victorias'} · {c.podiums} {c.podiums === 1 ? 'podio' : 'podios'}
+      </b>
+      <ul>
+        {c.history
+          .slice()
+          .reverse()
+          .map((h) => (
+            <li key={h.week}>
+              <span>
+                {h.rank === 1 && h.size >= 2 ? '🏆' : h.rank <= 3 && h.size > h.rank ? '🎖️' : '⚔️'} Semana del {h.week.slice(8)}/{h.week.slice(5, 7)}
+              </span>
+              <span className="muted">
+                {h.rank}º de {h.size} · {h.points} pts · +{h.gems} 💎
+              </span>
+            </li>
+          ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Partes de batalla: quién te quitó territorios. */
+function ConquestReports() {
+  const reports = useGame((st) => st.s.conquest.reports);
+  const week = useGame((st) => st.s.conquest.week);
+  const t = now();
+  const recent = reports.filter((r) => seasonOf(r.at).week === week);
+  if (!recent.length) return null;
+  return (
+    <div className="card conquest-reports">
+      <b>📜 Partes de batalla</b>
+      <ul>
+        {recent.map((r) => (
+          <li key={`${r.at}-${r.tile}`}>
+            <span>
+              ⚔️ <b>{r.name}</b> te quitó un territorio
+            </span>
+            <small className="muted">{ago(r.at, t)}</small>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -317,7 +376,14 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
             </li>
           ))}
         </ol>
+        <small className="muted">
+          Cierra el domingo a medianoche (hora de Costa Rica) y el premio se cobra al volver a entrar: hasta {seasonPrize(1, 2, 15).gems} 💎 y 3 🎟️ para el
+          1º, extra para el podio y, para todos, 5 💎 + 1 por punto (hasta 20).
+        </small>
       </div>
+
+      <ConquestReports />
+      <ConquestHistory />
     </div>
   );
 }

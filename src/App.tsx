@@ -10,6 +10,7 @@ import { BottomNav, type TabId } from './ui/BottomNav';
 import { CityTab } from './ui/CityTab';
 import { useIncidentScheduler } from './ui/CityIncident';
 import { useGiftInbox } from './ui/Gifts';
+import { useConquestNews } from './ui/conquest/useConquestNews';
 import { INCIDENTS } from './game/incidents';
 import { CityVisit } from './ui/CityVisit';
 import { useDecreeScheduler } from './ui/DecreeCard';
@@ -80,6 +81,8 @@ export default function App() {
   useTutorialEffects();
   // Regalos que otros alcaldes dejaron en tu ciudad
   useGiftInbox(ready);
+  // Conquista: premio de la temporada terminada y partes de batalla
+  useConquestNews(ready);
 
   // Incidentes: solo salen si el jugador está mirando la ciudad, sin nada encima
   const overlayRef = useRef(false);

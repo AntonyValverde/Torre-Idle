@@ -1,4 +1,20 @@
-import { collection, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, writeBatch, type DocumentData } from 'firebase/firestore';
+import {
+  Timestamp,
+  collection,
+  doc,
+  getDocFromServer,
+  getDocs,
+  getDocsFromServer,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  where,
+  writeBatch,
+  type DocumentData,
+} from 'firebase/firestore';
 import { db } from '../firebase';
 import { ensureUser } from './cloud';
 import {
@@ -11,8 +27,11 @@ import {
   banditGarrison,
   garrisonAt,
   sourceFor,
+  standings,
   troopsAt,
   type Player,
+  type Report,
+  type Standing,
   type Tile,
 } from './conquest';
 
@@ -21,6 +40,7 @@ import {
 //   conquest/{lunes}/worlds/{w}                cuántos alcaldes tiene el mundo
 //   conquest/{lunes}/worlds/{w}/players/{uid}  reserva de tropas
 //   conquest/{lunes}/worlds/{w}/tiles/{q_r}    territorios con dueño
+//   .../players/{uid}/reports/{id}             partes de batalla: quién te quitó qué (solo los lee su dueño)
 
 function need() {
   if (!db) throw new Error('Firebase no está configurado');
@@ -177,7 +197,45 @@ export async function sendTroops(week: string, w: string, me: Player, name: stri
   const b = writeBatch(d);
   b.update(doc(d, ...base, 'players', me.uid), { troops, t: serverTimestamp(), last: target, sent });
   b.set(doc(d, ...base, 'tiles', target), { owner: me.uid, name, t: serverTimestamp(), sent, from, ...data });
+  // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver)
+  if (tile && tile.owner !== me.uid) {
+    b.set(doc(collection(d, ...base, 'players', tile.owner, 'reports')), { by: me.uid, name, tile: target, at: serverTimestamp() });
+  }
   await b.commit();
+}
+
+/** Partes de batalla recibidos después de `sinceMs` (hora del servidor). */
+export async function fetchReports(week: string, w: string, sinceMs: number): Promise<Report[]> {
+  const d = need();
+  const user = await ensureUser();
+  if (!user) return [];
+  const q = query(
+    collection(d, 'conquest', week, 'worlds', w, 'players', user.uid, 'reports'),
+    where('at', '>', Timestamp.fromMillis(sinceMs)),
+    orderBy('at'),
+    limit(30),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((x) => {
+      const v = x.data();
+      const at = v.at?.toMillis?.();
+      return typeof at === 'number' && typeof v.by === 'string' && typeof v.tile === 'string' ? { by: v.by, name: str(v.name).slice(0, 20) || '???', tile: v.tile, at } : null;
+    })
+    .filter((r): r is Report => !!r);
+}
+
+/** Clasificación final de una temporada terminada (del servidor: sin conexión no se cobra). */
+export async function fetchFinalStandings(week: string, w: string): Promise<{ rows: Standing[]; size: number }> {
+  const d = need();
+  await ensureUser();
+  const [tiles, players] = await Promise.all([
+    getDocsFromServer(collection(d, 'conquest', week, 'worlds', w, 'tiles')),
+    getDocsFromServer(collection(d, 'conquest', week, 'worlds', w, 'players')),
+  ]);
+  const ts = tiles.docs.map((x) => parseTile(x.id, x.data())).filter((t): t is Tile => !!t);
+  const ps = players.docs.map((x) => parsePlayer(x.id, x.data()));
+  return { rows: standings(ts, ps), size: ps.length };
 }
 
 /** Suma a la reserva los reclutas ganados hoy por jugar. */

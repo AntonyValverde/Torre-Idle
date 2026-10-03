@@ -346,6 +346,8 @@ export interface CityVisitView {
   buildings: number;
   /** Copas ganadas: oro, plata, bronce y temporadas. */
   cups?: [number, number, number, number];
+  /** Temporadas de Conquista ganadas. */
+  conq?: number;
 }
 
 /** Distancia máxima (px) entre tocar y soltar para que cuente como toque y no como desplazamiento. */
@@ -717,6 +719,52 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       }
     }
 
+    /**
+     * Estandartes azules de la Conquista, colgados en la fachada del ayuntamiento entre los rojos de la Copa.
+     * `shift`: sube el contador si ya está el de la Copa.
+     */
+    function drawConquestBanners(t: number, n: number, shift: boolean) {
+      const gy = groundY();
+      const k = scale * 1.3;
+      const cx = W / 2;
+      const count = Math.min(2, n);
+      for (let i = 0; i < count; i++) {
+        const x = cx + (i === 0 ? 7 : -14) * scale;
+        const top = gy - 57 * scale;
+        const sway = Math.sin(t / 650 + i + 1) * 1.2 * k;
+        ctx.fillStyle = '#2f6fe0';
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x + 7 * k, top);
+        ctx.lineTo(x + 7 * k + sway, top + 22 * k);
+        ctx.lineTo(x + 3.5 * k + sway, top + 18 * k);
+        ctx.lineTo(x + sway, top + 22 * k);
+        ctx.closePath();
+        ctx.fill();
+        // Espadas cruzadas
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1, 0.8 * k);
+        const sx = x + 3.5 * k + sway * 0.5;
+        const sy = top + 8 * k;
+        ctx.beginPath();
+        ctx.moveTo(sx - 2 * k, sy - 2 * k);
+        ctx.lineTo(sx + 2 * k, sy + 2 * k);
+        ctx.moveTo(sx + 2 * k, sy - 2 * k);
+        ctx.lineTo(sx - 2 * k, sy + 2 * k);
+        ctx.stroke();
+      }
+      if (n > 2) {
+        const y = gy - (shift ? 130 : 116) * scale;
+        ctx.font = `800 ${Math.max(9, 8 * k)}px 'Baloo 2', system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(20,10,50,.8)';
+        ctx.strokeText(`⚔️×${n}`, cx, y);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`⚔️×${n}`, cx, y);
+      }
+    }
+
     function drawHalloween(night: number) {
       const gy = groundY();
       for (const fx of [0.1, 0.32, 0.68, 0.9]) {
@@ -1024,6 +1072,8 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       const cups = v ? (v.cups ?? [0, 0, 0, 0]) : ([s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons] as const);
       drawTrophies(t, night, [cups[0], cups[1], cups[2]]);
       if (cups[3] > 0) drawSeasonBanners(t, cups[3]);
+      const conq = v ? (v.conq ?? 0) : s.conquest.wins;
+      if (conq > 0) drawConquestBanners(t, conq, cups[3] > 2);
       if (season === 'christmas' || season === 'newyear') drawChristmas(t, night);
 
       // Luces de las antenas

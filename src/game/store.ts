@@ -111,7 +111,17 @@ import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { PAPER_GEMS, paperUnread } from './paper';
 import { applyGiftSent, applyGiftsReceived, type GiftIn } from './social';
-import { RECRUIT_DAILY, RECRUIT_INCIDENT, RECRUIT_MISSION, addRecruits } from './conquest';
+import {
+  RECRUIT_DAILY,
+  RECRUIT_INCIDENT,
+  RECRUIT_MISSION,
+  addRecruits,
+  applyReports,
+  applySeason,
+  withWorld,
+  type Report,
+  type seasonPrize,
+} from './conquest';
 import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
@@ -205,6 +215,12 @@ interface GameStore {
   rewardFire(score: number): ThiefReward;
   rewardMetro(score: number): StackReward;
   rewardTowers(score: number): ThiefReward;
+  /** Conquista: apunta en qué semana y mundo juega el alcalde. */
+  setConquestWorld(week: string, w: string): void;
+  /** Conquista: guarda los partes de batalla nuevos y devuelve los recién llegados. */
+  receiveReports(list: Report[]): Report[];
+  /** Conquista: cobra el premio de una temporada terminada (una vez). */
+  claimConquest(week: string, rank: number, size: number, points: number): ReturnType<typeof seasonPrize> | null;
   /** Reclama una misión completada; devuelve el texto del premio o null. */
   claimMission(kind: 'daily' | 'weekly', index: number): string | null;
   claimChest(): string | null;
@@ -591,6 +607,25 @@ export const useGame = create<GameStore>((set, get) => ({
     const gems = score >= 130 ? 6 : score >= 80 ? 4 : score >= 45 ? 2 : score >= 20 ? 1 : 0;
     set({ s: bump({ ...addCoins(s, coins), gems: s.gems + gems, towersBest: Math.max(s.towersBest, score) }, 'arcade') });
     return { coins, gems, newBest: score > s.towersBest };
+  },
+
+  setConquestWorld(week, w) {
+    const { s } = get();
+    const next = withWorld(s, week, w);
+    if (next !== s) set({ s: next });
+  },
+
+  receiveReports(list) {
+    const r = applyReports(get().s, list);
+    if (r.fresh.length) set({ s: r.s });
+    return r.fresh;
+  },
+
+  claimConquest(week, rank, size, points) {
+    const r = applySeason(get().s, week, rank, size, points);
+    if (!r) return null;
+    set({ s: r.s });
+    return r.prize;
   },
 
   rewardTraffic(score) {

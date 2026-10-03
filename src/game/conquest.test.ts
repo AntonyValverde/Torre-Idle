@@ -13,6 +13,11 @@ import {
   TROOP_MS,
   addRecruits,
   adjacent,
+  applyReports,
+  applySeason,
+  newConquest,
+  seasonPrize,
+  withWorld,
   banditGarrison,
   conquestState,
   distToCenter,
@@ -29,6 +34,7 @@ import {
   troopsAt,
   type Tile,
 } from './conquest';
+import { citySnapshot } from './cities';
 import { newState, normalize } from './state';
 
 const tile = (id: string, owner: string, extra: Partial<Tile> = {}): Tile => ({ id, owner, name: owner, g: 10, t: 0, ct: -1e9, capital: false, ...extra });
@@ -160,10 +166,10 @@ describe('Conquista: reclutas en la partida', () => {
     let s = newState(0);
     s = addRecruits(s, 5, '2026-10-02');
     s = addRecruits(s, 5, '2026-10-02');
-    expect(s.conquest).toEqual({ day: '2026-10-02', recruits: 10 });
+    expect(s.conquest).toMatchObject({ day: '2026-10-02', recruits: 10 });
     for (let i = 0; i < 10; i++) s = addRecruits(s, 5, '2026-10-02');
     expect(s.conquest.recruits).toBe(RECRUITS_DAY);
-    expect(addRecruits(s, 3, '2026-10-03').conquest).toEqual({ day: '2026-10-03', recruits: 3 });
+    expect(addRecruits(s, 3, '2026-10-03').conquest).toMatchObject({ day: '2026-10-03', recruits: 3 });
   });
 
   it('solo se envían los que aún no están en la reserva', () => {
@@ -174,7 +180,45 @@ describe('Conquista: reclutas en la partida', () => {
   });
 
   it('las partidas viejas o raras se normalizan', () => {
-    expect(normalize({ coins: 1 }, 0).conquest).toEqual({ day: null, recruits: 0 });
-    expect(conquestState({ day: '2026-10-02', recruits: 999 })).toEqual({ day: '2026-10-02', recruits: RECRUITS_DAY });
+    expect(normalize({ coins: 1 }, 0).conquest).toEqual(newConquest());
+    expect(conquestState({ day: '2026-10-02', recruits: 999, wins: -3, reports: [{ by: 'x' }, { by: 'b', name: 'Bruno', tile: '1_0', at: 5 }] })).toMatchObject({
+      day: '2026-10-02',
+      recruits: RECRUITS_DAY,
+      wins: 0,
+      reports: [{ by: 'b', name: 'Bruno', tile: '1_0', at: 5 }],
+    });
+  });
+});
+
+describe('Conquista: partes de batalla y premios', () => {
+  it('los partes nuevos se guardan una sola vez, los más recientes primero', () => {
+    const s = newState(0);
+    const r1 = { by: 'b', name: 'Bruno', tile: '-4_3', at: 100 };
+    const r2 = { by: 'c', name: 'Caro', tile: '-3_3', at: 200 };
+    const a = applyReports(s, [r1, r2]);
+    expect(a.fresh.map((r) => r.at)).toEqual([200, 100]);
+    expect(a.s.conquest).toMatchObject({ seenAt: 200, lost: 2 });
+    expect(applyReports(a.s, [r1, r2]).fresh).toEqual([]);
+  });
+
+  it('el premio pide rivales para el podio', () => {
+    expect(seasonPrize(1, 5, 12)).toEqual({ gems: 5 + 12 + 45, tickets: 3, win: true, podium: true });
+    expect(seasonPrize(2, 5, 30)).toEqual({ gems: 20 + 25, tickets: 2, win: false, podium: true });
+    expect(seasonPrize(3, 3, 4)).toEqual({ gems: 9, tickets: 0, win: false, podium: false });
+    // Solo en el mundo: participación, sin victoria
+    expect(seasonPrize(1, 1, 20)).toEqual({ gems: 20, tickets: 0, win: false, podium: false });
+  });
+
+  it('una temporada se cobra una vez y queda en el palmarés y en la ciudad pública', () => {
+    let s = withWorld(newState(0), '2026-09-28', 'w0');
+    const r = applySeason(s, '2026-09-28', 1, 4, 10)!;
+    expect(r.prize.win).toBe(true);
+    s = r.s;
+    expect(s.gems).toBe(60);
+    expect(s.tickets).toBe(newState(0).tickets + 3);
+    expect(s.conquest).toMatchObject({ claimed: '2026-09-28', wins: 1, podiums: 1, history: [{ week: '2026-09-28', rank: 1, size: 4, points: 10, gems: 60 }] });
+    expect(applySeason(s, '2026-09-28', 1, 4, 10)).toBeNull();
+    expect(citySnapshot(s).conq).toBe(1);
+    expect(citySnapshot(newState(0)).conq).toBeUndefined();
   });
 });

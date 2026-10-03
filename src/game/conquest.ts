@@ -233,32 +233,137 @@ export function seasonOf(ms: number): { week: string; endsAt: number } {
   return { week, endsAt: cupStart(week) + 7 * 86_400_000 };
 }
 
-// ---------- Reclutas en la partida ----------
+// ---------- Estado en la partida ----------
+
+/** Parte de batalla: otro alcalde te quitó un territorio. */
+export interface Report {
+  by: string;
+  name: string;
+  tile: string;
+  /** Hora del servidor (ms). */
+  at: number;
+}
+
+/** Resultado de una temporada terminada. */
+export interface SeasonRecord {
+  week: string;
+  rank: number;
+  size: number;
+  points: number;
+  gems: number;
+}
 
 export interface ConquestState {
   /** Día al que corresponde `recruits`. */
   day: string | null;
   /** Reclutas ganados hoy por actividad (se suben a la reserva al abrir la Conquista). */
   recruits: number;
+  /** Semana y mundo en que juega el alcalde (para los partes y el premio). */
+  week: string | null;
+  w: string | null;
+  /** Hora (del servidor) del último parte de batalla ya visto. */
+  seenAt: number;
+  /** Últimos partes de batalla. */
+  reports: Report[];
+  /** Territorios perdidos en total (para el periódico). */
+  lost: number;
+  /** Última semana cuyo premio ya se cobró. */
+  claimed: string | null;
+  /** Temporadas ganadas (bandera en la ciudad) y podios. */
+  wins: number;
+  podiums: number;
+  history: SeasonRecord[];
 }
 
+const REPORTS_MAX = 8;
+export const HISTORY_MAX = 8;
+
 export function newConquest(): ConquestState {
-  return { day: null, recruits: 0 };
+  return { day: null, recruits: 0, week: null, w: null, seenAt: 0, reports: [], lost: 0, claimed: null, wins: 0, podiums: 0, history: [] };
 }
+
+const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+const text = (v: unknown) => (typeof v === 'string' ? v : null);
 
 export function conquestState(v: unknown): ConquestState {
   if (!v || typeof v !== 'object') return newConquest();
   const r = v as Partial<ConquestState>;
-  const n = typeof r.recruits === 'number' && Number.isFinite(r.recruits) ? Math.floor(r.recruits) : 0;
-  return { day: typeof r.day === 'string' ? r.day : null, recruits: Math.max(0, Math.min(RECRUITS_DAY, n)) };
+  return {
+    day: text(r.day),
+    recruits: Math.min(RECRUITS_DAY, count(r.recruits)),
+    week: text(r.week),
+    w: text(r.w),
+    seenAt: count(r.seenAt),
+    reports: Array.isArray(r.reports)
+      ? r.reports
+          .filter((x) => x && typeof x.by === 'string' && typeof x.name === 'string' && typeof x.tile === 'string' && Number.isFinite(x.at))
+          .slice(0, REPORTS_MAX)
+          .map((x) => ({ by: x.by, name: x.name.slice(0, 20), tile: x.tile, at: x.at }))
+      : [],
+    lost: count(r.lost),
+    claimed: text(r.claimed),
+    wins: count(r.wins),
+    podiums: count(r.podiums),
+    history: Array.isArray(r.history)
+      ? r.history
+          .filter((x) => x && typeof x.week === 'string')
+          .slice(-HISTORY_MAX)
+          .map((x) => ({ week: x.week, rank: count(x.rank), size: count(x.size), points: count(x.points), gems: count(x.gems) }))
+      : [],
+  };
+}
+
+/** Apunta en qué semana y mundo juega el alcalde. */
+export function withWorld(s: GameState, week: string, w: string): GameState {
+  if (s.conquest.week === week && s.conquest.w === w) return s;
+  return { ...s, conquest: { ...s.conquest, week, w } };
+}
+
+/** Guarda los partes de batalla nuevos. Devuelve también los recién llegados. */
+export function applyReports(s: GameState, list: Report[]): { s: GameState; fresh: Report[] } {
+  const c = s.conquest;
+  const fresh = list.filter((r) => r.at > c.seenAt).sort((a, b) => b.at - a.at);
+  if (!fresh.length) return { s, fresh };
+  return {
+    s: { ...s, conquest: { ...c, seenAt: fresh[0].at, lost: c.lost + fresh.length, reports: [...fresh, ...c.reports].slice(0, REPORTS_MAX) } },
+    fresh,
+  };
+}
+
+/**
+ * Premio al cerrar la temporada: participación (5 + 1 por punto, hasta 20) y extra por el podio. El podio
+ * pide rivales: ganar solo cuenta si hubo al menos 2 alcaldes, el 2º con 3 y el 3º con 4.
+ */
+export function seasonPrize(rank: number, size: number, points: number): { gems: number; tickets: number; win: boolean; podium: boolean } {
+  const base = 5 + Math.min(15, Math.max(0, points));
+  const win = rank === 1 && size >= 2;
+  const second = rank === 2 && size >= 3;
+  const third = rank === 3 && size >= 4;
+  const extra = win ? 45 : second ? 25 : third ? 10 : 0;
+  return { gems: base + extra, tickets: win ? 3 : second ? 2 : third ? 1 : 0, win, podium: win || second || third };
+}
+
+/** Cobra el premio de una temporada terminada (una sola vez por semana). */
+export function applySeason(s: GameState, week: string, rank: number, size: number, points: number): { s: GameState; prize: ReturnType<typeof seasonPrize> } | null {
+  const c = s.conquest;
+  if (c.claimed === week) return null;
+  const prize = seasonPrize(rank, size, points);
+  const conquest: ConquestState = {
+    ...c,
+    claimed: week,
+    wins: c.wins + (prize.win ? 1 : 0),
+    podiums: c.podiums + (prize.podium ? 1 : 0),
+    history: [...c.history, { week, rank, size, points, gems: prize.gems }].slice(-HISTORY_MAX),
+  };
+  return { s: { ...s, gems: s.gems + prize.gems, tickets: s.tickets + prize.tickets, conquest }, prize };
 }
 
 /** Suma reclutas de hoy por jugar (con el tope diario). */
 export function addRecruits(s: GameState, n: number, day: string): GameState {
-  const c = s.conquest.day === day ? s.conquest : { day, recruits: 0 };
-  const recruits = Math.min(RECRUITS_DAY, c.recruits + n);
-  if (recruits === c.recruits && c === s.conquest) return s;
-  return { ...s, conquest: { day, recruits } };
+  const before = s.conquest.day === day ? s.conquest.recruits : 0;
+  const recruits = Math.min(RECRUITS_DAY, before + n);
+  if (recruits === s.conquest.recruits && s.conquest.day === day) return s;
+  return { ...s, conquest: { ...s.conquest, day, recruits } };
 }
 
 /** Reclutas ganados hoy que aún no están en la reserva de la nube. */

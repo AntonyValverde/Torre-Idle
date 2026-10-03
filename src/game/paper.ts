@@ -34,6 +34,9 @@ export interface PaperStats {
   achievements: number;
   /** Regalos recibidos de otros alcaldes. */
   gifts: number;
+  /** Conquista: temporadas ganadas y territorios perdidos. */
+  conqWins: number;
+  conqLost: number;
   bests: Record<RecordKey, number>;
 }
 
@@ -47,6 +50,9 @@ export interface PaperDelta {
   spins: number;
   achievements: number;
   gifts: number;
+  /** Conquista: temporadas ganadas y territorios perdidos desde la edición anterior (las ediciones viejas no los traen). */
+  conqWins?: number;
+  conqLost?: number;
   /** Eras ganadas (refundaciones). */
   eras: number;
   stars: number;
@@ -97,6 +103,8 @@ function statsOf(v: unknown): PaperStats | null {
     league: Number.isFinite(r.league) ? (r.league as number) : -1,
     achievements: num(r.achievements),
     gifts: num(r.gifts),
+    conqWins: num(r.conqWins),
+    conqLost: num(r.conqLost),
     bests,
   };
 }
@@ -136,6 +144,8 @@ export function paperStats(s: GameState): PaperStats {
     league: s.league.best,
     achievements: Object.values(s.achievements).reduce((n, x) => n + x, 0),
     gifts: s.social.received,
+    conqWins: s.conquest.wins,
+    conqLost: s.conquest.lost,
     bests,
   };
 }
@@ -152,6 +162,8 @@ export function paperDelta(a: PaperStats, b: PaperStats, since: string): PaperDe
     spins: Math.max(0, b.spins - a.spins),
     achievements: Math.max(0, b.achievements - a.achievements),
     gifts: Math.max(0, b.gifts - a.gifts),
+    conqWins: Math.max(0, b.conqWins - a.conqWins),
+    conqLost: Math.max(0, b.conqLost - a.conqLost),
     eras: Math.max(0, b.era - a.era),
     stars: Math.max(0, b.stars - a.stars),
     era: b.era,

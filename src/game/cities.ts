@@ -15,6 +15,8 @@ export interface CitySnapshot {
   cups: string;
   /** Regalos recibidos de otros alcaldes (❤️). Solo se envía si hay alguno. */
   gifts?: number;
+  /** Temporadas de Conquista ganadas (banderas azules). Solo se envía si hay alguna. */
+  conq?: number;
 }
 
 /**
@@ -38,6 +40,7 @@ export function citySnapshot(s: GameState): CitySnapshot {
     stars: Math.floor(s.stars),
     cups: [s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons].map((n) => Math.min(99999, Math.floor(n))).join(','),
     ...(s.social.received > 0 ? { gifts: Math.min(10_000_000, Math.floor(s.social.received)) } : {}),
+    ...(s.conquest.wins > 0 ? { conq: Math.min(10_000, Math.floor(s.conquest.wins)) } : {}),
   };
 }
 

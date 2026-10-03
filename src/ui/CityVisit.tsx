@@ -80,7 +80,7 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
         {city && city !== 'error' && (
           <>
             <div className="scene-wrap visit-scene">
-              <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings, cups: parseCups(city.cups) }} />
+              <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings, cups: parseCups(city.cups), conq: city.conq ?? 0 }} />
               <div className="scene-badge">
                 Era {city.era} · {eraName(city.era)}
               </div>
@@ -118,6 +118,11 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+            {(city.conq ?? 0) > 0 && (
+              <div className="card cup-showcase">
+                <b>⚔️ Conquistas ganadas: {city.conq}</b>
               </div>
             )}
             <p className="hint">
