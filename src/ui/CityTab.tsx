@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react';
+import { cloudEnabled } from '../firebase';
 import {
   BUILDINGS,
   autoTapsPerSec,
@@ -36,7 +37,7 @@ const AMOUNTS = [1, 10, -1] as const;
  * `paused`: hay una pantalla completa encima y la escena no necesita dibujarse.
  * `onIncident`: el jugador tocó el incidente de la escena (abre su minijuego gratis).
  */
-export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIncident: () => void }) {
+export function CityTab({ paused = false, onIncident, onWorld }: { paused?: boolean; onIncident: () => void; onWorld: () => void }) {
   const s = useGame((st) => st.s);
   const buy = useGame((st) => st.buyBuilding);
   const [amount, setAmount] = useState<(typeof AMOUNTS)[number]>(1);
@@ -77,6 +78,17 @@ export function CityTab({ paused = false, onIncident }: { paused?: boolean; onIn
 
       {isUnlocked(s, 'ranking') && <NewspaperCard onOpen={() => setPaper(true)} />}
       {paper && <NewspaperScreen onClose={() => setPaper(false)} />}
+
+      {cloudEnabled && isUnlocked(s, 'ranking') && (
+        <button className="world-entry" onClick={onWorld}>
+          <span className="world-entry-icon">🌍</span>
+          <span className="world-entry-main">
+            <b>Mapa del mundo</b>
+            <small>Visita las ciudades de otros alcaldes y conquista territorios cada semana.</small>
+          </span>
+          <span className="world-entry-go">›</span>
+        </button>
+      )}
 
       {isUnlocked(s, 'missions') && <MissionsCard />}
 

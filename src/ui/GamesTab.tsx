@@ -8,10 +8,24 @@ import { vipReady } from '../game/legacy';
 import { CASINO_ERA, casinoOpen, casinoToday } from '../game/casino';
 import { CupCard } from './cup/CupCard';
 
-export type GameId = 'stack' | 'merge' | 'daily' | 'roads' | 'parks' | 'wheel' | 'thief' | 'stocks' | 'traffic' | 'memory' | 'fire' | 'metro' | 'casino';
+export type GameId =
+  | 'stack'
+  | 'merge'
+  | 'daily'
+  | 'roads'
+  | 'parks'
+  | 'wheel'
+  | 'thief'
+  | 'stocks'
+  | 'traffic'
+  | 'memory'
+  | 'fire'
+  | 'metro'
+  | 'casino'
+  | 'towers';
 
 /** Juegos que cuestan un ticket al entrar. */
-export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro'];
+export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers'];
 
 const NEW_TAG = <span className="new-tag">NUEVO</span>;
 
@@ -98,6 +112,16 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
         <h2>Arcade</h2>
         <small className="muted">{vip ? '🏆 Partida VIP gratis' : '1 🎟️ por partida'}</small>
       </div>
+
+      <button className="game-card towers" disabled={!canPlay} onClick={() => onPlay('towers')}>
+        <span className="game-emoji">🏰</span>
+        <div className="game-info">
+          <b>Guerra de torres {NEW_TAG}</b>
+          <small>Arrastra de tu torre a otra vecina para enviar soldados. ¡Conquista todas las del rival!</small>
+          <small className="game-meta">🏆 Récord: {s.towersBest} pts</small>
+        </div>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
+      </button>
 
       <button className="game-card fire" disabled={!canPlay} onClick={() => onPlay('fire')}>
         <span className="game-emoji">🚒</span>

@@ -111,6 +111,7 @@ import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { PAPER_GEMS, paperUnread } from './paper';
 import { applyGiftSent, applyGiftsReceived, type GiftIn } from './social';
+import { RECRUIT_DAILY, RECRUIT_INCIDENT, RECRUIT_MISSION, addRecruits } from './conquest';
 import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
 import { tutorialNext, tutorialSkip } from './tutorial';
 import { WHEEL, pickSegment } from './wheel';
@@ -203,6 +204,7 @@ interface GameStore {
   rewardMemory(rounds: number): MemoryReward;
   rewardFire(score: number): ThiefReward;
   rewardMetro(score: number): StackReward;
+  rewardTowers(score: number): ThiefReward;
   /** Reclama una misión completada; devuelve el texto del premio o null. */
   claimMission(kind: 'daily' | 'weekly', index: number): string | null;
   claimChest(): string | null;
@@ -310,6 +312,11 @@ function incidentBonus(game: IncidentGame, play: IncidentKind | null, score: num
   return INCIDENT_BONUS;
 }
 
+/** Un incidente resuelto (el minijuego pagó su extra) también da reclutas para la Conquista. */
+function incidentRecruits(s: GameState, bonus: number): GameState {
+  return bonus > 1 ? addRecruits(s, RECRUIT_INCIDENT, dateKey(now())) : s;
+}
+
 /** Completa un reto diario (Apagón, Calles o Plan verde): un premio por día, con racha y gemas extra dentro del par. */
 function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: string, moves: number, par: number) {
   const rec = s[key];
@@ -322,7 +329,7 @@ function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: strin
     gems: s.gems + gems,
     [key]: { last: date, streak, bestStreak: Math.max(rec.bestStreak, streak) },
   };
-  let next = addPoints(bump(bump(done, key), 'puzzle'), PUZZLE_POINTS);
+  let next = addRecruits(addPoints(bump(bump(done, key), 'puzzle'), PUZZLE_POINTS), RECRUIT_DAILY, dateKey(now()));
   // A veces regala una carta para la Copa
   const card = Math.random() < 0.35 ? randomCard(Math.random) : undefined;
   if (card) next = withCard(next, card);
@@ -556,7 +563,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const coins = Math.round(score * Math.max(15, pps * 4) * bonus * fxMult(s, 'arcadeCoins'));
     const gems = score >= 400 ? 6 : score >= 250 ? 4 : score >= 120 ? 2 : score >= 60 ? 1 : 0;
     set({
-      s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score),
+      s: incidentRecruits(bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, fireBest: Math.max(s.fireBest, score) }, 'arcade'), 'fire', score), bonus),
       incidentPlay: null,
     });
     return { coins, gems, newBest: score > s.fireBest };
@@ -573,8 +580,17 @@ export const useGame = create<GameStore>((set, get) => ({
     // Fuente propia ('metro'): se multiplica con los boosts de Stack y Semáforo
     let next = { ...addCoins(s, coins), metroBest: Math.max(s.metroBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'metro', mult, seconds) };
-    set({ s: bump(bump(next, 'arcade'), 'metro', score), incidentPlay: null });
+    set({ s: incidentRecruits(bump(bump(next, 'arcade'), 'metro', score), bonus), incidentPlay: null });
     return { coins, mult, seconds, newBest: score > s.metroBest };
+  },
+
+  rewardTowers(score) {
+    const { s } = get();
+    const pps = productionPerSec(s, now(), false);
+    const coins = Math.round(score * Math.max(20, pps * 5) * fxMult(s, 'arcadeCoins'));
+    const gems = score >= 130 ? 6 : score >= 80 ? 4 : score >= 45 ? 2 : score >= 20 ? 1 : 0;
+    set({ s: bump({ ...addCoins(s, coins), gems: s.gems + gems, towersBest: Math.max(s.towersBest, score) }, 'arcade') });
+    return { coins, gems, newBest: score > s.towersBest };
   },
 
   rewardTraffic(score) {
@@ -588,7 +604,7 @@ export const useGame = create<GameStore>((set, get) => ({
     // Fuente propia ('semaforo'): se multiplica con el boost de Stack en vez de sustituirlo
     let next = { ...addCoins(s, coins), trafficBest: Math.max(s.trafficBest, score) };
     if (mult > 1) next = { ...next, boosts: addBoost(s, t, 'semaforo', mult, seconds) };
-    set({ s: bump(bump(next, 'arcade'), 'traffic', score), incidentPlay: null });
+    set({ s: incidentRecruits(bump(bump(next, 'arcade'), 'traffic', score), bonus), incidentPlay: null });
     return { coins, mult, seconds, newBest: score > s.trafficBest };
   },
 
@@ -766,7 +782,7 @@ export const useGame = create<GameStore>((set, get) => ({
     if (chips) get().toast(`🎰 ¡Atraco frustrado! +${chips} fichas`);
     const next: GameState = { ...addCoins(s, coins), gems: s.gems + gems, thiefBest: Math.max(s.thiefBest, score) };
     set({
-      s: bump(bump(chips ? { ...next, casino: { ...next.casino, chips: next.casino.chips + chips } } : next, 'arcade'), 'thief', score),
+      s: incidentRecruits(bump(bump(chips ? { ...next, casino: { ...next.casino, chips: next.casino.chips + chips } } : next, 'arcade'), 'thief', score), bonus),
       incidentPlay: null,
     });
     return { coins, gems, newBest: score > s.thiefBest };
@@ -815,7 +831,7 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!slot || slot.c || !isDone(slot)) return null;
     const claimed = list.map((x, i) => (i === index ? { ...x, c: true } : x));
     const missions = kind === 'daily' ? { ...s.missions, daily: claimed } : { ...s.missions, weekly: claimed };
-    let next: GameState = { ...s, missions, missionsDone: s.missionsDone + 1 };
+    let next: GameState = addRecruits({ ...s, missions, missionsDone: s.missionsDone + 1 }, RECRUIT_MISSION, dateKey(now()));
     if (kind === 'daily') {
       next = addPoints({ ...next, gems: next.gems + DAILY_REWARD.gems, tickets: next.tickets + DAILY_REWARD.tickets }, DAILY_REWARD.points);
       set({ s: next });

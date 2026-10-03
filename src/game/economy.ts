@@ -374,6 +374,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     desc: (v) => `Lleva a ${v} viajeros en Metro`,
   },
   {
+    id: 'towers',
+    name: 'Conquistador',
+    emoji: '🏰',
+    threshold: fromList([10, 25, 45, 70, 100, 140, 190, 250], (k) => 320 + 80 * k),
+    stat: (s) => s.towersBest,
+    desc: (v) => `Consigue ${v} puntos en Guerra de torres`,
+  },
+  {
     id: 'missions',
     name: 'Funcionario ejemplar',
     emoji: '📋',

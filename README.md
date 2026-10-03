@@ -16,8 +16,11 @@ Juego idle/clicker para móvil (PWA) con minijuegos (antes se llamaba Torre Idle
 | 🧠 **Memoria de ventanas**: repite la secuencia de luces | 🎟️ | Monedas y hasta 4 🎟️ (sin pasar del máximo) |
 | 🚒 **Bomberos**: apaga incendios antes de que se propaguen, con agua limitada | 🎟️ | Monedas y gemas |
 | 🚇 **Metro**: traza hasta 3 líneas entre estaciones y lleva a cada viajero a su destino | 🎟️ | Monedas y boost de producción (fuente propia) |
+| 🏰 **Guerra de torres**: arrastra de una torre tuya a una vecina para enviar todos sus soldados; conquista todas las del rival | 🎟️ | Monedas y gemas |
 | 🧱 **Fusión** (tipo 2048) | 🎟️ | Gemas y edificios raros |
 | 📈 **Bolsa de la ciudad** | Libre | Ganancias que no cuentan para estrellas ni rankings |
+
+En la **Guerra de torres** ([logic.ts](src/minigames/towers/logic.ts)) las torres con dueño generan soldados hasta su tope (25 las pequeñas, 40 las grandes); lo que pasa del tope por refuerzos se pierde a 2 por segundo. Al llegar a una torre ajena los soldados se restan y, si sobran, la conquistan. Una partida son batallas seguidas de hasta 90 s, cada vez con más torres y un rival más rápido (dos rivales desde la quinta), hasta que pierdes una. Si se acaba el tiempo, gana quien tenga más torres. Puntos: 1 por torre conquistada y 5 por batalla ganada, más 1 por cada 15 s que sobren.
 
 Los tres retos diarios generan el mismo tablero para todos a partir de la fecha. El Plan verde siempre tiene una única solución. En Semáforo, un coche que espera demasiado en rojo pierde la paciencia y se lo salta, así que no se puede dejar el semáforo fijo.
 
@@ -51,6 +54,24 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - En cualquier ranking, al tocar a un jugador se abre su ciudad, dibujada con el mismo clima y la misma hora. Tocarla no recauda; solo saluda.
 - En Logros → Perfil → **Tu ciudad** puedes ver cómo la ven los demás y compartir un enlace (`?ciudad=UID`) que abre tu ciudad directamente.
 - El panel de administración también puede abrir la ciudad de cualquier jugador.
+- **Mapa del mundo** (tarjeta 🌍 en la Ciudad, o Logros → Perfil): todas las ciudades sobre unos continentes fijos ([world.ts](src/game/world.ts)). La posición de cada ciudad sale de su UID, así que siempre está en el mismo sitio y es igual para todos. El tamaño y el color dependen de la era, y las que llevan una semana sin actividad se ven apagadas. Se arrastra, se pellizca para hacer zoom y, al tocar una ciudad, se puede visitar. También tiene vista de lista (la antigua "Explorar ciudades"). Lee las 200 ciudades más recientes como mucho una vez cada 10 minutos.
+
+## Conquista (temporada semanal)
+
+Pestaña ⚔️ Conquista del Mapa del mundo. Va en la misma semana que la Copa (lunes a domingo, hora de Costa Rica). La lógica está en [conquest.ts](src/game/conquest.ts) y [conquestCloud.ts](src/game/conquestCloud.ts).
+
+- **Mundos** de hasta 16 alcaldes. Al unirte recibes una capital en el borde del mapa, que nadie puede conquistar. Las casillas de capital todavía libres no se pueden tomar.
+- **Mapa** hexagonal de 61 territorios. Los que no tienen dueño son de bandidos, con 4 de guarnición en el borde y hasta 13 junto a la **Torre central**, que tiene 40 y vale 3 puntos.
+- **Tropas**: salen de una reserva que se recarga sola (1 cada 3 min, hasta 60). Las misiones (+5), los retos diarios (+5) y los incidentes resueltos (+3) dan **reclutas** extra, como mucho 30 al día. Se suman al abrir la Conquista.
+- **Combate**: tocas un territorio vecino de uno tuyo y envías más tropas que su guarnición. Lo conquistado queda con la diferencia y un **escudo** de 30 min. Los territorios propios se refuerzan, y su guarnición crece sola (1 cada 10 min, hasta 30; la capital, hasta 50).
+- **Clasificación**: un punto por territorio, en vivo.
+- **Firestore**:
+  - `conquest/{lunes}/members/{uid}`: en qué mundo juega cada alcalde.
+  - `conquest/{lunes}/worlds/{w}`: cuántos alcaldes tiene el mundo.
+  - `.../players/{uid}`: la reserva de tropas.
+  - `.../tiles/{q_r}`: los territorios con dueño.
+- **Reglas como árbitro**: comprueban con la hora del servidor la recarga, la vecindad, la guarnición, el escudo y el tope de reclutas, sin Cloud Functions. Los reclutas los declara el móvil y las reglas solo garantizan el tope diario. Las cifras están repetidas en las reglas y en `conquest.ts`, y un test comprueba que coinciden.
+- **Pendiente**: partes de batalla ("mientras no estabas…") y premios de fin de temporada.
 
 ## Tutorial de Clara
 
@@ -81,7 +102,7 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - Al visitar la ciudad de otro jugador se le puede dejar un 🎁 regalo: uno al día por ciudad y hasta 5 al día en total. Cada regalo da +1 💎 a quien lo deja.
 - El alcalde visitado lo cobra al entrar (o en los 5 minutos siguientes si ya estaba jugando): +1 🎟️ por regalo, hasta 5 tickets al día. Un aviso le dice quién se lo dejó.
 - Los regalos recibidos se ven como ❤️ en la ciudad pública, en Logros → Perfil y en el periódico.
-- **Explorar ciudades** (Logros → Perfil) lista las 20 ciudades con actividad más reciente para visitarlas.
+- El **Mapa del mundo** (vista de mapa o de lista, con las 20 ciudades más recientes) sirve para encontrar a quién visitar y regalar.
 - Firestore: `gifts/{destinatario}/inbox/{remitente}`, un documento por remitente que solo se puede renovar otro día. Solo el destinatario lee su buzón, y la ciudad de destino tiene que existir.
 
 ## Misiones y liga semanal

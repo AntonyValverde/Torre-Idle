@@ -13,6 +13,7 @@ export const PAPER_RECORDS = {
   memoryBest: { emoji: '🧠', name: 'Memoria', unit: 'rondas' },
   fireBest: { emoji: '🚒', name: 'Bomberos', unit: 'puntos' },
   metroBest: { emoji: '🚇', name: 'Metro', unit: 'viajeros' },
+  towersBest: { emoji: '🏰', name: 'Guerra de torres', unit: 'puntos' },
   mergeBestTile: { emoji: '🧱', name: 'Fusión', unit: '(ficha)' },
 } as const;
 

@@ -2,7 +2,161 @@ import { describe, expect, it } from 'vitest';
 import * as fire from './fire/logic';
 import * as metro from './metro/logic';
 import * as parks from './parks/logic';
+import * as towers from './towers/logic';
 import { mulberry32 } from './rng';
+
+describe('Guerra de torres', () => {
+  const connected = (adj: number[][]) => {
+    const seen = new Set([0]);
+    const stack = [0];
+    while (stack.length) for (const j of adj[stack.pop()!]) if (!seen.has(j)) seen.add(j), stack.push(j);
+    return seen.size === adj.length;
+  };
+
+  it('cada batalla tiene tu torre, la del rival y caminos que lo unen todo', () => {
+    for (let battle = 1; battle <= 9; battle++) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const { towers: ts, adj } = towers.makeBattle(battle, mulberry32(seed * 31 + battle));
+        expect(ts).toHaveLength(towers.towerCount(battle));
+        expect(ts.filter((t) => t.owner === towers.PLAYER)).toHaveLength(1);
+        expect(ts.filter((t) => towers.isAi(t.owner))).toHaveLength(towers.aiCount(battle));
+        expect(connected(adj)).toBe(true);
+        // Los caminos van en los dos sentidos
+        adj.forEach((ns, a) => ns.forEach((b) => expect(adj[b]).toContain(a)));
+        for (const t of ts) {
+          expect(t.x).toBeGreaterThanOrEqual(0);
+          expect(t.x).toBeLessThanOrEqual(towers.FIELD_W);
+          expect(t.y).toBeGreaterThanOrEqual(0);
+          expect(t.y).toBeLessThanOrEqual(towers.FIELD_H);
+        }
+      }
+    }
+  });
+
+  it('en la primera batalla el primer envío ya conquista una vecina (casi siempre)', () => {
+    let ok = 0;
+    for (let seed = 1; seed <= 50; seed++) {
+      const g = towers.newTowers(mulberry32(seed));
+      const me = g.towers.findIndex((t) => t.owner === towers.PLAYER);
+      const out = towers.sendAmount(g.towers[me].units);
+      if (g.adj[me].some((j) => g.towers[j].owner === towers.NEUTRAL && g.towers[j].units < out)) ok++;
+    }
+    expect(ok).toBeGreaterThanOrEqual(45);
+  });
+
+  it('la misma semilla da el mismo mapa', () => {
+    expect(towers.makeBattle(3, mulberry32(7))).toEqual(towers.makeBattle(3, mulberry32(7)));
+  });
+
+  it('enviar manda todos los soldados por un camino y al llegar conquista con lo que sobra', () => {
+    const g = towers.newTowers(mulberry32(5));
+    g.aiTimer = [0, 0, 1e9, 1e9];
+    const me = g.towers.findIndex((t) => t.owner === towers.PLAYER);
+    // Una vecina que no sea la del rival (si no, conquistarla ganaría la batalla)
+    const to = g.adj[me].find((j) => !towers.isAi(g.towers[j].owner))!;
+    const other = g.towers.findIndex((_, i) => i !== me && !g.adj[me].includes(i));
+    g.towers[me].units = 20;
+    g.towers[to] = { ...g.towers[to], owner: towers.NEUTRAL, units: 4 };
+    // Sin camino o desde una torre ajena no se puede
+    if (other >= 0) expect(towers.send(g, me, other)).toBe(0);
+    expect(towers.send(g, to, me)).toBe(0);
+    expect(towers.send(g, me, to)).toBe(20);
+    expect(g.towers[me].units).toBe(0);
+    // Sin soldados ya no se puede volver a enviar
+    expect(towers.send(g, me, to)).toBe(0);
+    const len = g.packets[0].len;
+    towers.step(g, (len / towers.SPEED) * 1000 + 50, mulberry32(1));
+    expect(g.towers[to].owner).toBe(towers.PLAYER);
+    expect(g.towers[to].units).toBeCloseTo(16, 0);
+    expect(g.captured).toBe(1);
+    expect(g.score).toBe(towers.CAPTURE_POINTS);
+  });
+
+  it('los refuerzos a una torre propia se suman', () => {
+    const g = towers.newTowers(mulberry32(8));
+    g.aiTimer = [0, 0, 1e9, 1e9];
+    const me = g.towers.findIndex((t) => t.owner === towers.PLAYER);
+    const to = g.adj[me].find((j) => !towers.isAi(g.towers[j].owner))!;
+    g.towers[to] = { ...g.towers[to], owner: towers.PLAYER, units: 3 };
+    g.towers[me].units = 9;
+    expect(towers.send(g, me, to)).toBe(9);
+    towers.step(g, (g.packets[0].len / towers.SPEED) * 1000 + 50, mulberry32(1));
+    expect(g.towers[to].units).toBeGreaterThan(11);
+    expect(g.towers[to].owner).toBe(towers.PLAYER);
+  });
+
+  it('lo que pasa del tope se va perdiendo', () => {
+    const g = towers.newTowers(mulberry32(8));
+    g.aiTimer = [0, 0, 1e9, 1e9];
+    const me = g.towers.findIndex((t) => t.owner === towers.PLAYER);
+    const t = g.towers[me];
+    t.units = t.cap + 10;
+    towers.step(g, 2000, mulberry32(1));
+    expect(t.units).toBeCloseTo(t.cap + 10 - 2 * towers.OVER_DECAY);
+    towers.step(g, 10_000, mulberry32(1));
+    expect(t.units).toBe(t.cap);
+  });
+
+  it('gana la batalla quien elimina al rival, y la siguiente es más grande', () => {
+    const g = towers.newTowers(mulberry32(3));
+    for (const t of g.towers) if (towers.isAi(t.owner)) t.owner = towers.PLAYER;
+    const ev = towers.step(g, 100, mulberry32(1));
+    expect(ev.battleWon).toBe(true);
+    expect(g.state).toBe('won');
+    expect(g.won).toBe(1);
+    expect(g.score).toBeGreaterThanOrEqual(towers.WIN_POINTS);
+    const next = towers.nextBattle(g, mulberry32(4));
+    expect(next.battle).toBe(2);
+    expect(next.score).toBe(g.score);
+    expect(next.towers.length).toBeGreaterThan(g.towers.length);
+    expect(next.state).toBe('play');
+  });
+
+  it('pierdes si te quedas sin torres ni soldados en camino', () => {
+    const g = towers.newTowers(mulberry32(3));
+    for (const t of g.towers) if (t.owner === towers.PLAYER) t.owner = 2;
+    const ev = towers.step(g, 100, mulberry32(1));
+    expect(ev.battleLost).toBe(true);
+    expect(g.over).toBe(true);
+    // Terminada, ya no cambia nada
+    expect(towers.step(g, 1000, mulberry32(1)).battleLost).toBe(false);
+  });
+
+  it('al acabarse el tiempo gana quien tiene más torres', () => {
+    const g = towers.newTowers(mulberry32(9));
+    g.aiTimer = [0, 0, 1e9, 1e9];
+    const neutral = g.towers.findIndex((t) => t.owner === towers.NEUTRAL);
+    g.towers[neutral].owner = towers.PLAYER;
+    g.t = towers.BATTLE_MS - 10;
+    expect(towers.step(g, 20, mulberry32(1)).battleWon).toBe(true);
+
+    const h = towers.newTowers(mulberry32(9));
+    h.aiTimer = [0, 0, 1e9, 1e9];
+    h.t = towers.BATTLE_MS - 10;
+    // Empate (una torre cada uno): pierdes
+    expect(towers.step(h, 20, mulberry32(1)).battleLost).toBe(true);
+  });
+
+  it('el rival ataca si puede ganar una torre vecina', () => {
+    const g = towers.newTowers(mulberry32(11));
+    const ai = g.towers.findIndex((t) => t.owner === 2);
+    const to = g.adj[ai][0];
+    g.towers[ai].units = 30;
+    g.towers[to] = { ...g.towers[to], owner: towers.NEUTRAL, units: 2 };
+    g.battle = 9; // sin dudas
+    expect(towers.aiMove(g, 2, mulberry32(1))).toBe(true);
+    expect(g.packets.some((p) => p.owner === 2)).toBe(true);
+  });
+
+  it('si no haces nada, el rival se expande', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const g = towers.newTowers(mulberry32(seed));
+      const rand = mulberry32(seed + 100);
+      for (let t = 0; t < 60_000 && g.state === 'play'; t += 50) towers.step(g, 50, rand);
+      expect(g.towers.filter((t) => t.owner === 2).length).toBeGreaterThan(1);
+    }
+  });
+});
 
 describe('Bomberos', () => {
   it('empieza sin fuego y con el depósito lleno', () => {

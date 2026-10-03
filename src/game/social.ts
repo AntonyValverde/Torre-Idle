@@ -62,7 +62,7 @@ function today(s: SocialState, day: string): SocialState {
 }
 
 /** Por qué no se puede regalar a esa ciudad hoy (null: se puede). */
-export function giftBlock(s: GameState, uid: string, day: string, myUid: string | null): string | null {
+export function giftBlock(s: Pick<GameState, 'social'>, uid: string, day: string, myUid: string | null): string | null {
   if (!myUid) return 'Necesitas conexión para regalar';
   if (uid === myUid) return 'No puedes regalarte a ti mismo';
   const so = today(s.social, day);

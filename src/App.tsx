@@ -46,6 +46,8 @@ const TrafficScreen = lazy(() => import('./minigames/traffic/TrafficScreen').the
 const WheelScreen = lazy(() => import('./minigames/wheel/WheelScreen').then((m) => ({ default: m.WheelScreen })));
 const CupScreen = lazy(() => import('./ui/cup/CupScreen').then((m) => ({ default: m.CupScreen })));
 const CasinoScreen = lazy(() => import('./minigames/casino/CasinoScreen').then((m) => ({ default: m.CasinoScreen })));
+const TowersScreen = lazy(() => import('./minigames/towers/TowersScreen').then((m) => ({ default: m.TowersScreen })));
+const WorldScreen = lazy(() => import('./ui/WorldMap').then((m) => ({ default: m.WorldScreen })));
 
 const loading = (
   <div className="game-screen splash">
@@ -65,6 +67,7 @@ export default function App() {
   // Ciudad que se está visitando (desde el ranking, el perfil o un enlace ?ciudad=…)
   const [visit, setVisit] = useState<string | null>(() => cityFromUrl());
   const [cupOpen, setCupOpen] = useState(false);
+  const [worldOpen, setWorldOpen] = useState(false);
   const tabRef = useRef(tab);
   useEffect(() => {
     tabRef.current = tab;
@@ -169,7 +172,7 @@ export default function App() {
     if (cityFromUrl()) history.replaceState(null, '', location.pathname);
   };
 
-  const overlay = !!game || !!visit || cupOpen || admin;
+  const overlay = !!game || !!visit || cupOpen || worldOpen || admin;
   overlayRef.current = overlay;
 
   if (otherTab) {
@@ -201,11 +204,11 @@ export default function App() {
     <div className={`app${tutorialOn ? ' tutorial-on' : ''}`} style={{ '--hue': eraHue(era) } as CSSProperties}>
       <TopBar />
       <main className="content" key={tab}>
-        {tab === 'city' && <CityTab paused={overlay} onIncident={playIncident} />}
+        {tab === 'city' && <CityTab paused={overlay} onIncident={playIncident} onWorld={() => setWorldOpen(true)} />}
         {tab === 'upgrades' && <UpgradesTab />}
         {tab === 'games' && <GamesTab onPlay={play} onCup={() => setCupOpen(true)} />}
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
-        {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} onVisit={setVisit} />}
+        {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} onVisit={setVisit} onWorld={() => setWorldOpen(true)} />}
       </main>
       {tutorialOn && <TutorialBubble tab={tab} onTab={setTab} />}
       <BottomNav tab={tab} onTab={setTab} />
@@ -228,6 +231,7 @@ export default function App() {
             {game === 'fire' && <FireScreen onClose={() => setGame(null)} />}
             {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
             {game === 'casino' && <CasinoScreen onClose={() => setGame(null)} />}
+            {game === 'towers' && <TowersScreen onClose={() => setGame(null)} />}
           </Suspense>
         </ErrorBoundary>
       )}
@@ -235,6 +239,13 @@ export default function App() {
         <ErrorBoundary onClose={() => setCupOpen(false)}>
           <Suspense fallback={loading}>
             <CupScreen onClose={() => setCupOpen(false)} onVisit={setVisit} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+      {worldOpen && !game && (
+        <ErrorBoundary onClose={() => setWorldOpen(false)}>
+          <Suspense fallback={loading}>
+            <WorldScreen onVisit={setVisit} onClose={() => setWorldOpen(false)} />
           </Suspense>
         </ErrorBoundary>
       )}
@@ -250,7 +261,7 @@ export default function App() {
           </Suspense>
         </ErrorBoundary>
       )}
-      {!game && !admin && !visit && !cupOpen && <OfflineModal />}
+      {!game && !admin && !visit && !cupOpen && !worldOpen && <OfflineModal />}
       {!game && updateReady && (
         <button className="update-banner" onClick={applyUpdate}>
           🔄 Nueva versión disponible · <b>Actualizar</b>

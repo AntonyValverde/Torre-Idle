@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { track } from '../firebase';
 import { cloudEnabled } from '../firebase';
 import { dateKey, now } from '../game/clock';
-import { currentUid, fetchActiveCities, fetchNewGifts, sendGiftCloud, type PublicCity } from '../game/cloud';
+import { currentUid, fetchNewGifts, sendGiftCloud, type PublicCity } from '../game/cloud';
 import { eraName } from '../game/economy';
 import { fmt } from '../game/format';
 import { GIFT_GEMS, GIFTS_PER_DAY, giftBlock, giftsLeft } from '../game/social';
@@ -11,10 +11,11 @@ import { ago } from '../admin/metrics';
 import { pressable } from './a11y';
 import { celebrate } from './celebrate';
 import { sfx, vibrate } from './haptics';
-import { GameScreen } from './Modal';
 
 /** Cada cuánto se miran los regalos recibidos mientras se juega. */
 const INBOX_EVERY_MS = 5 * 60_000;
+/** Ciudades que muestra la lista (las de actividad más reciente). */
+const LIST_MAX = 20;
 
 /**
  * Cobra los regalos que otros alcaldes dejaron en tu ciudad: al poco de abrir el juego y luego
@@ -120,62 +121,49 @@ export function GiftsCard({ onExplore }: { onExplore: () => void }) {
         </ul>
       )}
       <button className="btn" onClick={onExplore}>
-        🧭 Explorar ciudades y dejar regalos
+        🌍 Mapa del mundo: visita y deja regalos
       </button>
     </div>
   );
 }
 
-/** Ciudades con actividad reciente: para descubrir a quién visitar (y regalar). */
-export function ExploreCities({ onVisit, onClose }: { onVisit: (uid: string) => void; onClose: () => void }) {
+/** Ciudades con actividad reciente (vista de lista del mapa del mundo): para descubrir a quién visitar y regalar. */
+export function CityList({ cities, onVisit }: { cities: PublicCity[] | null | 'error'; onVisit: (uid: string) => void }) {
   const s = useGame((st) => st.s);
-  const [cities, setCities] = useState<PublicCity[] | null | 'error'>(null);
   const me = currentUid();
   const day = dateKey(now());
   const t = now();
-
-  useEffect(() => {
-    let alive = true;
-    fetchActiveCities(20).then(
-      (c) => alive && setCities(c.filter((x) => x.uid !== me)),
-      () => alive && setCities('error'),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [me]);
+  const others = Array.isArray(cities) ? cities.filter((x) => x.uid !== me).slice(0, LIST_MAX) : cities;
 
   return (
-    <GameScreen title="Explorar ciudades" right={`🎁 ${giftsLeft(s, day)}/${GIFTS_PER_DAY}`} onClose={onClose}>
-      <div className="explore">
-        <p className="hint">Ciudades con actividad reciente. Visita una y déjale un regalo: tú ganas 💎 y su alcalde, 🎟️.</p>
-        {cities === null && <p className="empty">Buscando ciudades…</p>}
-        {cities === 'error' && <p className="empty">No se pudieron cargar las ciudades. Revisa tu conexión.</p>}
-        {Array.isArray(cities) && cities.length === 0 && <p className="empty">Aún no hay otras ciudades. ¡Invita a tus amigos!</p>}
-        {Array.isArray(cities) && cities.length > 0 && (
-          <ul className="explore-list">
-            {cities.map((c) => {
-              const can = !giftBlock(s, c.uid, day, me);
-              const given = s.social.day === day && s.social.sent.includes(c.uid);
-              return (
-                <li key={c.uid} className="clickable" {...pressable(() => onVisit(c.uid))}>
-                  <span className="explore-main">
-                    <b>{c.name}</b>
-                    <small className="muted">
-                      Era {c.era} · {eraName(c.era)} · ⭐ {fmt(c.stars)}
-                      {c.updatedAt ? ` · ${ago(c.updatedAt, t)}` : ''}
-                    </small>
-                  </span>
-                  <span className="explore-side">
-                    {(c.gifts ?? 0) > 0 && <small>❤️ {fmt(c.gifts ?? 0)}</small>}
-                    {(can || given) && <span className={`explore-gift${can ? ' can' : ''}`}>{can ? '🎁' : '✔'}</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </GameScreen>
+    <div className="explore">
+      <p className="hint">Ciudades con actividad reciente. Visita una y déjale un regalo: tú ganas 💎 y su alcalde, 🎟️.</p>
+      {others === null && <p className="empty">Buscando ciudades…</p>}
+      {others === 'error' && <p className="empty">No se pudieron cargar las ciudades. Revisa tu conexión.</p>}
+      {Array.isArray(others) && others.length === 0 && <p className="empty">Aún no hay otras ciudades. ¡Invita a tus amigos!</p>}
+      {Array.isArray(others) && others.length > 0 && (
+        <ul className="explore-list">
+          {others.map((c) => {
+            const can = !giftBlock(s, c.uid, day, me);
+            const given = s.social.day === day && s.social.sent.includes(c.uid);
+            return (
+              <li key={c.uid} className="clickable" {...pressable(() => onVisit(c.uid))}>
+                <span className="explore-main">
+                  <b>{c.name}</b>
+                  <small className="muted">
+                    Era {c.era} · {eraName(c.era)} · ⭐ {fmt(c.stars)}
+                    {c.updatedAt ? ` · ${ago(c.updatedAt, t)}` : ''}
+                  </small>
+                </span>
+                <span className="explore-side">
+                  {(c.gifts ?? 0) > 0 && <small>❤️ {fmt(c.gifts ?? 0)}</small>}
+                  {(can || given) && <span className={`explore-gift${can ? ' can' : ''}`}>{can ? '🎁' : '✔'}</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

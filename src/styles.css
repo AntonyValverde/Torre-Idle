@@ -412,6 +412,489 @@ img.splash-logo {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
+/* ---------- Mapa del mundo ---------- */
+
+.world-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #1d4f86, #2a7a5a);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-align: left;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.world-entry:active {
+  transform: translateY(2px);
+}
+
+.world-entry-icon {
+  font-size: 30px;
+}
+
+.world-entry-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.world-entry-main small {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.world-entry-go {
+  font-size: 1.6rem;
+  opacity: 0.7;
+}
+
+.world-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 10px;
+}
+
+.world-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -12px;
+}
+
+.world-map-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.world-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.world-map svg {
+  display: block;
+}
+
+.world-grid line {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+}
+
+.world-shore circle {
+  fill: #d9c993;
+}
+
+.world-land circle {
+  fill: #3f7a45;
+}
+
+.world-decor .tree {
+  fill: #2b5a32;
+}
+
+.world-decor .mountain {
+  fill: #7d8a7a;
+}
+
+.world-city.asleep {
+  opacity: 0.45;
+}
+
+.world-me-ring {
+  fill: none;
+  stroke: #fff;
+  animation: worldRing 1.6s ease-in-out infinite;
+}
+
+.world-sel {
+  fill: none;
+  stroke: #ffc23d;
+}
+
+.world-label {
+  fill: #fff;
+  font-weight: 700;
+  stroke: rgba(8, 14, 30, 0.85);
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+.world-controls {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.world-controls .icon-btn {
+  background: rgba(10, 14, 30, 0.75);
+  border: 1px solid var(--line);
+  font-size: 1.1rem;
+}
+
+.world-msg {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  text-align: center;
+  background: rgba(10, 8, 30, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.card.world-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  animation: tabIn 0.2s ease-out;
+}
+
+.world-card-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.world-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.world-card-main b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-card .btn {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+}
+
+.world-hint {
+  padding: 4px 0;
+}
+
+@keyframes worldRing {
+  50% { stroke-opacity: 0.2; }
+}
+
+/* ---------- Conquista ---------- */
+
+.conquest,
+.conquest-join {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 12px 24px;
+}
+
+.conquest-join {
+  align-items: center;
+  text-align: center;
+  padding-top: 18px;
+}
+
+.conquest-join h2,
+.conquest-join p {
+  margin: 0;
+}
+
+.conquest-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.conquest-rules li {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.conquest-hud {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.conquest-hud > div {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.conquest-hud small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conquest-hud b {
+  font-size: 1.15rem;
+}
+
+.conquest-hud b span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.conquest-map {
+  width: 100%;
+  display: block;
+  user-select: none;
+  background: radial-gradient(ellipse at 50% 50%, #1d2a50, #0d1430);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+}
+
+.conquest-hex {
+  cursor: pointer;
+}
+
+.conquest-hex polygon {
+  stroke: rgba(8, 12, 28, 0.9);
+  stroke-width: 0.8;
+}
+
+.conquest-hex.mine polygon {
+  stroke: rgba(255, 255, 255, 0.55);
+}
+
+.conquest-hex.near polygon {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1;
+  stroke-dasharray: 2 1.4;
+}
+
+.conquest-hex.reserved polygon {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-dasharray: 1.2 1.2;
+}
+
+.conquest-hex.sel polygon {
+  stroke: #ffc23d;
+  stroke-width: 1.6;
+  stroke-dasharray: none;
+}
+
+.conquest-hex text {
+  pointer-events: none;
+}
+
+.conquest-g {
+  fill: #fff;
+  font-weight: 800;
+}
+
+.conquest-g.bandit {
+  fill: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+}
+
+.card.conquest-panel {
+  gap: 6px;
+  animation: tabIn 0.2s ease-out;
+}
+
+.conquest-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conquest-amount b {
+  min-width: 36px;
+  text-align: center;
+  font-size: 1.3rem;
+}
+
+.conquest-amount .btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
+
+.conquest-ranking ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conquest-ranking li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.conquest-ranking li.me .conquest-name {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.conquest-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.conquest-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Guerra de torres ---------- */
+
+.game-card.towers {
+  background: linear-gradient(135deg, #2b62c4, #7a2a4f);
+}
+
+.towers-wrap {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.towers-share {
+  display: flex;
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+
+.towers-share i {
+  transition: flex 0.3s;
+}
+
+.towers-field {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+  background: radial-gradient(ellipse at 50% 40%, #1f2a52, #0f1430);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+}
+
+.towers-links line {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 0.9;
+  stroke-dasharray: 1.6 1.4;
+}
+
+.towers-links line.hot {
+  stroke: rgba(63, 180, 255, 0.75);
+  stroke-width: 1.2;
+}
+
+.towers-aim {
+  stroke-width: 1.2;
+  stroke-dasharray: 2 1.5;
+  pointer-events: none;
+}
+
+.towers-packet text,
+.towers-units {
+  fill: #fff;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.towers-packet text {
+  fill: #0b1020;
+}
+
+.towers-sel {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 0.8;
+  stroke-dasharray: 2 1.4;
+  animation: worldRing 1s ease-in-out infinite;
+}
+
+.towers-target {
+  fill: none;
+  stroke: rgba(63, 180, 255, 0.6);
+  stroke-width: 0.6;
+}
+
+.towers-flash {
+  fill: #7dff9c;
+  font-weight: 800;
+  stroke: rgba(8, 14, 30, 0.85);
+  stroke-width: 0.6;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+.towers-flash.bad {
+  fill: #ff8a8a;
+}
+
+.towers-banner {
+  font-size: 2.4rem;
+  text-align: center;
+  padding: 0 16px;
+}
+
 /* ---------- Periódico (La Gaceta) ---------- */
 
 .paper-card {

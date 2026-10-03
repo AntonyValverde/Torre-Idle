@@ -427,8 +427,8 @@ export function startAutoSave(): () => void {
 // Rankings
 // =====================================================================
 
-export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro';
-export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory', 'fire', 'metro'];
+export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro' | 'towers';
+export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers'];
 
 /** Colección de cada reto diario en Firestore: `daily` (Apagón), `roads` (Conecta las calles) y `parks` (Plan verde). */
 export type DailyKind = 'daily' | 'roads' | 'parks';
@@ -710,6 +710,19 @@ export async function fetchActiveCities(n = 15): Promise<PublicCity[]> {
   await ensureUser();
   const snap = await getDocs(query(collection(d, 'cities'), orderBy('updatedAt', 'desc'), limit(n)));
   return snap.docs.map((x) => parseCity(x.id, x.data())).filter((c): c is PublicCity => !!c);
+}
+
+// El mapa del mundo lee muchas ciudades de golpe: se guardan unos minutos para no releerlas al reabrirlo
+const WORLD_CACHE_MS = 10 * 60_000;
+export const WORLD_MAX = 200;
+let worldCache: { at: number; cities: PublicCity[] } | null = null;
+
+/** Ciudades para el mapa del mundo (las de actividad más reciente, hasta WORLD_MAX). */
+export async function fetchWorldCities(force = false): Promise<PublicCity[]> {
+  if (!force && worldCache && Date.now() - worldCache.at < WORLD_CACHE_MS) return worldCache.cities;
+  const cities = await fetchActiveCities(WORLD_MAX);
+  worldCache = { at: Date.now(), cities };
+  return cities;
 }
 
 // =====================================================================

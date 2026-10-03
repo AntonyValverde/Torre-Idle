@@ -6,8 +6,8 @@ import type { GameState, PendingDaily } from './state';
 // y el guardado automático los reintenta.
 
 /** Rankings de minijuegos que dependen de un récord guardado en la partida. */
-export type ArcadeBoard = 'stack' | 'merge' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro';
-export const ARCADE_BOARDS: ArcadeBoard[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro'];
+export type ArcadeBoard = 'stack' | 'merge' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro' | 'towers';
+export const ARCADE_BOARDS: ArcadeBoard[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers'];
 
 /** Las reglas de Firestore no aceptan más de 999 movimientos en un reto diario. */
 export const DAILY_MOVES_MAX = 999;
@@ -36,6 +36,8 @@ export function localBest(s: GameState, board: ArcadeBoard): number {
       return s.fireBest;
     case 'metro':
       return s.metroBest;
+    case 'towers':
+      return s.towersBest;
   }
 }
 

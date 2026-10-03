@@ -40,6 +40,7 @@ export const GAMES: GameAdoption[] = [
   { id: 'memory', label: '🧠 Memoria', played: (s) => s.memoryBest > 0, best: (s) => s.memoryBest },
   { id: 'fire', label: '🚒 Bomberos', played: (s) => s.fireBest > 0, best: (s) => s.fireBest },
   { id: 'metro', label: '🚇 Metro', played: (s) => s.metroBest > 0, best: (s) => s.metroBest },
+  { id: 'towers', label: '🏰 Torres', played: (s) => s.towersBest > 0, best: (s) => s.towersBest },
   { id: 'merge', label: '🧱 Fusión', played: (s) => s.mergeBest > 0, best: (s) => s.mergeBest },
   { id: 'stocks', label: '📈 Bolsa', played: (s) => s.stockProfit !== 0 || Object.keys(s.stocks).length > 0 },
 ];

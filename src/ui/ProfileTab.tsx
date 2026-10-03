@@ -10,9 +10,9 @@ import { shareCity } from './CityVisit';
 import { isSoundOn, setSoundOn } from './haptics';
 import { isMusicOn, musicVolume, nowPlaying, setMusicOn, setMusicVolume } from './music/engine';
 import { SuggestionBox } from './SuggestionBox';
-import { ExploreCities, GiftsCard } from './Gifts';
+import { GiftsCard } from './Gifts';
 
-export function ProfileTab({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: string) => void }) {
+export function ProfileTab({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: (uid: string) => void; onWorld: () => void }) {
   const s = useGame((st) => st.s);
   const [section, setSection] = useState<'ach' | 'profile'>('ach');
   const claimable = claimableAchievements(s);
@@ -27,12 +27,12 @@ export function ProfileTab({ onAdmin, onVisit }: { onAdmin: () => void; onVisit:
           👤 Perfil
         </button>
       </div>
-      {section === 'ach' ? <Achievements /> : <Profile onAdmin={onAdmin} onVisit={onVisit} />}
+      {section === 'ach' ? <Achievements /> : <Profile onAdmin={onAdmin} onVisit={onVisit} onWorld={onWorld} />}
     </div>
   );
 }
 
-function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: string) => void }) {
+function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: (uid: string) => void; onWorld: () => void }) {
   const s = useGame((st) => st.s);
   const setName = useGame((st) => st.setName);
   const toast = useGame((st) => st.toast);
@@ -43,7 +43,6 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
   const [music, setMusic] = useState(isMusicOn());
   const [vol, setVol] = useState(Math.round(musicVolume() * 100));
   const [admin, setAdmin] = useState(false);
-  const [explore, setExplore] = useState(false);
 
   useEffect(() => onAccountChange(setAccount), []);
 
@@ -138,8 +137,7 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
         </div>
       )}
 
-      {cloudEnabled && <GiftsCard onExplore={() => setExplore(true)} />}
-      {explore && <ExploreCities onVisit={onVisit} onClose={() => setExplore(false)} />}
+      {cloudEnabled && <GiftsCard onExplore={onWorld} />}
 
       <div className="card cup-showcase">
         <b>🏆 Vitrina de la Copa de Alcaldes</b>
@@ -300,6 +298,10 @@ function Profile({ onAdmin, onVisit }: { onAdmin: () => void; onVisit: (uid: str
         <div>
           <small>Mejor metro</small>
           <b>{s.metroBest}</b>
+        </div>
+        <div>
+          <small>Mejor conquista</small>
+          <b>{s.towersBest}</b>
         </div>
       </div>
     </>

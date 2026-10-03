@@ -7,6 +7,7 @@ import { advisorsState, newAdvisors, type AdvisorsState } from './advisors';
 import { newPaper, paperState, type PaperState } from './paper';
 import { newSocial, socialState, type SocialState } from './social';
 import { casinoState, newCasino, type CasinoState } from './casino';
+import { conquestState, newConquest, type ConquestState } from './conquest';
 
 export interface Boost {
   k: string;
@@ -65,6 +66,8 @@ export interface GameState {
   fireBest: number;
   /** Récord de viajeros llevados en Metro. */
   metroBest: number;
+  /** Récord de puntos en Guerra de torres. */
+  towersBest: number;
   /** Apagón diario. */
   daily: DailyRecord;
   /** Conecta las calles (segundo puzzle diario). */
@@ -109,6 +112,8 @@ export interface GameState {
   social: SocialState;
   /** Casino (desde la era 2): fichas, nivel de socio y partidas a medias. Sobrevive a las refundaciones. */
   casino: CasinoState;
+  /** Conquista: reclutas ganados hoy por jugar (se suben a la reserva al abrirla). */
+  conquest: ConquestState;
   createdAt: number;
 }
 
@@ -163,6 +168,7 @@ export function newState(t: number): GameState {
     memoryBest: 0,
     fireBest: 0,
     metroBest: 0,
+    towersBest: 0,
     daily: { last: null, streak: 0, bestStreak: 0 },
     roads: { last: null, streak: 0, bestStreak: 0 },
     parks: { last: null, streak: 0, bestStreak: 0 },
@@ -185,6 +191,7 @@ export function newState(t: number): GameState {
     paper: newPaper(),
     social: newSocial(),
     casino: newCasino(),
+    conquest: newConquest(),
     createdAt: t,
   };
 }
@@ -368,6 +375,7 @@ export function normalize(raw: unknown, t: number): GameState {
     memoryBest: num(r.memoryBest, 0),
     fireBest: num(r.fireBest, 0),
     metroBest: num(r.metroBest, 0),
+    towersBest: num(r.towersBest, 0),
     submittedBest: numRecord(r.submittedBest),
     pendingDaily: pendingDaily(r.pendingDaily),
     wheelLast: typeof r.wheelLast === 'string' ? r.wheelLast : null,
@@ -393,6 +401,7 @@ export function normalize(raw: unknown, t: number): GameState {
     paper: paperState(r.paper),
     social: socialState(r.social),
     casino: casinoState(r.casino),
+    conquest: conquestState(r.conquest),
     createdAt: num(r.createdAt, t),
   };
 }
