@@ -129,6 +129,16 @@ service cloud.firestore {
       return math.abs(day.toMillis() + 43200000 - request.time.toMillis()) < 129600000;
     }
 
+    // Ventana asimétrica para fechas que el móvil calcula con su día local: la medianoche local (como UTC)
+    // no puede ir más de 14 h por delante del servidor (UTC+14) ni quedar más de 36 h atrás.
+    // Así no se puede declarar un día futuro para cobrar sus reclutas antes de tiempo.
+    function dayNotFuture(date) {
+      let parts = date.split('-');
+      let day = timestamp.date(int(parts[0]), int(parts[1]), int(parts[2]));
+      return day.toMillis() <= request.time.toMillis() + 50400000
+        && day.toMillis() >= request.time.toMillis() - 129600000;
+    }
+
     function validDailyResult(date) {
       return date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && dateIsCurrent(date)
@@ -482,7 +492,7 @@ service cloud.firestore {
         let d = incoming();
         let old = resource.data;
         return d.t == request.time && d.sent == old.sent && d.last == old.last
-          && d.rDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && dateIsCurrent(d.rDay)
+          && d.rDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && dayNotFuture(d.rDay)
           && ((d.rDay == old.rDay && d.rToday > old.rToday && conqTroopsFit(old, d.troops - (d.rToday - old.rToday)))
             || (d.rDay > old.rDay && d.rToday >= 1 && conqTroopsFit(old, d.troops - d.rToday)));
       }
@@ -605,12 +615,14 @@ service cloud.firestore {
     }
 
     // Partes de batalla: los escribe quien conquista un territorio de {uid}, en el mismo lote que la
-    // conquista. Solo los lee el alcalde que lo perdió.
+    // conquista. Solo los lee el alcalde que lo perdió. El id es el territorio: un único parte por
+    // conquista (si lo pierde otra vez más tarde, el parte se sobrescribe con la misma validación).
     match /conquest/{week}/worlds/{w}/players/{uid}/reports/{rid} {
       function validReport() {
         let d = incoming();
         let tile = /databases/$(database)/documents/conquest/$(week)/worlds/$(w)/tiles/$(d.tile);
         return d.keys().hasOnly(['by', 'name', 'tile', 'at']) && d.keys().hasAll(['by', 'name', 'tile', 'at'])
+          && rid == d.tile
           && d.by == request.auth.uid && uid != request.auth.uid
           && validName(d.name) && conqTile(d.tile) && d.at == request.time
           && get(tile).data.owner == uid
@@ -618,7 +630,7 @@ service cloud.firestore {
       }
 
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if request.auth != null && conqOpen(week) && validReport();
+      allow create, update: if request.auth != null && conqOpen(week) && validReport();
       allow delete: if isAdmin();
     }
 

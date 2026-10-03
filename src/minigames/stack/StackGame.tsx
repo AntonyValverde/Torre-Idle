@@ -266,6 +266,8 @@ export function StackGame({ onGameOver, onScore }: { onGameOver: (score: number)
         reported = true;
         cbRef.current(score);
       }
+      // Tras el choque, cuando ya se avisó el resultado, deja de dibujar (el último fotograma ya está en pantalla)
+      if (over && reported) return;
       raf = requestAnimationFrame(frame);
     }
     raf = requestAnimationFrame(frame);

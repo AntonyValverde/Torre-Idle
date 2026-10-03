@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { track } from '../../firebase';
-import { dateKey, isNewDay, msUntilTomorrow } from '../../game/clock';
+import { dateKey, isNewDay } from '../../game/clock';
 import { saveCloud, submitDaily } from '../../game/cloud';
-import { fmt, fmtClock, fmtTime } from '../../game/format';
+import { fmt, fmtClock } from '../../game/format';
 import { useGame, type DailyReward } from '../../game/store';
 import { sfx, tone, vibrate } from '../../ui/haptics';
 import { CARDS } from '../../game/cup';
 import { GameScreen, Modal } from '../../ui/Modal';
+import { UntilTomorrow } from '../UntilTomorrow';
 import { E, N, S, SIZE, W, connected, dailyRoads, exits, isSolved, rotate } from './logic';
 
 /** Tramo de calle dibujado según sus salidas. */
@@ -26,7 +27,13 @@ function RoadTile({ mask, lit }: { mask: number; lit: boolean }) {
 }
 
 export function RoadsScreen({ onClose, onRanking }: { onClose: () => void; onRanking: () => void }) {
-  const date = useMemo(() => dateKey(), []);
+  // Al llegar un día nuevo con el plano ya hecho, se vuelve a montar con el plano nuevo
+  const [date, setDate] = useState(() => dateKey());
+  const onNewDay = useCallback(() => setDate(dateKey()), []);
+  return <RoadsGame key={date} date={date} onNewDay={onNewDay} onClose={onClose} onRanking={onRanking} />;
+}
+
+function RoadsGame({ date, onNewDay, onClose, onRanking }: { date: string; onNewDay: () => void; onClose: () => void; onRanking: () => void }) {
   const puzzle = useMemo(() => dailyRoads(date), [date]);
   const [tiles, setTiles] = useState(puzzle.tiles);
   // Giros acumulados por casilla, solo para animar el giro con CSS
@@ -97,7 +104,9 @@ export function RoadsScreen({ onClose, onRanking }: { onClose: () => void; onRan
             <p>
               Racha actual: <b>🔥 {roads.streak} días</b>
             </p>
-            <p className="muted">Nuevo plano en {fmtTime(msUntilTomorrow() / 1000)}</p>
+            <p className="muted">
+              Nuevo plano en <UntilTomorrow date={date} onNewDay={onNewDay} />
+            </p>
             <button className="btn primary" onClick={onRanking}>
               Ver ranking de hoy
             </button>

@@ -246,6 +246,8 @@ export function TrafficGame({ onGameOver, onScore }: { onGameOver: (score: numbe
         reported = true;
         cbRef.current(g.score);
       }
+      // Tras el choque, cuando ya se avisó el resultado, deja de dibujar (el último fotograma ya está en pantalla)
+      if (g.crash && reported) return;
       raf = requestAnimationFrame(frame);
     }
     raf = requestAnimationFrame(frame);

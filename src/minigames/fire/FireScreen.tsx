@@ -21,7 +21,9 @@ interface Splash {
 let splashId = 0;
 
 export function FireGameView({ onOver, onScore }: { onOver: (score: number) => void; onScore: (score: number) => void }) {
-  const game = useRef<FireGame>(newFire());
+  // Estado inicial perezoso: no se vuelve a crear en cada render
+  const [g0] = useState<FireGame>(() => newFire());
+  const game = useRef<FireGame>(g0);
   const start = useRef(performance.now() + COUNTDOWN);
   const splashes = useRef<Splash[]>([]);
   const shakeUntil = useRef(0);
@@ -113,7 +115,7 @@ export function FireGameView({ onOver, onScore }: { onOver: (score: number) => v
       <div className="thief-building fire-building">
         <div className="thief-grid" style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}>
           {g.level.map((lv, i) => (
-            <button key={i} className={`thief-window fire-window lv${lv}`} onPointerDown={() => hit(i)} aria-label={`Ventana ${i + 1}${lv ? `, fuego nivel ${lv}` : ''}`}>
+            <button key={i} className={`thief-window fire-window lv${lv}`} onPointerDown={() => hit(i)} onClick={(e) => { if (e.detail === 0) hit(i); }} aria-label={`Ventana ${i + 1}${lv ? `, fuego nivel ${lv}` : ''}`}>
               {lv > 0 && <span className="fire-flame">🔥</span>}
               {lv === 3 && <span className="fire-smoke">💨</span>}
               {splashes.current

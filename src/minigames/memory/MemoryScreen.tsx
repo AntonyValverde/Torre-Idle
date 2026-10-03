@@ -136,6 +136,7 @@ export function MemoryGame({
               key={i}
               className={`window${lit === i ? ' on' : ''}${wrong === i ? ' wrong' : ''}`}
               onPointerDown={() => press(i)}
+              onClick={(e) => { if (e.detail === 0) press(i); }}
               aria-label={`Ventana ${i + 1}`}
             />
           ))}

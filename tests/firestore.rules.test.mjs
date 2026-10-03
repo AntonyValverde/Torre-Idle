@@ -425,25 +425,31 @@ console.log('conquest (Conquista)');
   // Partes de batalla: van en el mismo lote que la conquista y solo los lee quien perdió el territorio
   await seed(`${W}/tiles/-2_1`, tileSeed('alice', 1, 3600000, 3600000));
   await seed(`${W}/tiles/-3_2`, tileSeed('bob', 30, 0, 3600000));
-  const report = (db, to) => doc(collection(db, `${W}/players/${to}/reports`));
-  const captureWithReport = (to, extra = {}) => {
+  // El id del parte es el territorio conquistado: así hay exactamente uno por conquista
+  const report = (db, to, rid = '-2_1') => doc(db, `${W}/players/${to}/reports/${rid}`);
+  const captureWithReport = (to, extra = {}, { rid, second } = {}) => {
     const b = writeBatch(bob);
     // Los soldados de alice crecieron a algo más de 16 en esa hora: con 18 queda 1
     b.update(doc(bob, `${W}/tiles/-3_2`), { name: 'Bob', g: 12, t: serverTimestamp(), to: '-2_1', sent: 18, from: '' });
     b.set(doc(bob, `${W}/tiles/-2_1`), { owner: 'bob', name: 'Bob', g: 1, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent: 18, from: '-3_2', to: '' });
-    b.set(report(bob, to), { by: 'bob', name: 'Bob', tile: '-2_1', at: serverTimestamp(), ...extra });
+    b.set(report(bob, to, rid), { by: 'bob', name: 'Bob', tile: '-2_1', at: serverTimestamp(), ...extra });
+    if (second) b.set(report(bob, to, second), { by: 'bob', name: 'Bob', tile: '-2_1', at: serverTimestamp() });
     return b.commit();
   };
   await no('conquista: parte a quien no era el dueño', () => captureWithReport('carol'));
   await no('conquista: parte firmado por otro', () => captureWithReport('alice', { by: 'alice' }));
+  await no('conquista: parte con otro id que el territorio', () => captureWithReport('alice', {}, { rid: 'x1' }));
+  await no('conquista: dos partes por la misma conquista', () => captureWithReport('alice', {}, { second: 'x2' }));
   await ok('conquista: conquistar con parte de batalla', () => captureWithReport('alice'));
-  await no('conquista: parte sin conquista', () => setDoc(report(bob, 'alice'), { by: 'bob', name: 'Bob', tile: '-3_3', at: serverTimestamp() }));
+  await no('conquista: parte sin conquista', () => setDoc(report(bob, 'alice', '-3_3'), { by: 'bob', name: 'Bob', tile: '-3_3', at: serverTimestamp() }));
   await ok('conquista: el que perdió lee sus partes', () => getDocs(collection(alice, `${W}/players/alice/reports`)));
   await no('conquista: nadie más los lee', () => getDocs(collection(bob, `${W}/players/alice/reports`)));
 
   // Reclutas: hasta 30 al día (45 con la ley Militar), sumados a la reserva
   const rec = (troops, rDay, rToday) => updateDoc(doc(alice, `${W}/players/alice`), { troops, t: serverTimestamp(), rDay, rToday });
   await no('conquista: reclutas de otro día', () => rec(5, future, 5));
+  // El móvil pone su día local: mañana queda fuera (las zonas horarias solo llegan a UTC+14), hoy vale
+  await no('conquista: reclutas de mañana', () => rec(5, key(new Date(Date.now() + 2 * 86400000)), 5));
   await no('conquista: más de 45 reclutas', () => rec(46, today, 46));
   await no('conquista: tropas de más con los reclutas', () => rec(9, today, 5));
   await ok('conquista: sumar reclutas', () => rec(5, today, 5));

@@ -35,7 +35,9 @@ function shapePath(ctx: CanvasRenderingContext2D, shape: Shape, x: number, y: nu
 
 export function MetroGame({ onGameOver, onScore }: { onGameOver: (score: number) => void; onScore?: (score: number) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const game = useRef<Metro>(newMetro(Math.random));
+  // Estado inicial perezoso: no se vuelve a crear en cada render
+  const [g0] = useState<Metro>(() => newMetro(Math.random));
+  const game = useRef<Metro>(g0);
   const [, setFrame] = useState(0);
   const [started, setStarted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

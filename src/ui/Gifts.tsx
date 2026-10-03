@@ -1,6 +1,7 @@
+import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { track } from '../firebase';
-import { cloudEnabled } from '../firebase';
+import { cloudEnabled, db } from '../firebase';
 import { dateKey, now } from '../game/clock';
 import { currentUid, fetchNewGifts, sendGiftCloud, type PublicCity } from '../game/cloud';
 import { eraHue, eraName } from '../game/economy';
@@ -16,6 +17,16 @@ import { sfx, vibrate } from './haptics';
 const INBOX_EVERY_MS = 5 * 60_000;
 /** Ciudades que muestra la lista (las de actividad más reciente). */
 const LIST_MAX = 20;
+
+/** ¿Sigue existiendo la ciudad pública `uid`? Si no se puede saber (sin conexión), se da por buena. */
+async function cityExists(uid: string): Promise<boolean> {
+  if (!db) return true;
+  try {
+    return (await getDoc(doc(db, 'cities', uid))).exists();
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Cobra los regalos que otros alcaldes dejaron en tu ciudad: al poco de abrir el juego y luego
@@ -77,10 +88,15 @@ export function GiftButton({ uid, cityName }: { uid: string; cityName: string })
       track('gift_sent');
     } catch (e) {
       const code = (e as { code?: string })?.code;
-      // Rechazado por las reglas: ya le regalaste hoy (p. ej. desde otro dispositivo)
+      // Rechazado por las reglas: o la ciudad ya no existe (no hay regalo que cobrar), o ya le
+      // regalaste hoy (p. ej. desde otro dispositivo)
       if (code === 'permission-denied') {
-        st.sendGift(uid);
-        st.toast('🎁 Ya le dejaste un regalo hoy a esta ciudad');
+        if (!(await cityExists(uid))) {
+          st.toast('🏚️ Esa ciudad ya no existe');
+        } else {
+          st.sendGift(uid);
+          st.toast('🎁 Ya le dejaste un regalo hoy a esta ciudad');
+        }
       } else st.toast('⚠️ No se pudo entregar el regalo. Revisa tu conexión.');
     } finally {
       setSending(false);

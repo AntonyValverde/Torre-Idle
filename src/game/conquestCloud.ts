@@ -41,7 +41,7 @@ import {
 //   conquest/{lunes}/worlds/{w}                cuántos alcaldes tiene el mundo
 //   conquest/{lunes}/worlds/{w}/players/{uid}  reserva de tropas
 //   conquest/{lunes}/worlds/{w}/tiles/{q_r}    territorios con dueño
-//   .../players/{uid}/reports/{id}             partes de batalla: quién te quitó qué (solo los lee su dueño)
+//   .../players/{uid}/reports/{q_r}            partes de batalla: quién te quitó qué (solo los lee su dueño)
 
 function need() {
   if (!db) throw new Error('Firebase no está configurado');
@@ -206,8 +206,9 @@ export async function attackFrom(
   b.set(doc(d, ...base, 'tiles', target), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, p, from, to: '' });
   // Con bono de asalto: queda apuntado con su objetivo (las reglas solo dejan uno cada 10 min y para ese territorio)
   if (p > sent) b.update(doc(d, ...base, 'players', uid), { aAt: serverTimestamp(), aTo: target });
-  // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver)
-  if (tile) b.set(doc(collection(d, ...base, 'players', tile.owner, 'reports')), { by: uid, name, tile: target, at: serverTimestamp() });
+  // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver). El id es el territorio:
+  // las reglas solo admiten un parte por conquista
+  if (tile) b.set(doc(d, ...base, 'players', tile.owner, 'reports', target), { by: uid, name, tile: target, at: serverTimestamp() });
   await b.commit();
 }
 

@@ -63,6 +63,7 @@ export function ThiefGame({ onOver, onScore }: { onOver: (score: number) => void
   useEffect(() => {
     let raf = 0;
     let endTimer: ReturnType<typeof setTimeout> | undefined;
+    let overAt = 0;
     const loop = (t: number) => {
       const g = game.current;
       if (!g.over && t >= g.start) {
@@ -99,10 +100,13 @@ export function ThiefGame({ onOver, onScore }: { onOver: (score: number) => void
         }
         if (elapsed >= DURATION) {
           g.over = true;
+          overAt = t;
           endTimer = setTimeout(() => onOverRef.current(g.score), 700);
         }
       }
       setFrame((f) => f + 1);
+      // Al terminar, tras la animación final (~700 ms), deja de pedir fotogramas (el último ya quedó pintado)
+      if (g.over && t - overAt >= 700) return;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -168,7 +172,7 @@ export function ThiefGame({ onOver, onScore }: { onOver: (score: number) => void
       <div className="thief-building">
         <div className="thief-grid" style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}>
           {g.holes.map((a, i) => (
-            <button key={i} className="thief-window" onPointerDown={() => hitHole(i)} aria-label={`Ventana ${i + 1}`}>
+            <button key={i} className="thief-window" onPointerDown={() => hitHole(i)} onClick={(e) => { if (e.detail === 0) hitHole(i); }} aria-label={`Ventana ${i + 1}`}>
               {a && (
                 <span key={a.id} className={`actor ${a.kind}${a.hit ? (a.hit.good ? ' caught' : ' wrong') : ''}`}>
                   {a.hit ? (a.hit.good ? '💥' : '😡') : a.emoji}

@@ -90,6 +90,12 @@ export function MergeScreen({ onClose }: { onClose: () => void }) {
 
   const onDown = (e: PointerEvent) => {
     start.current = { x: e.clientX, y: e.clientY };
+    // Captura el puntero para que pointerup llegue al tablero aunque el dedo salga de él
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* navegadores sin captura de puntero */
+    }
   };
   const onUp = (e: PointerEvent) => {
     if (!start.current) return;
