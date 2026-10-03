@@ -47,10 +47,10 @@ export function HiLoGame() {
           <>
             <div className="cas-hilo-trail">
               {run.cards.slice(-7, -1).map((card, i) => (
-                <PlayingCard key={`${run.seed}-${Math.max(0, run.cards.length - 7) + i}`} card={card} small />
+                <PlayingCard key={`${run.id}-${Math.max(0, run.cards.length - 7) + i}`} card={card} small />
               ))}
             </div>
-            <PlayingCard key={`${run.seed}-${run.cards.length}`} card={current(run)} />
+            <PlayingCard key={`${run.id}-${run.cards.length}`} card={current(run)} />
             <div className="cas-hilo-mult">
               x{run.mult.toFixed(2)} <small>· {chips(Math.floor(run.bet * run.mult))}</small>
             </div>

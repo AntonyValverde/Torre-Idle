@@ -30,7 +30,7 @@ export function BlackjackGame() {
   const playing = !!hand && !hand.result;
 
   // Sonido al terminar una mano (no al abrir la mesa con la mano anterior a la vista)
-  const doneKey = hand?.result ? `${hand.seed}:${hand.result}` : '';
+  const doneKey = hand?.result ? `${hand.id}:${hand.result}` : '';
   const heard = useRef(doneKey);
   useEffect(() => {
     if (!doneKey || doneKey === heard.current || !hand) return;
@@ -72,7 +72,7 @@ export function BlackjackGame() {
             {hand ? (
               hand.dealer.map((card, i) => (
                 <PlayingCard
-                  key={`${hand.seed}-d${i}`}
+                  key={`${hand.id}-d${i}`}
                   card={card}
                   hidden={playing && i === 1}
                   delay={!playing && i >= revealFrom.current ? (i - revealFrom.current + 1) * 0.35 : 0}
@@ -87,7 +87,7 @@ export function BlackjackGame() {
         <div className="cas-hand">
           <div className="cas-cards">
             {hand ? (
-              hand.player.map((card, i) => <PlayingCard key={`${hand.seed}-p${i}`} card={card} />)
+              hand.player.map((card, i) => <PlayingCard key={`${hand.id}-p${i}`} card={card} />)
             ) : (
               <div className="cas-empty">Acércate a 21 sin pasarte</div>
             )}

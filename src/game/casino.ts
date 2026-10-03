@@ -1,5 +1,5 @@
 import { bjDeal, bjDouble, bjHit, bjStand, canDouble, type BjHand } from '../minigames/casino/blackjack';
-import { newSeed } from '../minigames/casino/cards';
+import { newHandId } from '../minigames/casino/cards';
 import { canCash, hiloCash, hiloGuess, hiloStart, type HiLoGuess, type HiLoRun } from '../minigames/casino/hilo';
 import { cashMultAt, crashPoint, rocketAutoPay, rocketOver, ROCKET_MAX, type RocketRun } from '../minigames/casino/rocket';
 import { isValidBet, rouletteWin, spinRoulette, totalStake } from '../minigames/casino/roulette';
@@ -93,7 +93,8 @@ function bjOf(v: unknown): BjHand | null {
   const results = ['blackjack', 'win', 'push', 'lose', 'bust'];
   return {
     bet: nonNeg(v.bet),
-    seed: nonNeg(v.seed),
+    // Partidas antiguas guardaban la semilla como `seed`: vale como id (ya no sirve para calcular cartas)
+    id: nonNeg(v.id) || nonNeg(v.seed),
     n: nonNeg(v.n),
     player: v.player,
     dealer: v.dealer,
@@ -108,7 +109,7 @@ function hiloOf(v: unknown): HiLoRun | null {
   const mult = typeof v.mult === 'number' && Number.isFinite(v.mult) && v.mult >= 1 ? v.mult : 1;
   return {
     bet: nonNeg(v.bet),
-    seed: nonNeg(v.seed),
+    id: nonNeg(v.id) || nonNeg(v.seed),
     n: nonNeg(v.n),
     cards: v.cards,
     mult,
@@ -278,7 +279,7 @@ export function clearTicket(s: GameState): GameState {
 export function startBlackjack(s: GameState, bet: number, rand: () => number): Result<{ hand: BjHand }> {
   const c = s.casino;
   if ((c.bj && !c.bj.result) || !validBet(c, bet)) return null;
-  const hand = bjDeal(bet, newSeed(rand));
+  const hand = bjDeal(bet, newHandId(rand));
   return { s: withCasino(s, { ...pay(stake(c, bet)!, hand.paid), bj: hand }), hand };
 }
 
@@ -303,7 +304,7 @@ export function blackjackMove(s: GameState, move: 'hit' | 'stand' | 'double'): R
 export function startHiLo(s: GameState, bet: number, rand: () => number): Result<{ run: HiLoRun }> {
   const c = s.casino;
   if ((c.hilo && !c.hilo.result) || !validBet(c, bet)) return null;
-  const run = hiloStart(bet, newSeed(rand));
+  const run = hiloStart(bet, newHandId(rand));
   return { s: withCasino(s, { ...stake(c, bet)!, hilo: run }), run };
 }
 

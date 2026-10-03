@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../minigames/rng';
 import { basicMove, bjDeal, bjDouble, bjHit, bjStand, handValue, type BjHand } from '../minigames/casino/blackjack';
-import { cardAt } from '../minigames/casino/cards';
+import { cardAt, drawCard, forgetHand, newHandId } from '../minigames/casino/cards';
 import { hiloCash, hiloGuess, hiloStart, stepMult, winChance } from '../minigames/casino/hilo';
 import { cashMultAt, crashPoint, msToMult, rocketOver } from '../minigames/casino/rocket';
 import { betReturn, isValidBet } from '../minigames/casino/roulette';
@@ -239,6 +239,25 @@ describe('partidas a medias', () => {
     expect(cardAt(123, 4)).toBe(cardAt(123, 4));
     expect(handValue([0, 12]).total).toBe(21);
     expect(handValue([0, 0, 8]).total).toBe(21);
+  });
+
+  it('lo guardado no revela la siguiente carta: el secreto vive en memoria y, si se pierde, se repone', () => {
+    const id = newHandId(mulberry32(7));
+    const first = drawCard(id, 0);
+    expect(drawCard(id, 0)).toBe(first);
+    // El id público no sirve como semilla de las cartas
+    const fromId = Array.from({ length: 8 }, (_, n) => cardAt(id, n));
+    const real = Array.from({ length: 8 }, (_, n) => drawCard(id, n));
+    expect(fromId).not.toEqual(real);
+    // La mano guardada solo lleva el id, nunca el secreto
+    const s = startBlackjack(player(1000), 10, mulberry32(3))!.s;
+    expect(Object.keys(s.casino.bj!)).not.toContain('seed');
+    // Secreto perdido (otra pestaña o recarga): se sortea otro y la mano puede seguir
+    forgetHand(id);
+    const again = drawCard(id, 0);
+    expect(again).toBeGreaterThanOrEqual(0);
+    expect(again).toBeLessThan(52);
+    expect(drawCard(id, 0)).toBe(again);
   });
 
   it('más alto o más bajo: cobra el multiplicador y recargar no cambia la carta', () => {
