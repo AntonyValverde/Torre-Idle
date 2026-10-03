@@ -343,10 +343,10 @@ service cloud.firestore {
     //   conquest/{lunes}/worlds/{w}                cuántos alcaldes tiene el mundo
     //   conquest/{lunes}/worlds/{w}/players/{uid}  reserva de tropas del alcalde
     //   conquest/{lunes}/worlds/{w}/tiles/{q_r}    territorios con dueño (los de bandidos no tienen documento)
-    // Las reglas hacen de árbitro con las mismas cifras que src/game/conquest.ts: tropas que se recargan
-    // (1 cada 3 min hasta 60), guarniciones que crecen (1 cada 10 min hasta 30; capital 50), vecindad
-    // en la cuadrícula hexagonal y escudo de 30 min tras una conquista. Solo cuentan comparaciones:
-    // "x <= min(a, b)" se escribe "x <= a && x <= b".
+    // Las reglas hacen de árbitro con las mismas cifras que src/game/conquest.ts: se ataca desde un territorio
+    // propio con sus soldados (crecen 1 cada 4 min hasta 30; la capital, 1 cada 2 min hasta 60), la reserva
+    // (1 cada 3 min hasta 60, más reclutas) solo refuerza, vecindad en la cuadrícula hexagonal y escudo de
+    // 30 min tras una conquista. Solo cuentan comparaciones: "x <= min(a, b)" se escribe "x <= a && x <= b".
     // ------------------------------------------------------------------
     function conqOpen(week) {
       return cupWeekOk(week) && cupElapsed(week) >= 0 && cupElapsed(week) < 604800000;
@@ -470,12 +470,21 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Los soldados de un territorio crecen solos: 1 cada 4 min hasta 30; la capital, 1 cada 2 min hasta 60.
+    // ¿Caben x soldados en el territorio `old`? Los que tenía, o los que tendría ahora sin pasar del tope.
+    function conqGarrisonFit(old, x) {
+      let cap = old.capital ? 60 : 30;
+      let rate = old.capital ? 120000.0 : 240000.0;
+      return x <= old.g || (x <= cap && x <= old.g + conqSince(old) / rate);
+    }
+
     match /conquest/{week}/worlds/{w}/tiles/{tid} {
+      // `to`/`sent`: el último ataque que salió de aquí; `from`/`sent`: de dónde llegaron los soldados
       function shape(d) {
-        return d.keys().hasOnly(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from'])
-          && d.keys().hasAll(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from'])
+        return d.keys().hasOnly(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from', 'to'])
+          && d.keys().hasAll(['owner', 'name', 'g', 't', 'ct', 'capital', 'sent', 'from', 'to'])
           && d.owner == request.auth.uid && validName(d.name)
-          && d.g is number && d.g >= 0 && d.capital is bool && d.sent is int && d.from is string
+          && d.g is number && d.g >= 0 && d.capital is bool && d.sent is int && d.from is string && d.to is string
           && d.t == request.time;
       }
 
@@ -483,14 +492,20 @@ service cloud.firestore {
         return getAfter(conqDoc(week, w, 'players', request.auth.uid)).data;
       }
 
-      // El envío viene de la reserva en este mismo lote y sale de un territorio propio vecino
-      // (o del mismo territorio, si es un refuerzo: así una capital aislada también se puede reforzar)
-      function sent() {
+      // Ataque: los soldados salen en este mismo lote de un territorio propio vecino (`from`), que baja
+      function fromTile() {
+        let d = incoming();
+        let f = getAfter(conqDoc(week, w, 'tiles', d.from)).data;
+        return d.sent >= 1 && d.to == '' && conqTile(d.from) && conqAdjacent(d.from, tid)
+          && f.owner == request.auth.uid && f.t == request.time && f.to == tid && f.sent == d.sent;
+      }
+
+      // Refuerzo: las tropas salen de la reserva en este mismo lote
+      function fromReserve() {
         let d = incoming();
         let p = me();
-        return p.t == request.time && p.last == tid && p.sent == d.sent && d.sent >= 1
-          && conqTile(d.from) && (d.from == tid || conqAdjacent(d.from, tid))
-          && get(conqDoc(week, w, 'tiles', d.from)).data.owner == request.auth.uid;
+        return d.sent >= 1 && d.to == '' && d.from == tid
+          && p.t == request.time && p.last == tid && p.sent == d.sent;
       }
 
       // Capital de un alcalde que se une ahora
@@ -499,34 +514,42 @@ service cloud.firestore {
         let p = me();
         return !exists(conqDoc(week, w, 'players', request.auth.uid))
           && p.t == request.time && tid == conqSlots()[p.slot]
-          && d.capital == true && d.g == 20 && d.ct == request.time && d.sent == 0 && d.from == '';
+          && d.capital == true && d.g == 20 && d.ct == request.time && d.sent == 0 && d.from == '' && d.to == '';
       }
 
       // Territorio de bandidos (sin documento): hay que mandar más que su guarnición fija
       function bandits() {
         let d = incoming();
-        return !(tid in conqSlots()) && sent()
+        return !(tid in conqSlots()) && fromTile()
           && d.capital == false && d.ct == request.time
           && d.sent > conqBandits(tid) && d.g == d.sent - conqBandits(tid);
       }
 
-      // Refuerzo de un territorio propio: suma lo enviado (la guarnición crece hasta su tope)
+      // Salida de un ataque: el territorio propio pierde los soldados que manda al vecino `to`
+      function dispatch() {
+        let d = incoming();
+        let old = resource.data;
+        return old.owner == request.auth.uid && d.capital == old.capital && d.ct == old.ct
+          && d.from == '' && d.sent >= 1 && conqTile(d.to) && conqAdjacent(tid, d.to)
+          && conqGarrisonFit(old, d.g + d.sent);
+      }
+
+      // Refuerzo de un territorio propio desde la reserva: suma lo enviado a lo que tenía
       function reinforce() {
         let d = incoming();
         let old = resource.data;
-        let cap = old.capital ? 50 : 30;
-        return old.owner == request.auth.uid && sent()
+        return old.owner == request.auth.uid && fromReserve()
           && d.capital == old.capital && d.ct == old.ct
-          && (d.g <= old.g + d.sent || (d.g <= cap + d.sent && d.g <= old.g + conqSince(old) / 600000.0 + d.sent));
+          && conqGarrisonFit(old, d.g - d.sent);
       }
 
       // Conquista de un territorio de otro alcalde (nunca su capital ni bajo escudo)
       function capture() {
         let d = incoming();
         let old = resource.data;
-        let grown = old.g + conqSince(old) / 600000.0;
+        let grown = old.g + conqSince(old) / 240000.0;
         return old.owner != request.auth.uid && old.capital == false
-          && request.time > old.ct + duration.value(30, 'm') && sent()
+          && request.time > old.ct + duration.value(30, 'm') && fromTile()
           && d.capital == false && d.ct == request.time
           && d.sent > old.g && (d.sent > 30 || d.sent > grown)
           && d.g + old.g <= d.sent && (d.g + 30 <= d.sent || d.g + grown <= d.sent);
@@ -534,7 +557,7 @@ service cloud.firestore {
 
       allow read: if true;
       allow create: if request.auth != null && conqOpen(week) && conqTile(tid) && shape(incoming()) && (capital() || bandits());
-      allow update: if request.auth != null && conqOpen(week) && shape(incoming()) && (reinforce() || capture());
+      allow update: if request.auth != null && conqOpen(week) && shape(incoming()) && (dispatch() || reinforce() || capture());
       allow delete: if isAdmin();
     }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newState, normalize } from './state';
 import { useGame } from './store';
-import { MIN_VIEW_W, WORLD_H, WORLD_W, cityPosition, clampView, isDormant, landDecor, markerRadius, onLand, zoomView } from './world';
+import { MIN_VIEW_W, WORLD_H, WORLD_W, cityPosition, clampView, clusterPoints, isDormant, landDecor, markerRadius, onLand, zoomView } from './world';
 
 describe('mapa del mundo', () => {
   it('cada ciudad tiene siempre la misma posición, en tierra y dentro del mapa', () => {
@@ -50,6 +50,20 @@ describe('mapa del mundo', () => {
     const all = clampView({ x: 0, y: 0, w: 1e6, h: 1e6 }, aspect);
     expect(all.w).toBeGreaterThanOrEqual(WORLD_W);
     expect(all.h).toBeGreaterThanOrEqual(WORLD_H - 1e-9);
+  });
+
+  it('las ciudades juntas se agrupan, pero la tuya nunca', () => {
+    const pts = [
+      { id: 'a', x: 100, y: 100 },
+      { id: 'b', x: 110, y: 104 },
+      { id: 'yo', x: 105, y: 100, alone: true },
+      { id: 'c', x: 400, y: 400 },
+    ];
+    const cl = clusterPoints(pts, 30);
+    expect(cl.map((c) => c.items.map((p) => p.id))).toEqual([['a', 'b'], ['yo'], ['c']]);
+    expect(cl[0]).toMatchObject({ x: 105, y: 102 });
+    // Con un radio pequeño (más zoom), cada una por su lado
+    expect(clusterPoints(pts, 5)).toHaveLength(4);
   });
 
   it('el zoom deja quieto el punto donde se hace', () => {

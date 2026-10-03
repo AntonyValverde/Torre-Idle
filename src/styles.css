@@ -447,6 +447,19 @@ img.splash-logo {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.world-entry-alert {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: #ffc23d;
+  color: #2a1a00;
+  font-size: 0.75rem;
+  font-weight: 800;
+  vertical-align: middle;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
 .world-entry-go {
   font-size: 1.6rem;
   opacity: 0.7;
@@ -510,6 +523,17 @@ img.splash-logo {
 
 .world-decor .mountain {
   fill: #7d8a7a;
+}
+
+.world-cluster circle {
+  fill: rgba(255, 194, 61, 0.9);
+  stroke: #0b1020;
+}
+
+.world-cluster text {
+  fill: #2a1a00;
+  font-weight: 800;
+  pointer-events: none;
 }
 
 .world-city.asleep {
@@ -716,6 +740,13 @@ img.splash-logo {
   stroke-dasharray: 1.2 1.2;
 }
 
+/* Territorio propio elegido como origen de los ataques */
+.conquest-hex.src polygon {
+  stroke: #ffffff;
+  stroke-width: 1.8;
+  stroke-dasharray: none;
+}
+
 .conquest-hex.sel polygon {
   stroke: #ffc23d;
   stroke-width: 1.6;
@@ -778,6 +809,32 @@ img.splash-logo {
 .conquest-ranking li.me .conquest-name {
   color: var(--accent);
   font-weight: 800;
+}
+
+.card.conquest-clara {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 12px 0;
+  border-color: rgba(255, 194, 61, 0.5);
+  animation: tabIn 0.25s ease-out;
+}
+
+.conquest-clara-face {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.conquest-clara > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.conquest-clara .btn {
+  flex: 0 0 auto;
+  padding: 8px 16px;
 }
 
 .conquest-reports ul,
@@ -3949,6 +4006,21 @@ img.splash-logo {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.admin-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.admin-tile {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
 }
 
 .admin-chips {

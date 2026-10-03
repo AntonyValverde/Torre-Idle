@@ -4,14 +4,15 @@ import type { GameState } from './state';
 
 // Conquista: una temporada por semana (lunes a domingo, hora de Costa Rica, como la Copa) en mundos de
 // hasta 16 alcaldes. El mapa es una cuadrícula hexagonal; cada alcalde tiene una capital que no se puede
-// perder y se expande desde ella. Las tropas salen de una reserva que se recarga sola y crece con
-// reclutas por jugar. Las reglas de Firestore repiten estas mismas cuentas para validar cada envío
-// (ver firestore.rules): si cambias una cifra aquí, cámbiala también allí.
+// perder y se expande desde ella. Como en la Guerra de torres, cada territorio genera soldados y se ataca
+// desde uno propio a un vecino con sus soldados. La reserva (se recarga sola y suma reclutas por jugar)
+// sirve para reforzar tus territorios. Las reglas de Firestore repiten estas mismas cuentas para validar
+// cada envío (ver firestore.rules): si cambias una cifra aquí, cámbiala también allí.
 
 /** Radio del mapa: 61 territorios. */
 export const RADIUS = 4;
 export const WORLD_MAX = 16;
-/** Reserva de tropas: 1 cada 3 min hasta 60 (unas 3 h fuera). Los reclutas pueden pasar del tope. */
+/** Reserva para reforzar: 1 cada 3 min hasta 60 (unas 3 h fuera). Los reclutas pueden pasar del tope. */
 export const TROOP_MS = 180_000;
 export const TROOP_CAP = 60;
 export const TROOP_MAX = 200;
@@ -21,10 +22,11 @@ export const RECRUITS_DAY = 30;
 export const RECRUIT_MISSION = 5;
 export const RECRUIT_DAILY = 5;
 export const RECRUIT_INCIDENT = 3;
-/** Guarnición de un territorio propio: crece 1 cada 10 min hasta 30 (la capital, hasta 50). */
-export const GROW_MS = 600_000;
+/** Soldados de un territorio propio: crecen 1 cada 4 min hasta 30; la capital, 1 cada 2 min hasta 60. */
+export const GROW_MS = 240_000;
+export const CAPITAL_GROW_MS = 120_000;
 export const TILE_CAP = 30;
-export const CAPITAL_CAP = 50;
+export const CAPITAL_CAP = 60;
 export const CAPITAL_START = 20;
 /** Tras una conquista, el territorio no se puede atacar durante 30 min. */
 export const SHIELD_MS = 30 * 60_000;
@@ -118,8 +120,6 @@ export interface Tile {
   t: number;
   /** Momento de la conquista: el escudo dura SHIELD_MS desde aquí. */
   ct: number;
-  /** La hora de la conquista tal como viene de la nube: al reforzar se reescribe idéntica (las reglas lo exigen). */
-  ctRaw?: unknown;
   capital: boolean;
 }
 
@@ -133,11 +133,19 @@ export interface Player {
   rToday: number;
 }
 
-/** Guarnición actual de un territorio con dueño (crece hasta su tope; lo que pasa del tope se queda). */
+/** Soldados de un territorio con dueño (crecen hasta su tope; lo que pasa del tope por refuerzos se queda). */
 export function garrisonAt(tile: Pick<Tile, 'g' | 't' | 'capital'>, ms: number): number {
   const cap = tile.capital ? CAPITAL_CAP : TILE_CAP;
   if (tile.g >= cap) return tile.g;
-  return Math.min(cap, tile.g + Math.max(0, ms - tile.t) / GROW_MS);
+  return Math.min(cap, tile.g + Math.max(0, ms - tile.t) / (tile.capital ? CAPITAL_GROW_MS : GROW_MS));
+}
+
+/** Milisegundos hasta que un territorio propio tenga `n` soldados (0 si ya los tiene; Infinity si no llega). */
+export function msUntilGarrison(tile: Pick<Tile, 'g' | 't' | 'capital'>, n: number, ms: number): number {
+  const now = garrisonAt(tile, ms);
+  if (now >= n) return 0;
+  if (n > (tile.capital ? CAPITAL_CAP : TILE_CAP)) return Infinity;
+  return Math.ceil((n - now) * (tile.capital ? CAPITAL_GROW_MS : GROW_MS));
 }
 
 /** Tropas en la reserva (se recargan hasta TROOP_CAP; por encima, de reclutas, no recargan). */
@@ -162,36 +170,35 @@ export type TargetInfo =
   | { kind: 'far' }
   | { kind: 'capital'; owner: string }
   | { kind: 'shield'; until: number }
-  | { kind: 'attack'; need: number; bandits: boolean }
-  | { kind: 'reinforce' };
+  /** `from`: territorio propio vecino desde el que se ataca. */
+  | { kind: 'attack'; need: number; bandits: boolean; from: string }
+  | { kind: 'own' };
 
 /**
- * Qué se puede hacer con un territorio: conquistarlo (y cuántas tropas hacen falta), reforzarlo, o nada.
- * `tiles` son los territorios con dueño; `me` el alcalde que mira.
+ * Qué se puede hacer con un territorio: atacarlo desde un territorio tuyo vecino (y cuántos soldados
+ * hacen falta), reforzarlo desde la reserva si es tuyo, o nada. `prefer`: territorio propio elegido
+ * antes como origen (si es vecino, se ataca desde él).
  */
-export function targetInfo(id: string, tiles: Map<string, Tile>, me: string, ms: number): TargetInfo {
+export function targetInfo(id: string, tiles: Map<string, Tile>, me: string, ms: number, prefer: string | null = null): TargetInfo {
   const tile = tiles.get(id);
-  if (tile?.owner === me) return { kind: 'reinforce' };
-  const near = neighbors(id).some((n) => tiles.get(n)?.owner === me);
+  if (tile?.owner === me) return { kind: 'own' };
   if (!tile && isCapitalSlot(id)) return { kind: 'reserved' };
   if (tile?.capital) return { kind: 'capital', owner: tile.owner };
-  if (!near) return { kind: 'far' };
-  if (!tile) return { kind: 'attack', need: banditGarrison(id) + 1, bandits: true };
+  const from = sourceFor(id, tiles, me, ms, prefer);
+  if (!from) return { kind: 'far' };
+  if (!tile) return { kind: 'attack', need: banditGarrison(id) + 1, bandits: true, from };
   if (shielded(tile, ms - SKEW_MS)) return { kind: 'shield', until: tile.ct + SHIELD_MS };
-  // Se cuenta la guarnición como si ya hubiera pasado el margen: el servidor nunca verá más
-  return { kind: 'attack', need: Math.floor(garrisonAt(tile, ms + SKEW_MS)) + 1, bandits: false };
+  // Se cuentan sus soldados como si ya hubiera pasado el margen: el servidor nunca verá más
+  return { kind: 'attack', need: Math.floor(garrisonAt(tile, ms + SKEW_MS)) + 1, bandits: false, from };
 }
 
-/**
- * Territorio propio desde el que salen las tropas: el vecino de más guarnición, o el mismo territorio
- * si es un refuerzo (así una capital aislada también se puede reforzar).
- */
-export function sourceFor(id: string, tiles: Map<string, Tile>, me: string): string | null {
-  if (tiles.get(id)?.owner === me) return id;
+/** Territorio propio vecino desde el que atacar: el elegido si es vecino, si no el que más soldados tiene. */
+export function sourceFor(id: string, tiles: Map<string, Tile>, me: string, ms: number, prefer: string | null = null): string | null {
   const own = neighbors(id)
     .map((n) => tiles.get(n))
-    .filter((t): t is Tile => !!t && t.owner === me)
-    .sort((a, b) => b.g - a.g);
+    .filter((t): t is Tile => !!t && t.owner === me);
+  if (prefer && own.some((t) => t.id === prefer)) return prefer;
+  own.sort((a, b) => garrisonAt(b, ms) - garrisonAt(a, ms));
   return own[0]?.id ?? null;
 }
 
@@ -273,13 +280,43 @@ export interface ConquestState {
   wins: number;
   podiums: number;
   history: SeasonRecord[];
+  /** Partes de batalla que llegaron y aún no se han visto en la pestaña. */
+  unread: number;
+  /** Última foto de la reserva en la nube: para avisar (reserva llena, reclutas) sin leerla. */
+  reserve: Reserve | null;
+  /** Clara ya presentó la Conquista. */
+  intro: boolean;
 }
+
+export type Reserve = Pick<Player, 'troops' | 't' | 'rDay' | 'rToday'>;
 
 const REPORTS_MAX = 8;
 export const HISTORY_MAX = 8;
 
 export function newConquest(): ConquestState {
-  return { day: null, recruits: 0, week: null, w: null, seenAt: 0, reports: [], lost: 0, claimed: null, wins: 0, podiums: 0, history: [] };
+  return {
+    day: null,
+    recruits: 0,
+    week: null,
+    w: null,
+    seenAt: 0,
+    reports: [],
+    lost: 0,
+    claimed: null,
+    wins: 0,
+    podiums: 0,
+    history: [],
+    unread: 0,
+    reserve: null,
+    intro: false,
+  };
+}
+
+function reserveOf(v: unknown): Reserve | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Partial<Reserve>;
+  if (!Number.isFinite(r.troops) || !Number.isFinite(r.t)) return null;
+  return { troops: Math.max(0, r.troops as number), t: r.t as number, rDay: typeof r.rDay === 'string' ? r.rDay : '', rToday: count(r.rToday) };
 }
 
 const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
@@ -310,7 +347,33 @@ export function conquestState(v: unknown): ConquestState {
           .slice(-HISTORY_MAX)
           .map((x) => ({ week: x.week, rank: count(x.rank), size: count(x.size), points: count(x.points), gems: count(x.gems) }))
       : [],
+    unread: count(r.unread),
+    reserve: reserveOf(r.reserve),
+    intro: r.intro === true,
   };
+}
+
+/** Guarda la foto de la reserva (solo si cambió). */
+export function withReserve(s: GameState, p: Reserve): GameState {
+  const r = s.conquest.reserve;
+  if (r && r.troops === p.troops && r.t === p.t && r.rDay === p.rDay && r.rToday === p.rToday) return s;
+  return { ...s, conquest: { ...s.conquest, reserve: { troops: p.troops, t: p.t, rDay: p.rDay, rToday: p.rToday } } };
+}
+
+/**
+ * Aviso para la tarjeta del Mapa del mundo (null si no hay nada): partes sin leer, reclutas por sumar,
+ * reserva llena, o temporada nueva para quien ya jugó alguna.
+ */
+export function conquestAlert(s: GameState, ms: number, today: string): string | null {
+  const c = s.conquest;
+  const week = seasonOf(ms).week;
+  if (c.week !== week) return c.week || c.history.length ? '⚔️ ¡Nueva temporada!' : null;
+  if (c.unread > 0) return `📜 ${c.unread} ${c.unread === 1 ? 'parte' : 'partes'} de batalla`;
+  if (!c.reserve) return null;
+  const n = recruitsToSend(s, c.reserve, today);
+  if (n > 0) return `🎖️ +${n} reclutas`;
+  if (troopsAt(c.reserve, ms) >= TROOP_CAP) return '⚔️ ¡Reserva llena!';
+  return null;
 }
 
 /** Apunta en qué semana y mundo juega el alcalde. */
@@ -325,7 +388,10 @@ export function applyReports(s: GameState, list: Report[]): { s: GameState; fres
   const fresh = list.filter((r) => r.at > c.seenAt).sort((a, b) => b.at - a.at);
   if (!fresh.length) return { s, fresh };
   return {
-    s: { ...s, conquest: { ...c, seenAt: fresh[0].at, lost: c.lost + fresh.length, reports: [...fresh, ...c.reports].slice(0, REPORTS_MAX) } },
+    s: {
+      ...s,
+      conquest: { ...c, seenAt: fresh[0].at, lost: c.lost + fresh.length, unread: c.unread + fresh.length, reports: [...fresh, ...c.reports].slice(0, REPORTS_MAX) },
+    },
     fresh,
   };
 }

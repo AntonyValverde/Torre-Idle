@@ -118,8 +118,10 @@ import {
   addRecruits,
   applyReports,
   applySeason,
+  withReserve,
   withWorld,
   type Report,
+  type Reserve,
   type seasonPrize,
 } from './conquest';
 import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
@@ -219,6 +221,10 @@ interface GameStore {
   setConquestWorld(week: string, w: string): void;
   /** Conquista: guarda los partes de batalla nuevos y devuelve los recién llegados. */
   receiveReports(list: Report[]): Report[];
+  /** Conquista: guarda la foto de la reserva (para los avisos), marca los partes como leídos y la presentación de Clara. */
+  noteReserve(p: Reserve): void;
+  readReports(): void;
+  seeConquestIntro(): void;
   /** Conquista: cobra el premio de una temporada terminada (una vez). */
   claimConquest(week: string, rank: number, size: number, points: number): ReturnType<typeof seasonPrize> | null;
   /** Reclama una misión completada; devuelve el texto del premio o null. */
@@ -619,6 +625,22 @@ export const useGame = create<GameStore>((set, get) => ({
     const r = applyReports(get().s, list);
     if (r.fresh.length) set({ s: r.s });
     return r.fresh;
+  },
+
+  noteReserve(p) {
+    const { s } = get();
+    const next = withReserve(s, p);
+    if (next !== s) set({ s: next });
+  },
+
+  readReports() {
+    const { s } = get();
+    if (s.conquest.unread) set({ s: { ...s, conquest: { ...s.conquest, unread: 0 } } });
+  },
+
+  seeConquestIntro() {
+    const { s } = get();
+    if (!s.conquest.intro) set({ s: { ...s, conquest: { ...s.conquest, intro: true } } });
   },
 
   claimConquest(week, rank, size, points) {

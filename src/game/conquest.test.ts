@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   ALL_TILES,
+  CAPITAL_CAP,
+  CAPITAL_GROW_MS,
   CAPITAL_SLOTS,
   CENTER,
   GROW_MS,
+  msUntilGarrison,
   RECRUITS_DAY,
   SHIELD_MS,
   SKEW_MS,
@@ -15,7 +18,9 @@ import {
   adjacent,
   applyReports,
   applySeason,
+  conquestAlert,
   newConquest,
+  withReserve,
   seasonPrize,
   withWorld,
   banditGarrison,
@@ -70,7 +75,9 @@ describe('Conquista: mapa', () => {
     const slots = rules.match(/function conqSlots\(\) \{\s*return \[([^\]]+)\]/)?.[1];
     expect(slots?.split(',').map((x) => x.trim().replace(/'/g, ''))).toEqual(CAPITAL_SLOTS);
     expect(rules).toContain(`/ ${TROOP_MS}`);
-    expect(rules).toContain(`/ ${GROW_MS}`);
+    expect(rules).toContain(`let rate = old.capital ? ${CAPITAL_GROW_MS}.0 : ${GROW_MS}.0;`);
+    expect(rules).toContain(`let cap = old.capital ? ${CAPITAL_CAP} : ${TILE_CAP};`);
+    expect(rules).toContain(`/ ${GROW_MS}.0`);
     expect(rules).toContain(`x <= ${TROOP_CAP}`);
     expect(rules).toContain(`duration.value(${SHIELD_MS / 60_000}, 'm')`);
     expect(rules).toContain(`d.rToday <= ${RECRUITS_DAY}`);
@@ -86,11 +93,20 @@ describe('Conquista: tropas y guarniciones', () => {
     expect(nextTroopMs({ troops: TROOP_CAP, t: 0 }, 0)).toBe(0);
   });
 
-  it('la guarnición crece hasta su tope (la capital más) y lo que lo pasa se queda', () => {
-    expect(garrisonAt({ g: 1, t: 0, capital: false }, 3600_000)).toBe(7);
+  it('los soldados crecen hasta su tope (la capital, el doble de rápido) y lo que lo pasa se queda', () => {
+    expect(garrisonAt({ g: 1, t: 0, capital: false }, 3600_000)).toBe(16);
+    expect(garrisonAt({ g: 1, t: 0, capital: true }, 3600_000)).toBe(31);
     expect(garrisonAt({ g: 1, t: 0, capital: false }, 1e9)).toBe(TILE_CAP);
-    expect(garrisonAt({ g: 1, t: 0, capital: true }, 1e9)).toBe(50);
+    expect(garrisonAt({ g: 1, t: 0, capital: true }, 1e9)).toBe(CAPITAL_CAP);
     expect(garrisonAt({ g: 45, t: 0, capital: false }, 1e9)).toBe(45);
+  });
+
+  it('cuánto falta para tener n soldados', () => {
+    expect(msUntilGarrison({ g: 5, t: 0, capital: false }, 8, 0)).toBe(3 * GROW_MS);
+    expect(msUntilGarrison({ g: 5, t: 0, capital: true }, 8, 0)).toBe(3 * CAPITAL_GROW_MS);
+    expect(msUntilGarrison({ g: 9, t: 0, capital: false }, 8, 0)).toBe(0);
+    // Más que el tope: solo con refuerzos
+    expect(msUntilGarrison({ g: 5, t: 0, capital: false }, TILE_CAP + 1, 0)).toBe(Infinity);
   });
 });
 
@@ -98,8 +114,10 @@ describe('Conquista: qué se puede hacer con un territorio', () => {
   const T = 1_000_000_000;
   const tiles = map(tile('-4_4', 'yo', { capital: true }), tile('-4_3', 'yo'), tile('-3_2', 'otro', { g: 5, t: T, ct: T - SHIELD_MS - 60_000 }), tile('4_-4', 'otro', { capital: true }));
 
-  it('bandidos vecinos: hace falta uno más que su guarnición', () => {
-    expect(targetInfo('-3_3', tiles, 'yo', T)).toEqual({ kind: 'attack', need: 8, bandits: true });
+  it('bandidos vecinos: hace falta uno más que su guarnición, y se ataca desde el vecino propio más fuerte', () => {
+    expect(targetInfo('-3_3', tiles, 'yo', T)).toEqual({ kind: 'attack', need: 8, bandits: true, from: '-4_4' });
+    // Con un origen elegido que también es vecino, se ataca desde él
+    expect(targetInfo('-3_3', tiles, 'yo', T, '-4_3')).toMatchObject({ kind: 'attack', from: '-4_3' });
   });
 
   it('un territorio lejano, un solar de capital o una capital no se atacan', () => {
@@ -108,24 +126,25 @@ describe('Conquista: qué se puede hacer con un territorio', () => {
     expect(targetInfo('4_-4', tiles, 'yo', T).kind).toBe('capital');
   });
 
-  it('lo tuyo se refuerza', () => {
-    expect(targetInfo('-4_3', tiles, 'yo', T).kind).toBe('reinforce');
+  it('lo tuyo se refuerza desde la reserva', () => {
+    expect(targetInfo('-4_3', tiles, 'yo', T).kind).toBe('own');
   });
 
-  it('a otro alcalde se le ataca contando la guarnición con margen de reloj', () => {
+  it('a otro alcalde se le ataca contando sus soldados con margen de reloj', () => {
     const info = targetInfo('-3_2', tiles, 'yo', T);
-    expect(info).toEqual({ kind: 'attack', need: Math.floor(5 + SKEW_MS / GROW_MS) + 1, bandits: false });
+    expect(info).toEqual({ kind: 'attack', need: Math.floor(5 + SKEW_MS / GROW_MS) + 1, bandits: false, from: '-4_3' });
     // Recién conquistado: escudo
     const fresh = map(...tiles.values(), tile('-3_2', 'otro', { ct: T - 60_000 }));
     expect(targetInfo('-3_2', fresh, 'yo', T)).toEqual({ kind: 'shield', until: T - 60_000 + SHIELD_MS });
   });
 
-  it('las tropas salen del territorio propio vecino con más guarnición', () => {
-    const t2 = map(tile('-4_4', 'yo', { capital: true, g: 30 }), tile('-4_3', 'yo', { g: 2 }));
-    expect(sourceFor('-3_3', t2, 'yo')).toBe('-4_4');
-    expect(sourceFor('0_0', t2, 'yo')).toBeNull();
-    // Un refuerzo sale del propio territorio, aunque no tenga vecinos tuyos
-    expect(sourceFor('-4_4', map(tile('-4_4', 'yo', { capital: true })), 'yo')).toBe('-4_4');
+  it('el ataque sale del territorio propio vecino con más soldados ahora mismo', () => {
+    const t2 = map(tile('-4_4', 'yo', { capital: true, g: 30, t: T }), tile('-4_3', 'yo', { g: 2, t: T }));
+    expect(sourceFor('-3_3', t2, 'yo', T)).toBe('-4_4');
+    expect(sourceFor('-3_3', t2, 'yo', T, '-4_3')).toBe('-4_3');
+    expect(sourceFor('0_0', t2, 'yo', T)).toBeNull();
+    // Un territorio propio no es origen de sí mismo
+    expect(sourceFor('-4_4', map(tile('-4_4', 'yo', { capital: true })), 'yo', T)).toBeNull();
   });
 });
 
@@ -187,6 +206,32 @@ describe('Conquista: reclutas en la partida', () => {
       wins: 0,
       reports: [{ by: 'b', name: 'Bruno', tile: '1_0', at: 5 }],
     });
+  });
+});
+
+describe('Conquista: avisos de la tarjeta del Mapa del mundo', () => {
+  const T = Date.UTC(2026, 9, 2, 12);
+  const week = seasonOf(T).week;
+  const day = '2026-10-02';
+
+  it('sin haber jugado nunca, no molesta; si jugaste, avisa de la temporada nueva', () => {
+    expect(conquestAlert(newState(0), T, day)).toBeNull();
+    expect(conquestAlert(withWorld(newState(0), '2026-09-21', 'w0'), T, day)).toBe('⚔️ ¡Nueva temporada!');
+  });
+
+  it('partes sin leer, luego reclutas por sumar, luego reserva llena', () => {
+    let s = withWorld(newState(0), week, 'w0');
+    s = withReserve(s, { troops: 60, t: T, rDay: day, rToday: 0 });
+    expect(conquestAlert(s, T, day)).toBe('⚔️ ¡Reserva llena!');
+    s = addRecruits(s, 5, day);
+    expect(conquestAlert(s, T, day)).toBe('🎖️ +5 reclutas');
+    s = applyReports(s, [{ by: 'b', name: 'Bruno', tile: '1_0', at: 9 }]).s;
+    expect(conquestAlert(s, T, day)).toBe('📜 1 parte de batalla');
+    s = { ...s, conquest: { ...s.conquest, unread: 0, recruits: 0 } };
+    s = withReserve(s, { troops: 10, t: T, rDay: day, rToday: 0 });
+    expect(conquestAlert(s, T, day)).toBeNull();
+    // La foto de la reserva solo cambia si cambió algo
+    expect(withReserve(s, { troops: 10, t: T, rDay: day, rToday: 0 })).toBe(s);
   });
 });
 

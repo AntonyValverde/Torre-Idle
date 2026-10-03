@@ -283,18 +283,26 @@ console.log('conquest (Conquista)');
     b.set(doc(db, `${base}/members/${uid}`), { w });
     b.set(doc(db, `${base}/worlds/${w}`), { members });
     b.set(doc(db, `${base}/worlds/${w}/players/${uid}`), { name, slot, troops, t: serverTimestamp(), rDay: '', rToday: 0, last: '', sent: 0 });
-    b.set(doc(db, `${base}/worlds/${w}/tiles/${capital}`), { owner: uid, name, g: 20, t: serverTimestamp(), ct: serverTimestamp(), capital: true, sent: 0, from: '' });
+    b.set(doc(db, `${base}/worlds/${w}/tiles/${capital}`), { owner: uid, name, g: 20, t: serverTimestamp(), ct: serverTimestamp(), capital: true, sent: 0, from: '', to: '' });
     return b.commit();
   };
-  // Envío de tropas: la reserva y el territorio en el mismo lote
-  const send = (db, uid, name, target, from, sent, troops, g, { ct = serverTimestamp(), capital = false, skipPlayer = false } = {}) => {
+  // Ataque: el territorio de origen baja (y dice a dónde mandó) y el objetivo pasa al atacante, en el mismo lote
+  const attack = (db, uid, name, target, from, sent, left, g, { skipFrom = false } = {}) => {
+    const b = writeBatch(db);
+    if (!skipFrom) b.update(doc(db, `${W}/tiles/${from}`), { name, g: left, t: serverTimestamp(), to: target, sent, from: '' });
+    b.set(doc(db, `${W}/tiles/${target}`), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, from, to: '' });
+    return b.commit();
+  };
+  // Refuerzo desde la reserva: la reserva baja y el territorio propio sube, en el mismo lote
+  const reinforce = (db, uid, name, target, sent, troops, g, { skipPlayer = false, extra = {} } = {}) => {
     const b = writeBatch(db);
     if (!skipPlayer) b.update(doc(db, `${W}/players/${uid}`), { troops, t: serverTimestamp(), last: target, sent });
-    b.set(doc(db, `${W}/tiles/${target}`), { owner: uid, name, g, t: serverTimestamp(), ct, capital, sent, from });
+    b.update(doc(db, `${W}/tiles/${target}`), { name, g, t: serverTimestamp(), sent, from: target, to: '', ...extra });
     return b.commit();
   };
   const seed = (path, data) => env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), path), data));
   const ago = (ms) => Timestamp.fromMillis(Date.now() - ms);
+  const tileSeed = (owner, g, tAgo, ctAgo) => ({ owner, name: owner === 'alice' ? 'Alice' : 'Bob', g, t: ago(tAgo), ct: ago(ctAgo), capital: false, sent: 0, from: '', to: '' });
 
   await no('conquista: unirse con más tropas', () => join(alice, 'alice', 'Alice', 0, { troops: 99 }));
   await no('conquista: capital en otra casilla', () => join(alice, 'alice', 'Alice', 0, { capital: '4_-4' }));
@@ -306,51 +314,61 @@ console.log('conquest (Conquista)');
   await ok('conquista: el segundo alcalde, segunda capital', () => join(bob, 'bob', 'Bob', 1));
   await ok('conquista: lectura pública del mundo', () => getDocs(collection(anon, `${W}/tiles`)));
 
-  // Bandidos: -4_3 tiene 4 (borde) y -3_3 tiene 7
-  await no('conquista: no basta con igualar a los bandidos', () => send(alice, 'alice', 'Alice', '-4_3', '-4_4', 4, 16, 0));
-  await no('conquista: guarnición inflada', () => send(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 15, 5));
-  await no('conquista: una casilla de capital libre no se toma', () => send(alice, 'alice', 'Alice', '-3_4', '-4_4', 10, 10, 6));
-  await no('conquista: un territorio que no es vecino', () => send(alice, 'alice', 'Alice', '0_0', '-4_4', 19, 1, 0));
-  await no('conquista: más tropas de las que hay', () => send(alice, 'alice', 'Alice', '-4_3', '-4_4', 21, 0, 17));
-  await no('conquista: sin gastar tropas de la reserva', () => send(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 20, 1));
-  await no('conquista: territorio sin pasar por la reserva', () => send(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 15, 1, { skipPlayer: true }));
-  await ok('conquista: tomar un territorio de bandidos', () => send(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 15, 1));
-  await ok('conquista: y otro más hacia el centro', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 8, 7, 1));
-  // Al reforzar se conserva la hora de la conquista (el escudo no se renueva)
-  const ct33 = (await getDoc(doc(alice, `${W}/tiles/-3_3`))).data().ct;
-  await no('conquista: refuerzo inflado', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 3, 4, 10, { ct: ct33 }));
-  await no('conquista: reforzar renovando el escudo', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 3, 4, 4));
-  await ok('conquista: reforzar un territorio propio', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 3, 4, 4, { ct: ct33 }));
+  // Bandidos: -4_3 tiene 4 (borde) y -3_3 tiene 7. Se ataca desde la capital (20 soldados)
+  await no('conquista: no basta con igualar a los bandidos', () => attack(alice, 'alice', 'Alice', '-4_3', '-4_4', 4, 16, 0));
+  await no('conquista: guarnición inflada', () => attack(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 15, 5));
+  await no('conquista: una casilla de capital libre no se toma', () => attack(alice, 'alice', 'Alice', '-3_4', '-4_4', 10, 10, 6));
+  await no('conquista: un territorio que no es vecino', () => attack(alice, 'alice', 'Alice', '0_0', '-4_4', 19, 1, 0));
+  await no('conquista: más soldados de los que tiene el origen', () => attack(alice, 'alice', 'Alice', '-4_3', '-4_4', 21, 0, 17));
+  await no('conquista: sin restar los soldados del origen', () => attack(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 20, 1));
+  await no('conquista: territorio sin pasar por el origen', () => attack(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 15, 1, { skipFrom: true }));
+  await no('conquista: atacar desde un territorio ajeno', () => attack(alice, 'alice', 'Alice', '3_-3', '4_-4', 8, 12, 1));
+  await ok('conquista: tomar un territorio de bandidos', () => attack(alice, 'alice', 'Alice', '-4_3', '-4_4', 5, 15, 1));
+  await ok('conquista: y otro más hacia el centro', () => attack(alice, 'alice', 'Alice', '-3_3', '-4_4', 8, 7, 1));
+
+  // La reserva solo refuerza lo propio, y se conserva la hora de la conquista (el escudo no se renueva)
+  await no('conquista: refuerzo inflado', () => reinforce(alice, 'alice', 'Alice', '-3_3', 3, 17, 10));
+  await no('conquista: refuerzo sin gastar la reserva', () => reinforce(alice, 'alice', 'Alice', '-3_3', 3, 20, 4));
+  await no('conquista: reforzar sin pasar por la reserva', () => reinforce(alice, 'alice', 'Alice', '-3_3', 3, 17, 4, { skipPlayer: true }));
+  await no('conquista: reforzar renovando el escudo', () => reinforce(alice, 'alice', 'Alice', '-3_3', 3, 17, 4, { extra: { ct: serverTimestamp() } }));
+  await no('conquista: reforzar lo ajeno', () => reinforce(alice, 'alice', 'Alice', '4_-4', 3, 17, 23));
+  await ok('conquista: reforzar desde la reserva', () => reinforce(alice, 'alice', 'Alice', '-3_3', 3, 17, 4));
 
   // La reserva se recarga: 1 tropa cada 3 min
   await seed(`${W}/players/alice`, { name: 'Alice', slot: 0, troops: 0, t: ago(30 * 60000), rDay: '', rToday: 0, last: '', sent: 0 });
-  await no('conquista: más de lo recargado', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 11, 0, 15, { ct: ct33 }));
-  await ok('conquista: gastar lo recargado (10 en 30 min)', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 10, 0, 14, { ct: ct33 }));
+  await no('conquista: más de lo recargado', () => reinforce(alice, 'alice', 'Alice', '-3_3', 11, 0, 15));
+  await ok('conquista: gastar lo recargado (10 en 30 min)', () => reinforce(alice, 'alice', 'Alice', '-3_3', 10, 0, 14));
   // La recarga cuenta fracciones (4,5 min = 1,5 tropas): el móvil guarda lo que sobra
   await seed(`${W}/players/alice`, { name: 'Alice', slot: 0, troops: 0, t: ago(270000), rDay: '', rToday: 0, last: '', sent: 0 });
-  await no('conquista: más de la fracción recargada', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 1, 0.6, 15, { ct: ct33 }));
-  await ok('conquista: la recarga cuenta fracciones', () => send(alice, 'alice', 'Alice', '-3_3', '-4_4', 1, 0.4, 15, { ct: ct33 }));
+  await no('conquista: más de la fracción recargada', () => reinforce(alice, 'alice', 'Alice', '-3_3', 1, 0.6, 15));
+  await ok('conquista: la recarga cuenta fracciones', () => reinforce(alice, 'alice', 'Alice', '-3_3', 1, 0.4, 15));
 
-  // Otro alcalde: bob tiene -3_2, vecino de -4_3 (de alice)
-  await seed(`${W}/tiles/-3_2`, { owner: 'bob', name: 'Bob', g: 10, t: Timestamp.now(), ct: ago(3600000), capital: false, sent: 0, from: '' });
-  await no('conquista: atacar bajo escudo', () => send(bob, 'bob', 'Bob', '-4_3', '-3_2', 10, 10, 1));
-  // Sin escudo: la guarnición de alice creció de 1 a 7 en una hora
-  await seed(`${W}/tiles/-4_3`, { owner: 'alice', name: 'Alice', g: 1, t: ago(3600000), ct: ago(3600000), capital: false, sent: 5, from: '-4_4' });
-  await no('conquista: no basta con igualar la guarnición que creció', () => send(bob, 'bob', 'Bob', '-4_3', '-3_2', 7, 13, 0));
-  await no('conquista: conquistar con guarnición inflada', () => send(bob, 'bob', 'Bob', '-4_3', '-3_2', 9, 11, 5));
-  await ok('conquista: conquistar el territorio de otro alcalde', () => send(bob, 'bob', 'Bob', '-4_3', '-3_2', 9, 11, 1));
-  await no('conquista: una capital no se conquista', () => send(bob, 'bob', 'Bob', '-4_4', '-4_3', 11, 0, 0));
-  await no('conquista: atacar diciendo que sale del propio objetivo', () => send(bob, 'bob', 'Bob', '-2_2', '-2_2', 11, 0, 1));
-  await no('conquista: escribir territorios a nombre de otro', () => send(bob, 'alice', 'Alice', '-2_2', '-3_3', 5, 5, 0));
+  // Los soldados de un territorio crecen solos: 1 cada 4 min (de 0 a 15 en una hora)
+  await seed(`${W}/tiles/-3_3`, tileSeed('alice', 0, 3600000, 3600000));
+  await no('conquista: más soldados de los que crecieron', () => attack(alice, 'alice', 'Alice', '-2_3', '-3_3', 16, 0, 9));
+  await ok('conquista: atacar con los soldados que crecieron', () => attack(alice, 'alice', 'Alice', '-2_3', '-3_3', 15, 0, 8));
+
+  // Otro alcalde: bob tiene -3_2 con 30 soldados, vecino de -4_3 (de alice)
+  await seed(`${W}/tiles/-3_2`, tileSeed('bob', 30, 0, 3600000));
+  await no('conquista: atacar bajo escudo', () => attack(bob, 'bob', 'Bob', '-4_3', '-3_2', 10, 20, 1));
+  // Sin escudo: los soldados de alice crecieron de 1 a 16 en una hora
+  await seed(`${W}/tiles/-4_3`, tileSeed('alice', 1, 3600000, 3600000));
+  await no('conquista: no basta con igualar los que crecieron', () => attack(bob, 'bob', 'Bob', '-4_3', '-3_2', 16, 14, 0));
+  await no('conquista: conquistar con guarnición inflada', () => attack(bob, 'bob', 'Bob', '-4_3', '-3_2', 18, 12, 5));
+  await ok('conquista: conquistar el territorio de otro alcalde', () => attack(bob, 'bob', 'Bob', '-4_3', '-3_2', 18, 12, 1));
+  await no('conquista: una capital no se conquista', () => attack(bob, 'bob', 'Bob', '-4_4', '-4_3', 1, 0, 0));
+  await no('conquista: atacar diciendo que sale del propio objetivo', () => attack(bob, 'bob', 'Bob', '-2_2', '-2_2', 5, 0, 1));
+  await no('conquista: escribir territorios a nombre de otro', () => attack(bob, 'alice', 'Alice', '-2_2', '-3_3', 5, 5, 0));
 
   // Partes de batalla: van en el mismo lote que la conquista y solo los lee quien perdió el territorio
-  await seed(`${W}/tiles/-2_1`, { owner: 'alice', name: 'Alice', g: 1, t: ago(3600000), ct: ago(3600000), capital: false, sent: 0, from: '' });
+  await seed(`${W}/tiles/-2_1`, tileSeed('alice', 1, 3600000, 3600000));
+  await seed(`${W}/tiles/-3_2`, tileSeed('bob', 30, 0, 3600000));
   const report = (db, to) => doc(collection(db, `${W}/players/${to}/reports`));
   const captureWithReport = (to, extra = {}) => {
     const b = writeBatch(bob);
-    // La guarnición de alice creció a algo más de 7 en esa hora: con 9 queda 1
-    b.update(doc(bob, `${W}/players/bob`), { troops: 2, t: serverTimestamp(), last: '-2_1', sent: 9 });
-    b.set(doc(bob, `${W}/tiles/-2_1`), { owner: 'bob', name: 'Bob', g: 1, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent: 9, from: '-3_2' });
+    // Los soldados de alice crecieron a algo más de 16 en esa hora: con 18 queda 1
+    b.update(doc(bob, `${W}/tiles/-3_2`), { name: 'Bob', g: 12, t: serverTimestamp(), to: '-2_1', sent: 18, from: '' });
+    b.set(doc(bob, `${W}/tiles/-2_1`), { owner: 'bob', name: 'Bob', g: 1, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent: 18, from: '-3_2', to: '' });
     b.set(report(bob, to), { by: 'bob', name: 'Bob', tile: '-2_1', at: serverTimestamp(), ...extra });
     return b.commit();
   };
@@ -369,9 +387,9 @@ console.log('conquest (Conquista)');
   await ok('conquista: sumar reclutas', () => rec(5, today, 5));
   await no('conquista: cobrar los mismos reclutas otra vez', () => rec(10, today, 5));
   await ok('conquista: más reclutas el mismo día', () => rec(8, today, 8));
-  // Un refuerzo puede salir del mismo territorio (para capitales sin vecinos propios)
-  const ctCap = (await getDoc(doc(alice, `${W}/tiles/-4_4`))).data().ct;
-  await ok('conquista: reforzar la capital desde ella misma', () => send(alice, 'alice', 'Alice', '-4_4', '-4_4', 2, 6, 22, { ct: ctCap, capital: true }));
+  // La capital también se refuerza desde la reserva
+  const gCap = (await getDoc(doc(alice, `${W}/tiles/-4_4`))).data().g;
+  await ok('conquista: reforzar la capital desde la reserva', () => reinforce(alice, 'alice', 'Alice', '-4_4', 2, 6, gCap + 2));
   await no('conquista: cambiar la casilla de capital', () => updateDoc(doc(alice, `${W}/players/alice`), { slot: 5 }));
   await ok('conquista: cambiar el nombre', () => updateDoc(doc(alice, `${W}/players/alice`), { name: 'Alicia' }));
   await no('conquista: un alcalde no borra territorios', () => deleteDoc(doc(alice, `${W}/tiles/-3_3`)));

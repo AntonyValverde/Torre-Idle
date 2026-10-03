@@ -54,7 +54,7 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
 - En cualquier ranking, al tocar a un jugador se abre su ciudad, dibujada con el mismo clima y la misma hora. Tocarla no recauda; solo saluda.
 - En Logros → Perfil → **Tu ciudad** puedes ver cómo la ven los demás y compartir un enlace (`?ciudad=UID`) que abre tu ciudad directamente.
 - El panel de administración también puede abrir la ciudad de cualquier jugador.
-- **Mapa del mundo** (tarjeta 🌍 en la Ciudad, o Logros → Perfil): todas las ciudades sobre unos continentes fijos ([world.ts](src/game/world.ts)). La posición de cada ciudad sale de su UID, así que siempre está en el mismo sitio y es igual para todos. El tamaño y el color dependen de la era, y las que llevan una semana sin actividad se ven apagadas. Se arrastra, se pellizca para hacer zoom y, al tocar una ciudad, se puede visitar. También tiene vista de lista (la antigua "Explorar ciudades"). Lee las 200 ciudades más recientes como mucho una vez cada 10 minutos.
+- **Mapa del mundo** (tarjeta 🌍 en la Ciudad, o Logros → Perfil): todas las ciudades sobre unos continentes fijos ([world.ts](src/game/world.ts)). La posición de cada ciudad sale de su UID, así que siempre está en el mismo sitio y es igual para todos. El tamaño y el color dependen de la era, y las que llevan una semana sin actividad se ven apagadas. Se arrastra, se pellizca para hacer zoom y, al tocar una ciudad, se puede visitar. También tiene vista de lista (la antigua "Explorar ciudades"). Lee las 200 ciudades más recientes como mucho una vez cada 10 minutos. Cuando hay muchas ciudades juntas se agrupan en una burbuja con su número (al tocarla, el mapa se acerca); la tuya y la que eliges nunca se agrupan.
 
 ## Conquista (temporada semanal)
 
@@ -62,17 +62,20 @@ Pestaña ⚔️ Conquista del Mapa del mundo. Va en la misma semana que la Copa 
 
 - **Mundos** de hasta 16 alcaldes. Al unirte recibes una capital en el borde del mapa, que nadie puede conquistar. Las casillas de capital todavía libres no se pueden tomar.
 - **Mapa** hexagonal de 61 territorios. Los que no tienen dueño son de bandidos, con 4 de guarnición en el borde y hasta 13 junto a la **Torre central**, que tiene 40 y vale 3 puntos.
-- **Tropas**: salen de una reserva que se recarga sola (1 cada 3 min, hasta 60). Las misiones (+5), los retos diarios (+5) y los incidentes resueltos (+3) dan **reclutas** extra, como mucho 30 al día. Se suman al abrir la Conquista.
-- **Combate**: tocas un territorio vecino de uno tuyo y envías más tropas que su guarnición. Lo conquistado queda con la diferencia y un **escudo** de 30 min. Los territorios propios se refuerzan, y su guarnición crece sola (1 cada 10 min, hasta 30; la capital, hasta 50).
+- **Soldados**: como en la Guerra de torres, cada territorio genera soldados. Tu capital, 1 cada 2 min hasta 60; los demás, 1 cada 4 min hasta 30.
+- **Combate**: tocas un territorio tuyo (el origen, con borde blanco) y luego un vecino con borde claro, y lo atacas con los soldados del origen. Si mandas más de los que tiene, es tuyo, con la diferencia y un **escudo** de 30 min. Si no eliges origen, ataca el vecino tuyo con más soldados. Si al origen le faltan soldados, el botón dice cuándo los tendrá.
+- **Reserva**: se recarga sola (1 cada 3 min, hasta 60) y solo sirve para **reforzar** tus territorios. Las misiones (+5), los retos diarios (+5) y los incidentes resueltos (+3) dan **reclutas** extra para la reserva, como mucho 30 al día. Se suman al abrir la Conquista.
 - **Clasificación**: un punto por territorio, en vivo.
 - **Firestore**:
   - `conquest/{lunes}/members/{uid}`: en qué mundo juega cada alcalde.
   - `conquest/{lunes}/worlds/{w}`: cuántos alcaldes tiene el mundo.
   - `.../players/{uid}`: la reserva de tropas.
   - `.../tiles/{q_r}`: los territorios con dueño.
-- **Reglas como árbitro**: comprueban con la hora del servidor la recarga, la vecindad, la guarnición, el escudo y el tope de reclutas, sin Cloud Functions. Los reclutas los declara el móvil y las reglas solo garantizan el tope diario. Las cifras están repetidas en las reglas y en `conquest.ts`, y un test comprueba que coinciden.
+- **Reglas como árbitro**: comprueban con la hora del servidor los soldados del origen (que bajan en el mismo lote que la conquista), la recarga de la reserva, la vecindad, el escudo y el tope de reclutas, sin Cloud Functions. Los reclutas los declara el móvil y las reglas solo garantizan el tope diario. Las cifras están repetidas en las reglas y en `conquest.ts`, y un test comprueba que coinciden.
 - **Partes de batalla**: quien te quita un territorio deja un parte en `.../players/{uid}/reports` (en el mismo lote que la conquista; solo lo lees tú). Al abrir el juego, y cada 5 min, se avisa de los nuevos. También aparecen en la pestaña y en La Gaceta.
 - **Fin de temporada**: cierra el domingo a medianoche (hora de Costa Rica). Al volver a entrar se cobra el premio según la clasificación final: 5 💎 + 1 por punto (hasta 20) para todos, y extra para el podio. El 1º recibe +45 💎 y 3 🎟️ (si hubo al menos 2 alcaldes), el 2º +25 💎 y 2 🎟️ (con 3 o más) y el 3º +10 💎 y 1 🎟️ (con 4 o más).
+- **Avisos**: la tarjeta 🌍 de la Ciudad avisa de partes sin leer, reclutas por sumar, reserva llena o temporada nueva, a partir de lo último que se vio de tu reserva, sin leer de la nube. La primera vez, Clara presenta la Conquista.
+- **Administración**: pestaña ⚔️ Conquista del panel, con los mundos de esta semana y de la anterior, su clasificación y un botón para devolver un territorio a los bandidos (moderación de trampas; las capitales no se tocan).
 - **Palmarés**: victorias, podios y las últimas temporadas. Cada temporada ganada cuelga un estandarte azul en la fachada del ayuntamiento, que también ven quienes visitan tu ciudad (campo `conq` de `cities/{uid}`). Ganar sale en La Gaceta.
 
 ## Tutorial de Clara

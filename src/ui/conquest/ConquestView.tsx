@@ -12,6 +12,7 @@ import {
   banditGarrison,
   garrisonAt,
   isCapitalSlot,
+  msUntilGarrison,
   nextTroopMs,
   ownerHue,
   parseTile,
@@ -22,8 +23,9 @@ import {
   targetInfo,
   troopsAt,
   type TargetInfo,
+  type Tile,
 } from '../../game/conquest';
-import { joinConquest, myWorld, sendRecruits, sendTroops, watchWorld, type WorldData } from '../../game/conquestCloud';
+import { attackFrom, joinConquest, myWorld, reinforce, sendRecruits, watchWorld, type WorldData } from '../../game/conquestCloud';
 import { fmtClock, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
 import { sfx, vibrate } from '../haptics';
@@ -79,8 +81,37 @@ export function ConquestView({ onVisit }: { onVisit: (uid: string) => void }) {
         </button>
       </div>
     );
-  if (world === null) return <JoinCard week={season.week} endsAt={season.endsAt} onJoined={setWorld} />;
-  return <WorldBoard week={season.week} w={world} endsAt={season.endsAt} onVisit={onVisit} />;
+  return (
+    <>
+      <ClaraIntro />
+      {world === null ? (
+        <JoinCard week={season.week} endsAt={season.endsAt} onJoined={setWorld} />
+      ) : (
+        <WorldBoard week={season.week} w={world} endsAt={season.endsAt} onVisit={onVisit} />
+      )}
+    </>
+  );
+}
+
+/** La primera vez, Clara presenta la Conquista. */
+function ClaraIntro() {
+  const seen = useGame((st) => st.s.conquest.intro);
+  if (seen) return null;
+  return (
+    <div className="card conquest-clara">
+      <span className="conquest-clara-face">👩‍💼</span>
+      <div>
+        <b>Clara</b>
+        <p>
+          Alcalde, las ciudades vecinas se disputan la región cada semana. Es como la Guerra de torres: tus territorios generan soldados. Toca uno
+          tuyo y luego uno vecino para atacarlo con sus soldados. Con la reserva refuerzas lo que ya es tuyo. ¡El domingo se reparte el botín!
+        </p>
+        <button className="btn primary" onClick={() => useGame.getState().seeConquestIntro()}>
+          ¡A conquistar!
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function JoinCard({ week, endsAt, onJoined }: { week: string; endsAt: number; onJoined: (w: string) => void }) {
@@ -108,9 +139,9 @@ function JoinCard({ week, endsAt, onJoined }: { week: string; endsAt: number; on
       <h2>Conquista de la semana</h2>
       <p className="muted">Termina en {fmtTime((endsAt - now()) / 1000)}. Cada lunes empieza una temporada nueva.</p>
       <ul className="conquest-rules">
-        <li>🏰 Recibes una capital en el borde del mapa. Nadie te la puede quitar.</li>
-        <li>⚔️ Envía tropas a un territorio vecino para quitárselo a los bandidos o a otros alcaldes.</li>
-        <li>⏱️ Tu reserva se recarga sola (1 tropa cada 3 min, hasta {TROOP_CAP}) y las misiones, retos e incidentes te dan reclutas.</li>
+        <li>🏰 Recibes una capital en el borde del mapa. Nadie te la puede quitar. Genera 1 soldado cada 2 min.</li>
+        <li>⚔️ Toca un territorio tuyo y luego uno vecino: lo atacas con sus soldados. Si mandas más de los que tiene, es tuyo.</li>
+        <li>🛡️ Con la reserva (1 tropa cada 3 min, hasta {TROOP_CAP}, más los reclutas de misiones, retos e incidentes) refuerzas tus territorios.</li>
         <li>👑 La Torre central vale {CENTER_VALUE} puntos. Gana quien tenga más territorio el domingo.</li>
       </ul>
       <button className="btn primary big" disabled={busy} onClick={join}>
@@ -180,6 +211,8 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   const [data, setData] = useState<WorldData | null>(null);
   const [error, setError] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
+  // Último territorio propio tocado: desde él salen los ataques a sus vecinos
+  const [src, setSrc] = useState<string | null>(null);
   const [amount, setAmount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [t, setT] = useState(now());
@@ -193,6 +226,14 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   }, []);
 
   const mine = data?.players.find((p) => p.uid === me) ?? null;
+
+  // Foto de la reserva para los avisos de la tarjeta del Mapa del mundo, y partes de batalla vistos
+  useEffect(() => {
+    if (mine) useGame.getState().noteReserve(mine);
+  }, [mine]);
+  useEffect(() => {
+    if (conquest.unread > 0) useGame.getState().readReports();
+  }, [conquest.unread]);
 
   // Reclutas ganados hoy jugando: se suman a la reserva al abrir la conquista
   useEffect(() => {
@@ -208,33 +249,42 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   }, [mine, conquest, week, w]);
 
   const rows = useMemo(() => (data ? standings(data.tiles.values(), data.players) : []), [data]);
-  const info: TargetInfo | null = sel && data && me ? targetInfo(sel, data.tiles, me, t) : null;
-  const troops = mine ? troopsAt(mine, t - SKEW_MS) : 0;
-  const can = Math.floor(troops);
+  const ownSrc = src && data?.tiles.get(src)?.owner === me ? src : null;
+  const info: TargetInfo | null = sel && data && me ? targetInfo(sel, data.tiles, me, t, ownSrc) : null;
+  const reserve = Math.floor(mine ? troopsAt(mine, t - SKEW_MS) : 0);
+  const fromTile = info?.kind === 'attack' ? data?.tiles.get(info.from) : undefined;
+  // Soldados disponibles: los del territorio de origen (ataque) o los de la reserva (refuerzo)
+  const can = info?.kind === 'attack' ? Math.floor(fromTile ? garrisonAt(fromTile, t - SKEW_MS) : 0) : reserve;
 
   // Al elegir un territorio, propone lo justo para conquistarlo (o 5 para reforzar)
   useEffect(() => {
     if (!info) return;
-    setAmount((a) => (info.kind === 'attack' ? Math.max(info.need, Math.min(a, can)) : Math.min(Math.max(a, 1), Math.max(1, Math.min(5, can)))));
-    // Solo al cambiar de territorio: después manda el jugador
-  }, [sel]);
+    setAmount(info.kind === 'attack' ? info.need : Math.max(1, Math.min(5, can)));
+    // Solo al cambiar de territorio o de origen: después manda el jugador
+  }, [sel, ownSrc]);
 
   if (error) return <p className="empty">Se perdió la conexión con el mundo. Cierra y vuelve a abrir el mapa.</p>;
   if (!data || !me) return <p className="empty">Cargando el mundo…</p>;
+
+  const tap = (id: string) => {
+    if (data.tiles.get(id)?.owner === me) setSrc(id);
+    setSel(sel === id ? null : id);
+  };
 
   const send = async () => {
     if (!sel || !mine || !info || busy) return;
     setBusy(true);
     try {
-      await sendTroops(week, w, mine, name, sel, amount, data, now());
       if (info.kind === 'attack') {
+        await attackFrom(week, w, me, name, info.from, sel, amount, data, now());
         sfx('win');
         vibrate([20, 40, 20]);
         track('conquest_capture', { bandits: info.bandits ? 1 : 0 });
         useGame.getState().toast(info.bandits ? '⚔️ ¡Territorio conquistado a los bandidos!' : '⚔️ ¡Territorio conquistado!');
       } else {
+        await reinforce(week, w, mine, name, sel, amount, data, now());
         sfx('buy');
-        useGame.getState().toast(`🛡️ +${amount} de guarnición`);
+        useGame.getState().toast(`🛡️ +${amount} soldados desde la reserva`);
       }
     } catch (e) {
       console.warn(e);
@@ -249,14 +299,19 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   const ownerName = (uid: string) => data.players.find((p) => p.uid === uid)?.name ?? data.tiles.get(sel ?? '')?.name ?? '???';
   const min = info?.kind === 'attack' ? info.need : 1;
   const nextMs = mine ? nextTroopMs(mine, t) : 0;
+  const tileLabel = (x: Tile | undefined) => (x?.capital ? 'tu capital 🏰' : 'tu territorio');
+  const soldiers = (n: number) => `${n} ${n === 1 ? 'soldado' : 'soldados'}`;
+  const growth = (x: Tile) => (x.capital ? '+1 cada 2 min' : '+1 cada 4 min');
+  // Si al origen le faltan soldados: cuándo los tendrá (sin pasar del tope)
+  const waitMs = info?.kind === 'attack' && fromTile && can < info.need ? msUntilGarrison(fromTile, info.need, t) + SKEW_MS : 0;
 
   return (
     <div className="conquest">
       <div className="conquest-hud">
         <div>
-          <small>Tropas</small>
+          <small>Reserva (refuerzos)</small>
           <b>
-            ⚔️ {can}
+            🛡️ {reserve}
             <span>/{TROOP_CAP}</span>
           </b>
           <small>{nextMs > 0 ? `+1 en ${fmtClock(nextMs)}` : 'Reserva llena'}</small>
@@ -281,14 +336,18 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
           const c = center(id);
           const owned = data.tiles.get(id);
           const reserved = !owned && isCapitalSlot(id);
-          const near = !owned || owned.owner !== me ? targetInfo(id, data.tiles, me, t).kind === 'attack' : false;
+          // Con un origen elegido se marcan sus vecinos atacables; si no, los de cualquier territorio tuyo
+          const tgt = !owned || owned.owner !== me ? targetInfo(id, data.tiles, me, t, ownSrc) : null;
+          const near = tgt?.kind === 'attack' && (!ownSrc || tgt.from === ownSrc);
           const hue = owned ? ownerHue(owned.owner, me) : 0;
           const fill = owned ? `hsl(${hue} ${owned.owner === me ? 75 : 55}% ${owned.owner === me ? 48 : 40}%)` : reserved ? '#1a1f36' : id === CENTER ? '#5a4a1e' : '#343a58';
           const g = owned ? Math.floor(garrisonAt(owned, t)) : reserved ? null : banditGarrison(id);
           const shield = owned && !owned.capital && t < owned.ct + 30 * 60_000;
-          const cls = ['conquest-hex', sel === id && 'sel', near && 'near', reserved && 'reserved', owned?.owner === me && 'mine'].filter(Boolean).join(' ');
+          const cls = ['conquest-hex', sel === id && 'sel', ownSrc === id && 'src', near && 'near', reserved && 'reserved', owned?.owner === me && 'mine']
+            .filter(Boolean)
+            .join(' ');
           return (
-            <g key={id} data-tile={id} className={cls} transform={`translate(${c.x.toFixed(2)} ${c.y.toFixed(2)})`} onClick={() => setSel(sel === id ? null : id)}>
+            <g key={id} data-tile={id} className={cls} transform={`translate(${c.x.toFixed(2)} ${c.y.toFixed(2)})`} onClick={() => tap(id)}>
               <polygon points={HEX_POINTS} fill={fill} />
               {owned?.capital && <text y={-3} fontSize={6} textAnchor="middle">🏰</text>}
               {id === CENTER && !owned?.capital && <text y={-3} fontSize={6} textAnchor="middle">👑</text>}
@@ -319,20 +378,30 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
                     : '🏴‍☠️ Bandidos'}
           </b>
           <small className="muted">
-            {tile ? `Guarnición ${Math.floor(garrisonAt(tile, t))}` : info.kind === 'reserved' ? 'Aquí llegará la capital de un nuevo alcalde.' : `Guarnición ${banditGarrison(sel)}`}
+            {tile
+              ? `${soldiers(Math.floor(garrisonAt(tile, t)))}${tile.owner === me ? ` (${growth(tile)})` : ''}`
+              : info.kind === 'reserved'
+                ? 'Aquí llegará la capital de un nuevo alcalde.'
+                : `${banditGarrison(sel)} bandidos`}
             {sel === CENTER && ` · vale ${CENTER_VALUE} puntos`}
           </small>
-          {info.kind === 'far' && <small>Necesitas un territorio vecino para atacarlo.</small>}
+          {info.kind === 'far' && <small>Está lejos: primero conquista un territorio que lo toque.</small>}
           {info.kind === 'capital' && <small>Las capitales no se pueden conquistar.</small>}
           {info.kind === 'shield' && <small>🛡️ Protegido otros {fmtClock(info.until - t)} tras su conquista.</small>}
-          {(info.kind === 'attack' || info.kind === 'reinforce') && (
+          {info.kind === 'own' && <small>Toca un vecino con borde claro para atacarlo con los soldados de aquí, o refuérzalo desde la reserva:</small>}
+          {info.kind === 'attack' && (
+            <small>
+              Atacas desde {tileLabel(fromTile)} ({soldiers(can)}). Necesitas {info.need}.
+            </small>
+          )}
+          {(info.kind === 'attack' || info.kind === 'own') && (
             <>
               <div className="conquest-amount">
                 <button className="icon-btn" onClick={() => setAmount((a) => Math.max(min, a - 1))} aria-label="Menos">
                   −
                 </button>
                 <b>{amount}</b>
-                <button className="icon-btn" onClick={() => setAmount((a) => Math.min(can, a + 1))} aria-label="Más">
+                <button className="icon-btn" onClick={() => setAmount((a) => Math.min(Math.max(min, can), a + 1))} aria-label="Más">
                   +
                 </button>
                 <button className="btn" onClick={() => setAmount(Math.max(min, can))}>
@@ -343,10 +412,14 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
                 {busy
                   ? 'Enviando…'
                   : amount > can
-                    ? `Faltan ${amount - can} tropas`
+                    ? info.kind === 'attack'
+                      ? Number.isFinite(waitMs)
+                        ? `Tendrá ${info.need} soldados en ${fmtTime(waitMs / 1000)}`
+                        : `No le caben ${info.need}: refuérzalo desde la reserva`
+                      : `Te faltan ${amount - can} en la reserva`
                     : info.kind === 'attack'
-                      ? `⚔️ Conquistar con ${amount} (mínimo ${info.need})`
-                      : `🛡️ Reforzar con ${amount}`}
+                      ? `⚔️ Atacar con ${amount}`
+                      : `🛡️ Reforzar con ${amount} de la reserva`}
               </button>
             </>
           )}
@@ -357,7 +430,9 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
           )}
         </div>
       ) : (
-        <p className="hint">Toca un territorio vecino a los tuyos (con borde claro) para conquistarlo, o uno tuyo para reforzarlo.</p>
+        <p className="hint">
+          El número es cuántos soldados tiene cada territorio. Toca uno tuyo y luego un vecino con borde claro para atacarlo con sus soldados.
+        </p>
       )}
 
       <div className="card conquest-ranking">

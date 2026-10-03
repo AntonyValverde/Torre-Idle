@@ -81,6 +81,27 @@ export function isDormant(updatedAt: number | null | undefined, t: number): bool
   return !!updatedAt && t - updatedAt > DORMANT_MS;
 }
 
+export interface Cluster<T> {
+  x: number;
+  y: number;
+  items: T[];
+}
+
+/**
+ * Agrupa los puntos que quedan a menos de `radius` (en unidades del mapa) del primero de un grupo, para
+ * que muchas ciudades juntas no se tapen. Los marcados con `alone` (tu ciudad) nunca se agrupan.
+ * El grupo se dibuja en la media de sus puntos.
+ */
+export function clusterPoints<T extends { x: number; y: number; alone?: boolean }>(points: T[], radius: number): Cluster<T>[] {
+  const out: (Cluster<T> & { ax: number; ay: number })[] = [];
+  for (const p of points) {
+    const near = p.alone ? null : out.find((c) => !c.items[0].alone && Math.hypot(c.ax - p.x, c.ay - p.y) < radius);
+    if (near) near.items.push(p);
+    else out.push({ x: p.x, y: p.y, ax: p.x, ay: p.y, items: [p] });
+  }
+  return out.map(({ items }) => ({ items, x: items.reduce((n, p) => n + p.x, 0) / items.length, y: items.reduce((n, p) => n + p.y, 0) / items.length }));
+}
+
 export interface View {
   x: number;
   y: number;

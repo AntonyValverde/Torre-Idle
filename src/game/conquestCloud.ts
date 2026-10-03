@@ -1,6 +1,7 @@
 import {
   Timestamp,
   collection,
+  deleteDoc,
   doc,
   getDocFromServer,
   getDocs,
@@ -26,7 +27,6 @@ import {
   WORLD_MAX,
   banditGarrison,
   garrisonAt,
-  sourceFor,
   standings,
   troopsAt,
   type Player,
@@ -88,6 +88,7 @@ export async function joinConquest(week: string, name: string): Promise<string> 
           capital: true,
           sent: 0,
           from: '',
+          to: '',
         });
         return w;
       }
@@ -112,7 +113,6 @@ function parseTile(id: string, x: DocumentData): Tile | null {
     g: Math.max(0, num(x.g)),
     t: ms(x.t),
     ct: ms(x.ct),
-    ctRaw: x.ct,
     capital: x.capital === true,
   };
 }
@@ -170,37 +170,39 @@ export function watchWorld(week: string, w: string, onData: (data: WorldData) =>
 }
 
 /**
- * Envía `sent` tropas de la reserva al territorio `target` (conquista o refuerzo). Las cuentas usan
- * el margen de reloj (SKEW_MS) para que el servidor nunca vea menos tropas ni más guarnición.
+ * Ataca `target` con `sent` soldados del territorio propio vecino `from`. Las cuentas usan el margen de
+ * reloj (SKEW_MS) para que el servidor nunca vea más soldados en el origen ni menos en el objetivo.
  */
-export async function sendTroops(week: string, w: string, me: Player, name: string, target: string, sent: number, world: WorldData, at: number) {
+export async function attackFrom(week: string, w: string, uid: string, name: string, from: string, target: string, sent: number, world: WorldData, at: number) {
   const d = need();
-  const from = sourceFor(target, world.tiles, me.uid);
-  if (!from) throw new Error('Necesitas un territorio vecino');
-  const troops = troopsAt(me, at - SKEW_MS) - sent;
-  if (troops < 0) throw new Error('No tienes tantas tropas');
+  const src = world.tiles.get(from);
+  if (!src || src.owner !== uid) throw new Error('Ese territorio ya no es tuyo');
+  const left = garrisonAt(src, at - SKEW_MS) - sent;
+  if (left < 0) throw new Error('No tiene tantos soldados');
   const tile = world.tiles.get(target);
-  let data: Record<string, unknown>;
-  if (tile?.owner === me.uid) {
-    // Refuerzo: se conserva la hora de la conquista (el escudo no se renueva)
-    data = { capital: tile.capital, ct: tile.ctRaw, g: garrisonAt(tile, at - SKEW_MS) + sent };
-  } else if (tile) {
-    const g = sent - Math.ceil(garrisonAt(tile, at + SKEW_MS));
-    if (g < 0) throw new Error('No son suficientes tropas');
-    data = { capital: false, ct: serverTimestamp(), g };
-  } else {
-    const g = sent - banditGarrison(target);
-    if (g <= 0) throw new Error('No son suficientes tropas');
-    data = { capital: false, ct: serverTimestamp(), g };
-  }
+  const g = tile ? sent - Math.ceil(garrisonAt(tile, at + SKEW_MS)) : sent - banditGarrison(target);
+  if (g < 0 || (!tile && g === 0)) throw new Error('No son suficientes soldados');
+  const base = ['conquest', week, 'worlds', w] as const;
+  const b = writeBatch(d);
+  // El origen baja (y dice a dónde mandó cuántos); el objetivo pasa a ser tuyo con lo que sobra
+  b.update(doc(d, ...base, 'tiles', from), { name, g: left, t: serverTimestamp(), to: target, sent, from: '' });
+  b.set(doc(d, ...base, 'tiles', target), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, from, to: '' });
+  // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver)
+  if (tile) b.set(doc(collection(d, ...base, 'players', tile.owner, 'reports')), { by: uid, name, tile: target, at: serverTimestamp() });
+  await b.commit();
+}
+
+/** Refuerza un territorio propio con `sent` tropas de la reserva (se conserva la hora de la conquista). */
+export async function reinforce(week: string, w: string, me: Player, name: string, target: string, sent: number, world: WorldData, at: number) {
+  const d = need();
+  const tile = world.tiles.get(target);
+  if (!tile || tile.owner !== me.uid) throw new Error('Ese territorio ya no es tuyo');
+  const troops = troopsAt(me, at - SKEW_MS) - sent;
+  if (troops < 0) throw new Error('No tienes tantas tropas en la reserva');
   const base = ['conquest', week, 'worlds', w] as const;
   const b = writeBatch(d);
   b.update(doc(d, ...base, 'players', me.uid), { troops, t: serverTimestamp(), last: target, sent });
-  b.set(doc(d, ...base, 'tiles', target), { owner: me.uid, name, t: serverTimestamp(), sent, from, ...data });
-  // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver)
-  if (tile && tile.owner !== me.uid) {
-    b.set(doc(collection(d, ...base, 'players', tile.owner, 'reports')), { by: me.uid, name, tile: target, at: serverTimestamp() });
-  }
+  b.update(doc(d, ...base, 'tiles', target), { name, g: garrisonAt(tile, at - SKEW_MS) + sent, t: serverTimestamp(), sent, from: target, to: '' });
   await b.commit();
 }
 
@@ -223,6 +225,35 @@ export async function fetchReports(week: string, w: string, sinceMs: number): Pr
       return typeof at === 'number' && typeof v.by === 'string' && typeof v.tile === 'string' ? { by: v.by, name: str(v.name).slice(0, 20) || '???', tile: v.tile, at } : null;
     })
     .filter((r): r is Report => !!r);
+}
+
+// ---------- Administración ----------
+
+/** Mundos de una semana y cuántos alcaldes tiene cada uno. */
+export async function fetchWorlds(week: string): Promise<{ w: string; members: number }[]> {
+  const d = need();
+  const snap = await getDocsFromServer(collection(d, 'conquest', week, 'worlds'));
+  return snap.docs.map((x) => ({ w: x.id, members: Math.floor(num(x.data().members)) })).sort((a, b) => Number(a.w.slice(1)) - Number(b.w.slice(1)));
+}
+
+/** Un mundo leído una vez del servidor (territorios y alcaldes). */
+export async function fetchWorldOnce(week: string, w: string): Promise<WorldData> {
+  const d = need();
+  const [tiles, players] = await Promise.all([
+    getDocsFromServer(collection(d, 'conquest', week, 'worlds', w, 'tiles')),
+    getDocsFromServer(collection(d, 'conquest', week, 'worlds', w, 'players')),
+  ]);
+  const map = new Map<string, Tile>();
+  for (const x of tiles.docs) {
+    const t = parseTile(x.id, x.data());
+    if (t) map.set(x.id, t);
+  }
+  return { tiles: map, players: players.docs.map((x) => parsePlayer(x.id, x.data())) };
+}
+
+/** Moderación: devuelve un territorio a los bandidos (las reglas solo lo permiten al administrador). */
+export async function removeTile(week: string, w: string, id: string): Promise<void> {
+  await deleteDoc(doc(need(), 'conquest', week, 'worlds', w, 'tiles', id));
 }
 
 /** Clasificación final de una temporada terminada (del servidor: sin conexión no se cobra). */

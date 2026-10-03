@@ -22,6 +22,8 @@ import { fmt, fmtClock } from '../game/format';
 import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
 import { currentLaw } from '../game/laws';
+import { conquestAlert } from '../game/conquest';
+import { dateKey } from '../game/clock';
 import { CityIncident } from './CityIncident';
 import { LawCard } from './LawCard';
 import { NewspaperCard, NewspaperScreen } from './Newspaper';
@@ -53,6 +55,7 @@ export function CityTab({ paused = false, onIncident, onWorld }: { paused?: bool
   const nextEraBuilding = BUILDINGS.find((_, i) => isBuildingEraLocked(s, i));
   const tut = currentStep(s)?.id;
   const law = currentLaw(s);
+  const alert = conquestAlert(s, t, dateKey(t));
 
   return (
     <div className="tab city-tab">
@@ -83,7 +86,9 @@ export function CityTab({ paused = false, onIncident, onWorld }: { paused?: bool
         <button className="world-entry" onClick={onWorld}>
           <span className="world-entry-icon">🌍</span>
           <span className="world-entry-main">
-            <b>Mapa del mundo</b>
+            <b>
+              Mapa del mundo {alert && <span className="world-entry-alert">{alert}</span>}
+            </b>
             <small>Visita las ciudades de otros alcaldes y conquista territorios cada semana.</small>
           </span>
           <span className="world-entry-go">›</span>

@@ -13,6 +13,8 @@ import {
   WORLD_W,
   clampView,
   cityPosition,
+  clusterPoints,
+  type Cluster,
   isDormant,
   landDecor,
   markerRadius,
@@ -29,6 +31,9 @@ const DECOR = landDecor();
 const TAP_SLOP = 8;
 /** Con pocas ciudades se ven todos los nombres; con muchas, solo al acercarse. */
 const LABELS_ALWAYS = 40;
+/** Ciudades a menos de tantos píxeles en pantalla se dibujan como un grupo. */
+const CLUSTER_PX = 32;
+const bubbleRadius = (c: Cluster<Marker>) => (c.items.length > 1 ? 12 + Math.min(8, c.items.length) : markerRadius(c.items[0].city.era));
 
 interface Marker {
   city: PublicCity;
@@ -174,6 +179,12 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
 
   // Arrastrar mueve el mapa, pellizcar hace zoom y un toque elige la ciudad más cercana
   const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const kNow = view && size.w ? view.w / size.w : 1;
+  // Las ciudades que quedarían a menos de CLUSTER_PX en pantalla se agrupan (la tuya y la elegida, nunca)
+  const clusters = clusterPoints(
+    markers.map((m) => ({ ...m, alone: m.mine || m.city.uid === selected })),
+    CLUSTER_PX * kNow,
+  );
   const gesture = useRef({ moved: 0, pinch: 0 });
 
   const toWorld = (clientX: number, clientY: number, v: View) => {
@@ -222,17 +233,23 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
     if (!wasTap || !view || !size.w) return;
     const p = toWorld(e.clientX, e.clientY, view);
     const k = view.w / size.w;
-    let best: Marker | null = null;
+    let best: Cluster<Marker> | null = null;
     let bestD = Infinity;
-    for (const m of markers) {
-      const d = Math.hypot(m.x - p.x, m.y - p.y);
+    for (const c of clusters) {
+      const d = Math.hypot(c.x - p.x, c.y - p.y);
       // Se perdona un poco de puntería alrededor del marcador
-      if (d <= (markerRadius(m.city.era) + 14) * k && d < bestD) {
-        best = m;
+      if (d <= (bubbleRadius(c) + 14) * k && d < bestD) {
+        best = c;
         bestD = d;
       }
     }
-    setSelected(best ? best.city.uid : null);
+    // Un grupo de ciudades: se acerca hasta que se separan
+    if (best && best.items.length > 1) {
+      setView(zoomView(view, 2.2, best.x, best.y, aspect));
+      setSelected(null);
+      return;
+    }
+    setSelected(best ? best.items[0].city.uid : null);
   };
 
   const zoomBy = (factor: number) => {
@@ -302,7 +319,19 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
                 ),
               )}
             </g>
-            {markers.map((m) => {
+            {clusters.map((c) => {
+              if (c.items.length > 1) {
+                const r = bubbleRadius(c) * k;
+                return (
+                  <g key={c.items[0].city.uid} className="world-cluster">
+                    <circle cx={c.x} cy={c.y} r={r} strokeWidth={2 * k} />
+                    <text x={c.x} y={c.y + 4.5 * k} fontSize={13 * k} textAnchor="middle">
+                      {c.items.length}
+                    </text>
+                  </g>
+                );
+              }
+              const m = c.items[0];
               const r = markerRadius(m.city.era) * k;
               const asleep = isDormant(m.city.updatedAt, t);
               const hue = eraHue(m.city.era);

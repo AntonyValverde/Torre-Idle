@@ -9,6 +9,7 @@ import { CityVisit } from '../ui/CityVisit';
 import { GameScreen, Modal } from '../ui/Modal';
 import { pressable } from '../ui/a11y';
 import { BarList, ColumnChart } from './charts';
+import { ConquestAdmin } from './ConquestAdmin';
 import {
   PLAYER_LIMIT,
   dailyParticipation,
@@ -28,7 +29,7 @@ import {
 } from './data';
 import { GAMES, ago, lastDays, summarize, type Player } from './metrics';
 
-type Tab = 'summary' | 'players' | 'suggestions';
+type Tab = 'summary' | 'players' | 'conquest' | 'suggestions';
 
 const shortDate = (key: string) => {
   const [, m, d] = key.split('-').map(Number);
@@ -87,12 +88,15 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   return (
     <GameScreen title="Administración" right={loadedAt ? <button className="link-btn" onClick={load}>↻ Actualizar</button> : null} onClose={onClose}>
       <div className="admin-wrap" ref={wrap}>
-        <div className="segmented">
+        <div className="segmented wide four">
           <button className={tab === 'summary' ? 'active' : ''} onClick={() => setTab('summary')}>
             📊 Resumen
           </button>
           <button className={tab === 'players' ? 'active' : ''} onClick={() => setTab('players')}>
             👥 Jugadores
+          </button>
+          <button className={tab === 'conquest' ? 'active' : ''} onClick={() => setTab('conquest')}>
+            ⚔️ Conquista
           </button>
           <button className={tab === 'suggestions' ? 'active' : ''} onClick={() => setTab('suggestions')}>
             💡 Sugerencias{fresh > 0 && <span className="seg-badge">{fresh}</span>}
@@ -109,6 +113,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
             }}
           />
         )}
+        {tab === 'conquest' && <ConquestAdmin />}
         {tab === 'suggestions' && <SuggestionsView items={suggestions} onChange={setSuggestions} />}
       </div>
     </GameScreen>
