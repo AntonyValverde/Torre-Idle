@@ -55,6 +55,25 @@ let flashId = 0;
 
 const radius = (t: Tower) => (t.big ? 7.5 : 6);
 
+/** Silueta de una torre de castillo centrada en (x, y): cuerpo con tres almenas arriba. */
+function towerPath(x: number, y: number, r: number): string {
+  const w = r * 1.45;
+  const x0 = x - w / 2;
+  const top = y - r * 0.95;
+  const bot = y + r * 0.8;
+  const m = r * 0.32;
+  const c = w / 5;
+  // Un poco más ancha abajo, como una torre de piedra
+  return `M${x0 - r * 0.1} ${bot}L${x0} ${top}h${c}v${m}h${c}v${-m}h${c}v${m}h${c}v${-m}h${c}L${x0 + w + r * 0.1} ${bot}z`;
+}
+
+/** Puerta en arco al pie de la torre. */
+function doorPath(x: number, y: number, r: number): string {
+  const w = r * 0.42;
+  const bot = y + r * 0.8;
+  return `M${x - w / 2} ${bot}v${-r * 0.3}a${w / 2} ${w / 2} 0 0 1 ${w} 0v${r * 0.3}z`;
+}
+
 /**
  * Pantalla de la Guerra de torres. Con `assault` es una sola batalla corta (el asalto de la Conquista)
  * que termina al ganarla, perderla o acabarse el tiempo; lo que cuenta es el bono.
@@ -265,7 +284,22 @@ export function TowersGameView({
         role="img"
         aria-label={`Batalla ${g.battle}: tienes ${mine} de ${total} torres`}
       >
+        <defs>
+          <linearGradient id="tw-shade" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.28" />
+            <stop offset="45%" stopColor="#fff" stopOpacity="0" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.3" />
+          </linearGradient>
+          <pattern id="tw-grass" width="23" height="17" patternUnits="userSpaceOnUse">
+            <path d="M3 12l0.8 -2.2l0.8 2.2M14 5l0.7 -2l0.7 2M19 15l0.6 -1.8l0.6 1.8M8 3.5l0.5 -1.4l0.5 1.4" fill="none" stroke="rgba(150,210,120,0.11)" strokeWidth="0.45" strokeLinecap="round" />
+          </pattern>
+        </defs>
+        <rect width={FIELD_W} height={FIELD_H} fill="url(#tw-grass)" />
+        {/* Caminos de tierra: un borde oscuro y el camino encima */}
         <g className="towers-links">
+          {links.map(([a, b]) => (
+            <line key={`e${a}-${b}`} x1={g.towers[a].x} y1={g.towers[a].y} x2={g.towers[b].x} y2={g.towers[b].y} className="edge" />
+          ))}
           {links.map(([a, b]) => (
             <line
               key={`${a}-${b}`}
@@ -273,7 +307,7 @@ export function TowersGameView({
               y1={g.towers[a].y}
               x2={g.towers[b].x}
               y2={g.towers[b].y}
-              className={active === a || active === b ? 'hot' : ''}
+              className={active === a || active === b ? 'road hot' : 'road'}
             />
           ))}
         </g>
@@ -282,9 +316,14 @@ export function TowersGameView({
         )}
         {g.packets.map((p, i) => {
           const pos = packetPos(g, p);
+          // Estela: dónde estaban un poco antes
+          const t1 = packetPos(g, { ...p, d: Math.max(0, p.d - 2.4) });
+          const t2 = packetPos(g, { ...p, d: Math.max(0, p.d - 4.6) });
           return (
             <g key={i} className="towers-packet">
-              <circle cx={pos.x} cy={pos.y} r={2.6} fill={COLORS[p.owner]} />
+              <circle cx={t2.x} cy={t2.y} r={1.1} fill={COLORS[p.owner]} opacity={0.35} />
+              <circle cx={t1.x} cy={t1.y} r={1.7} fill={COLORS[p.owner]} opacity={0.55} />
+              <circle cx={pos.x} cy={pos.y} r={2.7} fill={COLORS[p.owner]} stroke="#fff" strokeWidth={0.45} />
               <text x={pos.x} y={pos.y + 1} fontSize={2.6} textAnchor="middle">
                 {p.count}
               </text>
@@ -296,12 +335,21 @@ export function TowersGameView({
           const target = active !== null && active !== i && linked(g, active, i);
           return (
             <g key={i} className={`towers-tower${tw.owner === PLAYER ? ' mine' : ''}${isAi(tw.owner) ? ' enemy' : ''}`}>
-              {active === i && <circle cx={tw.x} cy={tw.y} r={r + 2.6} className="towers-sel" />}
-              {target && <circle cx={tw.x} cy={tw.y} r={r + 2} className="towers-target" />}
-              <circle cx={tw.x} cy={tw.y} r={r} fill="#141a33" stroke={COLORS[tw.owner]} strokeWidth={1.4} />
-              <circle cx={tw.x} cy={tw.y} r={r - 1.6} fill={COLORS[tw.owner]} opacity={tw.owner === NEUTRAL ? 0.35 : 0.8} />
-              {tw.big && <path d={`M${tw.x - 3} ${tw.y - r - 0.6}h1.4v-1.4h1.2v1.4h0.8v-1.4h1.2v1.4h1.4v-2.6h-6z`} fill={COLORS[tw.owner]} />}
-              <text x={tw.x} y={tw.y + (tw.big ? 1.7 : 1.4)} fontSize={tw.big ? 4.6 : 3.9} textAnchor="middle" className="towers-units">
+              {/* Zona que se puede tocar (y que usan las pruebas para encontrar la torre) */}
+              <circle cx={tw.x} cy={tw.y} r={r} className="towers-hit" />
+              {active === i && <circle cx={tw.x} cy={tw.y} r={r + 2.8} className="towers-sel" />}
+              {target && <circle cx={tw.x} cy={tw.y} r={r + 2.2} className="towers-target" />}
+              <ellipse cx={tw.x} cy={tw.y + r * 0.82} rx={r * 0.95} ry={r * 0.32} className="towers-shadow" />
+              <path d={towerPath(tw.x, tw.y, r)} fill={COLORS[tw.owner]} className={`towers-body${tw.owner === NEUTRAL ? ' neutral' : ''}`} />
+              <path d={towerPath(tw.x, tw.y, r)} fill="url(#tw-shade)" className="towers-shine" />
+              <path d={doorPath(tw.x, tw.y, r)} className="towers-door" />
+              {tw.big && (
+                <g className="towers-flag">
+                  <path d={`M${tw.x} ${tw.y - r * 0.95}v${-r * 0.75}`} />
+                  <path d={`M${tw.x} ${tw.y - r * 1.7}l${r * 0.6} ${r * 0.18}l${-r * 0.6} ${r * 0.18}z`} fill={COLORS[tw.owner]} />
+                </g>
+              )}
+              <text x={tw.x} y={tw.y + (tw.big ? 1.4 : 1.2)} fontSize={tw.big ? 4.4 : 3.7} textAnchor="middle" className="towers-units">
                 {Math.floor(tw.units)}
               </text>
             </g>

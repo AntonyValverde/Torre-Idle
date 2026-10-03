@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { track } from '../../firebase';
 import { dateKey, now } from '../../game/clock';
@@ -13,11 +13,9 @@ import {
   attackPower,
   banditGarrison,
   garrisonAt,
-  isCapitalSlot,
   msUntilGarrison,
   nextTroopMs,
   ownerHue,
-  parseTile,
   recruitCap,
   recruitsToSend,
   seasonOf,
@@ -36,21 +34,9 @@ import { sfx, vibrate } from '../haptics';
 import { celebrate } from '../celebrate';
 import { ago } from '../../admin/metrics';
 import { assaultLevel, fmtMult } from '../../minigames/towers/logic';
+import { ConquestBoard } from './ConquestBoard';
 
 const AssaultScreen = lazy(() => import('../../minigames/towers/AssaultScreen'));
-
-/** Tamaño de un hexágono en el dibujo (radio). */
-const SIZE = 10;
-const SQ3 = Math.sqrt(3);
-const center = (id: string) => {
-  const h = parseTile(id)!;
-  return { x: SIZE * SQ3 * (h.q + h.r / 2), y: SIZE * 1.5 * h.r };
-};
-const HEX_POINTS = Array.from({ length: 6 }, (_, i) => {
-  const a = (Math.PI / 180) * (60 * i - 30);
-  return `${(SIZE * 0.96 * Math.cos(a)).toFixed(2)},${(SIZE * 0.96 * Math.sin(a)).toFixed(2)}`;
-}).join(' ');
-const VIEW = `${-SIZE * SQ3 * 4.6} ${-SIZE * 7.2} ${SIZE * SQ3 * 9.2} ${SIZE * 14.4}`;
 
 /** Pestaña Conquista del Mapa del mundo: unirse a la temporada y jugarla. */
 export function ConquestView({ onVisit }: { onVisit: (uid: string) => void }) {
@@ -110,9 +96,9 @@ function ClaraIntro() {
       <div>
         <b>Clara</b>
         <p>
-          Alcalde, las ciudades vecinas se disputan la región cada semana. Es como la Guerra de torres: tus territorios generan soldados. Toca uno
-          tuyo y luego uno vecino para atacarlo con sus soldados. Antes de atacar puedes lanzar un asalto: una batalla corta que les da más fuerza. Con la
-          reserva refuerzas lo que ya es tuyo. ¡El domingo se reparte el botín!
+          Alcalde, las ciudades vecinas se disputan la región cada semana. Es como la Guerra de torres: tus territorios generan soldados. Toca uno tuyo y luego
+          uno vecino para atacarlo con sus soldados. Antes de atacar puedes lanzar un asalto: una batalla corta que les da más fuerza. Con la reserva refuerzas
+          lo que ya es tuyo. ¡El domingo se reparte el botín!
         </p>
         <button className="btn primary" onClick={() => useGame.getState().seeConquestIntro()}>
           ¡A conquistar!
@@ -226,7 +212,11 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   const [busy, setBusy] = useState(false);
   const [t, setT] = useState(now());
   // Asalto en juego y bono conseguido (vale para ese territorio hasta usarlo)
-  const [assault, setAssault] = useState<{ target: string; level: number; title: string } | null>(null);
+  const [assault, setAssault] = useState<{
+    target: string;
+    level: number;
+    title: string;
+  } | null>(null);
   const [bonus, setBonus] = useState<{ target: string; mult: number } | null>(null);
   const cap = useGame((st) => recruitCap(st.s));
   const recruiting = useRef(false);
@@ -262,6 +252,8 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   }, [mine, conquest, week, w]);
 
   const rows = useMemo(() => (data ? standings(data.tiles.values(), data.players) : []), [data]);
+  // Cada rival, el color de su casilla; tú, siempre azul
+  const hueOf = useCallback((uid: string) => ownerHue(uid, me, data?.players.find((p) => p.uid === uid)?.slot), [data, me]);
   const ownSrc = src && data?.tiles.get(src)?.owner === me ? src : null;
   const info: TargetInfo | null = sel && data && me ? targetInfo(sel, data.tiles, me, t, ownSrc) : null;
   const reserve = Math.floor(mine ? troopsAt(mine, t - SKEW_MS) : 0);
@@ -297,7 +289,10 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
         useGame.getState().noteCapture();
         sfx('win');
         vibrate([20, 40, 20]);
-        track('conquest_capture', { bandits: info.bandits ? 1 : 0, assault: mult > 1 ? 1 : 0 });
+        track('conquest_capture', {
+          bandits: info.bandits ? 1 : 0,
+          assault: mult > 1 ? 1 : 0,
+        });
         useGame.getState().toast(info.bandits ? '⚔️ ¡Territorio conquistado a los bandidos!' : '⚔️ ¡Territorio conquistado!');
       } else {
         await reinforce(week, w, mine, name, sel, amount, data, now());
@@ -317,102 +312,148 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   const ownerName = (uid: string) => data.players.find((p) => p.uid === uid)?.name ?? data.tiles.get(sel ?? '')?.name ?? '???';
   const nextMs = mine ? nextTroopMs(mine, t) : 0;
   const assaultWait = mine ? assaultWaitMs(mine, t) : 0;
+  const recruitsToday = mine && mine.rDay === dateKey(t) ? mine.rToday : 0;
+  // Territorios que se pueden atacar ahora: los vecinos del origen elegido, o de cualquier territorio tuyo
+  const near = new Set<string>();
+  for (const id of ALL_TILES) {
+    const x = data.tiles.get(id);
+    if (x && x.owner === me) continue;
+    const tgt = targetInfo(id, data.tiles, me, t, ownSrc);
+    if (tgt.kind === 'attack' && (!ownSrc || tgt.from === ownSrc)) near.add(id);
+  }
   const tileLabel = (x: Tile | undefined) => (x?.capital ? 'tu capital 🏰' : 'tu territorio');
   const soldiers = (n: number) => `${n} ${n === 1 ? 'soldado' : 'soldados'}`;
   const growth = (x: Tile) => (x.capital ? '+1 cada 2 min' : '+1 cada 4 min');
   // Si al origen le faltan soldados: cuándo los tendrá (sin pasar del tope)
   const waitMs = info?.kind === 'attack' && fromTile && can < min ? msUntilGarrison(fromTile, min, t) + SKEW_MS : 0;
 
+  const top = rows[0]?.points ?? 0;
+  const chipEmoji = info?.kind === 'reserved' ? '🏗️' : tile?.capital ? '🏰' : sel === CENTER ? '👑' : tile ? (tile.owner === me ? '🛡️' : '⚔️') : '⛺';
+  const chipColor = tile ? `hsl(${hueOf(tile.owner)} 60% 42%)` : sel === CENTER ? '#a67c1f' : info?.kind === 'reserved' ? '#1b2340' : '#5a3a2a';
+
   const startAssault = () => {
     if (!sel || info?.kind !== 'attack') return;
     const who = tile ? ownerName(tile.owner) : sel === CENTER ? 'la Torre central' : 'los bandidos';
-    setAssault({ target: sel, level: assaultLevel(info.need - 1), title: `Asalto a ${who}` });
+    setAssault({
+      target: sel,
+      level: assaultLevel(info.need - 1),
+      title: `Asalto a ${who}`,
+    });
   };
 
   return (
     <div className="conquest">
       <div className="conquest-hud">
-        <div>
-          <small>Reserva (refuerzos)</small>
+        <div className="cq-stat reserve">
+          <small>🛡️ Reserva</small>
           <b>
-            🛡️ {reserve}
+            {reserve}
             <span>/{TROOP_CAP}</span>
           </b>
-          <small>{nextMs > 0 ? `+1 en ${fmtClock(nextMs)}` : 'Reserva llena'}</small>
+          <i className="cq-meter">
+            <i
+              style={{
+                width: `${Math.min(100, (reserve / TROOP_CAP) * 100)}%`,
+              }}
+            />
+          </i>
+          <small>{nextMs > 0 ? `+1 en ${fmtClock(nextMs)}` : '¡Llena!'}</small>
         </div>
-        <div>
-          <small>Reclutas hoy</small>
+        <div className="cq-stat recruits">
+          <small>🎖️ Reclutas hoy</small>
           <b>
-            🎖️ {mine && mine.rDay === dateKey(t) ? mine.rToday : 0}
+            {recruitsToday}
             <span>/{cap}</span>
           </b>
-          <small>Misiones, retos, incidentes</small>
+          <i className="cq-meter">
+            <i
+              style={{
+                width: `${Math.min(100, (recruitsToday / cap) * 100)}%`,
+              }}
+            />
+          </i>
+          <small>Por jugar al juego</small>
         </div>
-        <div>
-          <small>Termina en</small>
-          <b>⏳</b>
-          <small>{fmtTime((endsAt - t) / 1000)}</small>
+        <div className="cq-stat season">
+          <small>⏳ Termina en</small>
+          <b className="cq-time">{fmtTime((endsAt - t) / 1000)}</b>
+          <i className="cq-meter">
+            <i
+              style={{
+                width: `${Math.max(0, Math.min(100, (1 - (endsAt - t) / (7 * 86_400_000)) * 100))}%`,
+              }}
+            />
+          </i>
+          <small>El domingo, el botín</small>
         </div>
       </div>
 
-      <svg className="conquest-map" viewBox={VIEW} role="img" aria-label="Mapa de la conquista">
-        {ALL_TILES.map((id) => {
-          const c = center(id);
-          const owned = data.tiles.get(id);
-          const reserved = !owned && isCapitalSlot(id);
-          // Con un origen elegido se marcan sus vecinos atacables; si no, los de cualquier territorio tuyo
-          const tgt = !owned || owned.owner !== me ? targetInfo(id, data.tiles, me, t, ownSrc) : null;
-          const near = tgt?.kind === 'attack' && (!ownSrc || tgt.from === ownSrc);
-          const hue = owned ? ownerHue(owned.owner, me) : 0;
-          const fill = owned ? `hsl(${hue} ${owned.owner === me ? 75 : 55}% ${owned.owner === me ? 48 : 40}%)` : reserved ? '#1a1f36' : id === CENTER ? '#5a4a1e' : '#343a58';
-          const g = owned ? Math.floor(garrisonAt(owned, t)) : reserved ? null : banditGarrison(id);
-          const shield = owned && !owned.capital && t < owned.ct + 30 * 60_000;
-          const cls = ['conquest-hex', sel === id && 'sel', ownSrc === id && 'src', near && 'near', reserved && 'reserved', owned?.owner === me && 'mine']
-            .filter(Boolean)
-            .join(' ');
-          return (
-            <g key={id} data-tile={id} className={cls} transform={`translate(${c.x.toFixed(2)} ${c.y.toFixed(2)})`} onClick={() => tap(id)}>
-              <polygon points={HEX_POINTS} fill={fill} />
-              {owned?.capital && <text y={-3} fontSize={6} textAnchor="middle">🏰</text>}
-              {id === CENTER && !owned?.capital && <text y={-3} fontSize={6} textAnchor="middle">👑</text>}
-              {shield && <text x={5} y={-3} fontSize={4.5} textAnchor="middle">🛡️</text>}
-              {g !== null && (
-                <text y={owned?.capital || id === CENTER ? 5 : 2} fontSize={owned ? 5 : 4.4} textAnchor="middle" className={owned ? 'conquest-g' : 'conquest-g bandit'}>
-                  {g}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
+      <ConquestBoard
+        tiles={data.tiles}
+        me={me}
+        t={t}
+        sel={sel}
+        src={ownSrc}
+        near={near}
+        arrow={info?.kind === 'attack' && sel ? { from: info.from, to: sel } : null}
+        hueOf={hueOf}
+        onTap={tap}
+      />
 
       {sel && info ? (
         <div className="card conquest-panel">
-          <b>
-            {info.kind === 'reserved'
-              ? '🏗️ Solar para una capital'
-              : tile?.owner === me
-                ? tile?.capital
-                  ? '🏰 Tu capital'
-                  : '🟦 Tu territorio'
-                : tile
-                  ? `${tile.capital ? '🏰 Capital' : '⚔️ Territorio'} de ${ownerName(tile.owner)}`
-                  : sel === CENTER
-                    ? '👑 Torre central (bandidos)'
-                    : '🏴‍☠️ Bandidos'}
-          </b>
-          <small className="muted">
-            {tile
-              ? `${soldiers(Math.floor(garrisonAt(tile, t)))}${tile.owner === me ? ` (${growth(tile)})` : ''}`
-              : info.kind === 'reserved'
-                ? 'Aquí llegará la capital de un nuevo alcalde.'
-                : `${banditGarrison(sel)} bandidos`}
-            {sel === CENTER && ` · vale ${CENTER_VALUE} puntos`}
-          </small>
+          <div className="cq-panel-head">
+            <span className="cq-chip" style={{ background: chipColor }}>
+              {chipEmoji}
+            </span>
+            <div>
+              <b>
+                {info.kind === 'reserved'
+                  ? 'Solar para una capital'
+                  : tile?.owner === me
+                    ? tile?.capital
+                      ? 'Tu capital'
+                      : 'Tu territorio'
+                    : tile
+                      ? `${tile.capital ? 'Capital' : 'Territorio'} de ${ownerName(tile.owner)}`
+                      : sel === CENTER
+                        ? 'Torre central (bandidos)'
+                        : 'Campamento de bandidos'}
+              </b>
+              <small className="muted">
+                {tile
+                  ? `${soldiers(Math.floor(garrisonAt(tile, t)))}${tile.owner === me ? ` (${growth(tile)})` : ''}`
+                  : info.kind === 'reserved'
+                    ? 'Aquí llegará la capital de un nuevo alcalde.'
+                    : `${banditGarrison(sel)} bandidos`}
+                {sel === CENTER && ` · vale ${CENTER_VALUE} puntos`}
+              </small>
+            </div>
+          </div>
           {info.kind === 'far' && <small>Está lejos: primero conquista un territorio que lo toque.</small>}
           {info.kind === 'capital' && <small>Las capitales no se pueden conquistar.</small>}
           {info.kind === 'shield' && <small>🛡️ Protegido otros {fmtClock(info.until - t)} tras su conquista.</small>}
           {info.kind === 'own' && <small>Toca un vecino con borde claro para atacarlo con los soldados de aquí, o refuérzalo desde la reserva:</small>}
+          {info.kind === 'attack' && (
+            <div className="cq-versus">
+              <div className="cq-side me">
+                <small>{mult > 1 ? `Tu fuerza (${fmtMult(mult)})` : 'Tus soldados'}</small>
+                <b>{attackPower(Math.min(amount, Math.max(can, amount)), mult)}</b>
+              </div>
+              <span className="cq-vs">VS</span>
+              <div className="cq-side foe">
+                <small>{info.bandits ? 'Bandidos' : 'Defensores'}</small>
+                <b>{info.need - 1}</b>
+              </div>
+              <i className={`cq-odds${attackPower(amount, mult) >= info.need ? ' win' : ''}`}>
+                <i
+                  style={{
+                    width: `${Math.min(100, (attackPower(amount, mult) / (attackPower(amount, mult) + info.need - 1)) * 100)}%`,
+                  }}
+                />
+              </i>
+            </div>
+          )}
           {info.kind === 'attack' && (
             <small>
               Atacas desde {tileLabel(fromTile)} ({soldiers(can)}).{' '}
@@ -463,19 +504,25 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
           )}
         </div>
       ) : (
-        <p className="hint">
-          El número es cuántos soldados tiene cada territorio. Toca uno tuyo y luego un vecino con borde claro para atacarlo con sus soldados.
-        </p>
+        <p className="hint">Cada número son los soldados de un territorio. Toca uno tuyo y luego un vecino que brille para atacarlo con sus soldados.</p>
       )}
 
       <div className="card conquest-ranking">
         <b>Clasificación del mundo</b>
         <ol>
           {rows.map((r, i) => (
-            <li key={r.uid} className={r.uid === me ? 'me' : ''}>
-              <span className="conquest-dot" style={{ background: `hsl(${ownerHue(r.uid, me)} 65% 50%)` }} />
+            <li
+              key={r.uid}
+              className={r.uid === me ? 'me' : ''}
+              style={{
+                ['--w' as string]: `${top > 0 ? Math.max(4, (r.points / top) * 100) : 0}%`,
+                ['--c' as string]: `hsl(${hueOf(r.uid)} 65% 50%)`,
+              }}
+            >
+              <span className="cq-rank">{i < 3 && r.points > 0 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span>
+              <span className="conquest-dot" style={{ background: `hsl(${hueOf(r.uid)} 65% 50%)` }} />
               <span className="conquest-name">
-                {i + 1}. {r.name}
+                {r.name}
                 {r.center && ' 👑'}
               </span>
               <span className="muted">
@@ -485,8 +532,8 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
           ))}
         </ol>
         <small className="muted">
-          Cierra el domingo a medianoche (hora de Costa Rica) y el premio se cobra al volver a entrar: hasta {seasonPrize(1, 2, 15).gems} 💎 y 3 🎟️ para el
-          1º, extra para el podio y, para todos, 5 💎 + 1 por punto (hasta 20).
+          Cierra el domingo a medianoche (hora de Costa Rica) y el premio se cobra al volver a entrar: hasta {seasonPrize(1, 2, 15).gems} 💎 y 3 🎟️ para el 1º,
+          extra para el podio y, para todos, 5 💎 + 1 por punto (hasta 20).
         </small>
       </div>
 

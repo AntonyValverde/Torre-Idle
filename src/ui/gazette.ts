@@ -120,6 +120,20 @@ export function marketMovers(t: number): { up: Mover; down: Mover } {
   return { up: all[0], down: all[all.length - 1] };
 }
 
+/** Precio de una acción en las últimas 24 horas, normalizado a 0..1 para la minigráfica. */
+export function sparkline(def: StockDef, t: number, points = 25): number[] {
+  const raw = Array.from({ length: points }, (_, i) => stockPrice(def, t - DAY + (DAY * i) / (points - 1)));
+  const min = Math.min(...raw);
+  const span = Math.max(...raw) - min || 1;
+  return raw.map((p) => (p - min) / span);
+}
+
+/** Separa la palabra en mayúsculas de un clasificado ("SE VENDE", "PERDIDO"…) del resto del texto. */
+export function splitAd(ad: string): [string, string] {
+  const m = /^((?:[A-ZÁÉÍÓÚÑ]{2,} )+)(.*)$/.exec(ad);
+  return m ? [m[1].trim(), m[2]] : ['', ad];
+}
+
 /** Previsión del clima de hoy: mañana, tarde y noche. */
 export function forecast(t: number): { label: string; weather: string }[] {
   const d = new Date(t);

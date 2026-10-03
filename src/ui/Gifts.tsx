@@ -3,7 +3,7 @@ import { track } from '../firebase';
 import { cloudEnabled } from '../firebase';
 import { dateKey, now } from '../game/clock';
 import { currentUid, fetchNewGifts, sendGiftCloud, type PublicCity } from '../game/cloud';
-import { eraName } from '../game/economy';
+import { eraHue, eraName } from '../game/economy';
 import { fmt } from '../game/format';
 import { GIFT_GEMS, GIFTS_PER_DAY, giftBlock, giftsLeft } from '../game/social';
 import { useGame } from '../game/store';
@@ -148,6 +148,10 @@ export function CityList({ cities, onVisit }: { cities: PublicCity[] | null | 'e
             const given = s.social.day === day && s.social.sent.includes(c.uid);
             return (
               <li key={c.uid} className="clickable" {...pressable(() => onVisit(c.uid))}>
+                <span className="world-card-badge small" style={{ background: `hsl(${eraHue(c.era)} 70% 50%)` }}>
+                  <small>Era</small>
+                  <b>{c.era}</b>
+                </span>
                 <span className="explore-main">
                   <b>{c.name}</b>
                   <small className="muted">

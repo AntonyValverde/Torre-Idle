@@ -256,9 +256,16 @@ export function standings(tiles: Iterable<Tile>, players: Player[]): Standing[] 
   return [...by.values()].sort((a, b) => b.points - a.points || b.tiles - a.tiles || (a.uid < b.uid ? -1 : 1));
 }
 
-/** Color de cada alcalde en el mapa (el tuyo siempre azul). */
-export function ownerHue(uid: string, me: string | null): number {
+/**
+ * Tonos de los rivales según su casilla de capital: bien distintos entre sí, sin azules (el tuyo) y con
+ * el dorado (la Torre central) y los verdes (el terreno) al final, que se confunden.
+ */
+export const SLOT_HUES = [0, 285, 28, 320, 265, 345, 12, 300, 250, 335, 55, 40, 100, 140, 160, 70];
+
+/** Color de cada alcalde en el mapa (el tuyo siempre azul). Con su casilla, uno de la paleta. */
+export function ownerHue(uid: string, me: string | null, slot?: number): number {
   if (uid === me) return 205;
+  if (slot !== undefined && slot >= 0) return SLOT_HUES[slot % SLOT_HUES.length];
   // Se evitan los azules para no confundirlos con los tuyos
   const h = hashString('color:' + uid) % 300;
   return h < 170 ? h : h + 60;

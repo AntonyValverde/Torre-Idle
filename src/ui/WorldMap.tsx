@@ -8,6 +8,7 @@ import { fmt } from '../game/format';
 import { giftBlock } from '../game/social';
 import { useGame } from '../game/store';
 import {
+  HIGHLANDS,
   LAND,
   WORLD_H,
   WORLD_W,
@@ -264,7 +265,7 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
   };
 
   const k = view && size.w ? view.w / size.w : 1;
-  const labels = markers.length <= LABELS_ALWAYS || k < 0.75;
+  const labels = markers.length <= LABELS_ALWAYS || k < 1.1;
   const sel = markers.find((m) => m.city.uid === selected) ?? null;
   const day = dateKey(t);
   const canGift = sel && !sel.mine && !giftBlock({ social }, sel.city.uid, day, me);
@@ -285,24 +286,32 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
           <svg viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} width="100%" height="100%">
             <defs>
               <radialGradient id="world-sea" cx="50%" cy="45%" r="75%">
-                <stop offset="0%" stopColor="#1d4f86" />
-                <stop offset="100%" stopColor="#0b1f3d" />
+                <stop offset="0%" stopColor="#1f5a92" />
+                <stop offset="100%" stopColor="#0a1c3a" />
               </radialGradient>
+              <pattern id="world-waves" width="46" height="26" patternUnits="userSpaceOnUse">
+                <path d="M2 14q5.5 -5 11 0t11 0M25 3q5.5 -5 11 0" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1.4" strokeLinecap="round" />
+              </pattern>
+              <radialGradient id="world-city" cx="35%" cy="30%" r="75%">
+                <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
+                <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+              </radialGradient>
+              <filter id="world-lift" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="7" stdDeviation="7" floodColor="#000814" floodOpacity="0.45" />
+              </filter>
             </defs>
-            <rect x={-WORLD_W} y={-WORLD_H} width={WORLD_W * 3} height={WORLD_H * 3} fill="#0b1f3d" />
+            <rect x={-WORLD_W} y={-WORLD_H} width={WORLD_W * 3} height={WORLD_H * 3} fill="#0a1c3a" />
             <rect x={0} y={0} width={WORLD_W} height={WORLD_H} fill="url(#world-sea)" />
-            <g className="world-grid">
-              {Array.from({ length: Math.floor(WORLD_W / 100) - 1 }, (_, i) => (
-                <line key={`v${i}`} x1={(i + 1) * 100} y1={0} x2={(i + 1) * 100} y2={WORLD_H} />
-              ))}
-              {Array.from({ length: Math.floor(WORLD_H / 100) - 1 }, (_, i) => (
-                <line key={`h${i}`} x1={0} y1={(i + 1) * 100} x2={WORLD_W} y2={(i + 1) * 100} />
+            <rect x={-WORLD_W} y={-WORLD_H} width={WORLD_W * 3} height={WORLD_H * 3} fill="url(#world-waves)" />
+            {/* Aguas poco profundas, playa, tierra y zonas altas: los círculos se funden en continentes */}
+            <g className="world-shallow">
+              {LAND.map((b, i) => (
+                <circle key={i} cx={b.x} cy={b.y} r={b.r + 26} />
               ))}
             </g>
-            {/* Costa (un poco más grande y clara) y tierra encima: los círculos se funden en continentes */}
-            <g className="world-shore">
+            <g className="world-shore" filter="url(#world-lift)">
               {LAND.map((b, i) => (
-                <circle key={i} cx={b.x} cy={b.y} r={b.r + 7} />
+                <circle key={i} cx={b.x} cy={b.y} r={b.r + 8} />
               ))}
             </g>
             <g className="world-land">
@@ -310,22 +319,39 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
                 <circle key={i} cx={b.x} cy={b.y} r={b.r} />
               ))}
             </g>
+            <g className="world-high">
+              {HIGHLANDS.map((b, i) => (
+                <circle key={i} cx={b.x} cy={b.y} r={b.r} />
+              ))}
+            </g>
             <g className="world-decor">
               {DECOR.map((d, i) =>
                 d.kind === 'tree' ? (
-                  <circle key={i} cx={d.x} cy={d.y} r={5} className="tree" />
+                  // Un bosquecillo de tres pinos
+                  <path
+                    key={i}
+                    className="pine"
+                    d={`M${d.x - 9} ${d.y + 5}l5 -12l5 12zM${d.x - 2} ${d.y + 2}l5.5 -14l5.5 14zM${d.x + 4} ${d.y + 7}l4.5 -11l4.5 11z`}
+                  />
                 ) : (
-                  <path key={i} d={`M${d.x - 9} ${d.y + 6}L${d.x} ${d.y - 9}L${d.x + 9} ${d.y + 6}z`} className="mountain" />
+                  <g key={i}>
+                    <path className="mountain" d={`M${d.x - 15} ${d.y + 8}L${d.x - 2} ${d.y - 12}L${d.x + 13} ${d.y + 8}z`} />
+                    <path className="snow" d={`M${d.x - 6.5} ${d.y - 5.5}L${d.x - 2} ${d.y - 12}L${d.x + 2.7} ${d.y - 5}l-2.4 1.6l-2.2 -1.8z`} />
+                  </g>
                 ),
               )}
             </g>
             {clusters.map((c) => {
               if (c.items.length > 1) {
+                // Un montón de ciudades: fichas apiladas con el número
                 const r = bubbleRadius(c) * k;
                 return (
                   <g key={c.items[0].city.uid} className="world-cluster">
-                    <circle cx={c.x} cy={c.y} r={r} strokeWidth={2 * k} />
-                    <text x={c.x} y={c.y + 4.5 * k} fontSize={13 * k} textAnchor="middle">
+                    <ellipse cx={c.x} cy={c.y + r * 0.95} rx={r * 0.95} ry={r * 0.32} className="world-shadow" />
+                    <circle cx={c.x - r * 0.45} cy={c.y - r * 0.3} r={r * 0.8} className="back" strokeWidth={1.5 * k} />
+                    <circle cx={c.x + r * 0.4} cy={c.y - r * 0.38} r={r * 0.72} className="back" strokeWidth={1.5 * k} />
+                    <circle cx={c.x} cy={c.y} r={r} className="front" strokeWidth={2 * k} />
+                    <text x={c.x} y={c.y + 4.6 * k} fontSize={13.5 * k} textAnchor="middle">
                       {c.items.length}
                     </text>
                   </g>
@@ -335,14 +361,18 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
               const r = markerRadius(m.city.era) * k;
               const asleep = isDormant(m.city.updatedAt, t);
               const hue = eraHue(m.city.era);
+              // Silueta de la ciudad: tres edificios dentro del marcador
+              const sky = `M${m.x - r * 0.55} ${m.y + r * 0.45}v${-r * 0.55}h${r * 0.3}v${r * 0.55}zM${m.x - r * 0.18} ${m.y + r * 0.45}v${-r * 0.95}h${r * 0.36}v${r * 0.95}zM${m.x + r * 0.25} ${m.y + r * 0.45}v${-r * 0.7}h${r * 0.3}v${r * 0.7}z`;
               return (
                 <g key={m.city.uid} className={`world-city${asleep ? ' asleep' : ''}${m.mine ? ' mine' : ''}`}>
-                  {m.mine && <circle cx={m.x} cy={m.y} r={r + 7 * k} className="world-me-ring" strokeWidth={2 * k} />}
-                  {m.city.uid === selected && <circle cx={m.x} cy={m.y} r={r + 4 * k} className="world-sel" strokeWidth={2.5 * k} />}
-                  <circle cx={m.x} cy={m.y} r={r} fill={`hsl(${hue} 80% 60%)`} stroke="#0b1020" strokeWidth={1.5 * k} />
-                  <circle cx={m.x} cy={m.y} r={r * 0.4} fill="#fff" opacity={0.85} />
+                  <ellipse cx={m.x} cy={m.y + r * 0.95} rx={r * 0.9} ry={r * 0.3} className="world-shadow" />
+                  {m.mine && <circle cx={m.x} cy={m.y} r={r + 8 * k} className="world-me-ring" strokeWidth={2.5 * k} />}
+                  {m.city.uid === selected && <circle cx={m.x} cy={m.y} r={r + 4.5 * k} className="world-sel" strokeWidth={2.5 * k} />}
+                  <circle cx={m.x} cy={m.y} r={r} fill={m.mine ? '#2f8fff' : `hsl(${hue} 70% 50%)`} stroke="#fff" strokeWidth={1.6 * k} />
+                  <circle cx={m.x} cy={m.y} r={r} fill="url(#world-city)" />
+                  <path d={sky} className="world-sky" />
                   {(labels || m.mine || m.city.uid === selected) && (
-                    <text x={m.x} y={m.y + r + 13 * k} fontSize={12 * k} strokeWidth={3 * k} textAnchor="middle" className="world-label">
+                    <text x={m.x} y={m.y + r + 13 * k} fontSize={(m.mine ? 12.5 : 11.5) * k} strokeWidth={3.2 * k} textAnchor="middle" className="world-label">
                       {m.mine ? `${m.city.name} (tú)` : m.city.name}
                     </text>
                   )}
@@ -351,6 +381,23 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
             })}
           </svg>
         )}
+        {/* Nubes que pasan, viñeta y rosa de los vientos: solo adorno, no se tocan */}
+        <div className="world-clouds" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="world-compass" aria-hidden="true">
+          <svg viewBox="-20 -20 40 40">
+            <circle r="17" />
+            <path d="M0 -15L3.5 0L0 15L-3.5 0z" className="ns" />
+            <path d="M-15 0L0 -3.5L15 0L0 3.5z" className="ew" />
+            <path d="M0 -15L3.5 0L-3.5 0z" className="n" />
+            <text y="-8.5" textAnchor="middle">
+              N
+            </text>
+          </svg>
+        </div>
         {loading && <div className="world-msg">Buscando ciudades…</div>}
         {!loading && markers.length <= 1 && <div className="world-msg">Aún no hay más ciudades. ¡Comparte la tuya e invita a tus amigos!</div>}
         <div className="world-controls">
@@ -369,7 +416,10 @@ function WorldMapView({ cities, loading, me, onVisit }: { cities: PublicCity[]; 
       </div>
       {sel ? (
         <div className="card world-card">
-          <span className="world-card-dot" style={{ background: `hsl(${eraHue(sel.city.era)} 80% 60%)` }} />
+          <span className="world-card-badge" style={{ background: sel.mine ? '#2f8fff' : `hsl(${eraHue(sel.city.era)} 70% 50%)` }}>
+            <small>Era</small>
+            <b>{sel.city.era}</b>
+          </span>
           <div className="world-card-main">
             <b>{sel.mine ? `${sel.city.name} (tu ciudad)` : sel.city.name}</b>
             <small className="muted">

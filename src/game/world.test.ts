@@ -21,7 +21,7 @@ describe('mapa del mundo', () => {
 
   it('los adornos están en tierra y no cambian', () => {
     const a = landDecor();
-    expect(a).toHaveLength(40);
+    expect(a).toHaveLength(60);
     expect(landDecor()).toEqual(a);
     for (const d of a) expect(onLand(d.x, d.y)).toBe(true);
   });

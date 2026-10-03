@@ -6,7 +6,7 @@ import { fmt, fmtTime } from '../game/format';
 import { PAPER_GEMS, paperUnread } from '../game/paper';
 import { useGame } from '../game/store';
 import { sfx, vibrate } from './haptics';
-import { agenda, claraTip, classifieds, editionNumber, forecast, headlines, longDate, marketMovers, sinceLabel } from './gazette';
+import { agenda, claraTip, classifieds, editionNumber, forecast, headlines, longDate, marketMovers, sinceLabel, sparkline, splitAd } from './gazette';
 
 const PUZZLES = [
   { kind: 'daily', emoji: '🌃', name: 'Apagón' },
@@ -14,27 +14,31 @@ const PUZZLES = [
   { kind: 'parks', emoji: '🌳', name: 'Plan verde' },
 ] as const;
 
-/** Tarjeta de la Ciudad que abre el periódico del día. */
+/** Mosaico de la fila de accesos de la Ciudad que abre el periódico del día. */
 export function NewspaperCard({ onOpen }: { onOpen: () => void }) {
   const s = useGame((st) => st.s);
-  const t = now();
-  const today = dateKey(t);
+  const today = dateKey(now());
   const unread = paperUnread(s, today);
   const lead = headlines(s, s.paper.prev)[0];
   return (
-    <button className={`paper-card${unread ? ' unread' : ''}`} onClick={onOpen}>
-      <span className="paper-card-icon">📰</span>
-      <span className="paper-card-main">
-        <small>
-          La Gaceta · edición nº {editionNumber(today)}
-          {unread && <span className="new-tag">NUEVO</span>}
-        </small>
-        <b>
-          {lead.emoji} {lead.title}
-        </b>
-      </span>
-      {unread && <span className="paper-card-tip">+{PAPER_GEMS} 💎</span>}
+    <button className={`hub-tile hub-paper${unread ? ' ready' : ''}`} onClick={onOpen} title={`${lead.emoji} ${lead.title}`}>
+      {unread && <span className="hub-badge new">NUEVO</span>}
+      <span className="hub-icon">📰</span>
+      <b>La Gaceta</b>
+      <small>{unread ? `+${PAPER_GEMS} 💎` : `Nº ${editionNumber(today)}`}</small>
     </button>
+  );
+}
+
+/** Minigráfica de las últimas 24 h de una acción (valores 0..1). */
+function Sparkline({ values, up }: { values: number[]; up: boolean }) {
+  const w = 72;
+  const h = 18;
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 1 - v * (h - 2)).toFixed(1)}`).join(' ');
+  return (
+    <svg className={`paper-spark ${up ? 'up' : 'down'}`} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
+      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 
@@ -80,8 +84,16 @@ export function NewspaperScreen({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
-  // Sin signo: el verbo (sube / cae) ya lo dice
+  // Sin signo: la flecha ya lo dice
   const pct = (x: number) => `${Math.abs(x * 100).toFixed(1)}%`;
+  const stats = d
+    ? [
+        { emoji: '🪙', value: d.earned, label: 'monedas' },
+        { emoji: '👆', value: d.taps, label: 'toques' },
+        { emoji: '🎈', value: d.balloons, label: 'globos' },
+        { emoji: '✅', value: d.missions, label: 'misiones' },
+      ]
+    : [];
 
   return (
     <div className="paper-screen" role="dialog" aria-label="La Gaceta de Infinite City">
@@ -90,24 +102,36 @@ export function NewspaperScreen({ onClose }: { onClose: () => void }) {
           ✕
         </button>
         <header className="paper-masthead">
+          <div className="paper-tagline">
+            <span>Fundado en 2026</span>
+            <span>Diario independiente</span>
+          </div>
           <h1>La Gaceta</h1>
-          <div className="paper-sub">de Infinite City</div>
+          <div className="paper-sub">✦ de Infinite City ✦</div>
           <div className="paper-meta">
-            <span>Edición nº {editionNumber(today)}</span>
-            <span>{longDate(t)}</span>
-            <span>Precio: 1 🪙</span>
+            <span>Nº {editionNumber(today)}</span>
+            <span className="paper-date">{longDate(t)}</span>
+            <span>1 🪙</span>
           </div>
         </header>
 
         <div className="paper-weather">
-          {forecast(t).map((f) => (
-            <span key={f.label}>
-              <small>{f.label}</small> {f.weather}
-            </span>
-          ))}
+          {forecast(t).map((f) => {
+            const [icon, ...txt] = f.weather.split(' ');
+            return (
+              <div key={f.label}>
+                <span className="paper-weather-icon">{icon}</span>
+                <span>
+                  <small>{f.label}</small>
+                  {txt.join(' ')}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         <article className="paper-lead">
+          <div className="paper-kicker">En portada</div>
           <div className="paper-lead-emoji">{lead.emoji}</div>
           <h2>{lead.title}</h2>
           <p>{lead.text}</p>
@@ -117,10 +141,10 @@ export function NewspaperScreen({ onClose }: { onClose: () => void }) {
           <div className="paper-briefs">
             {rest.map((x) => (
               <p key={x.title}>
-                <b>
-                  {x.emoji} {x.title}.
-                </b>{' '}
-                {x.text}
+                <span className="paper-brief-emoji">{x.emoji}</span>
+                <span>
+                  <b>{x.title}.</b> {x.text}
+                </span>
               </p>
             ))}
           </div>
@@ -130,52 +154,64 @@ export function NewspaperScreen({ onClose }: { onClose: () => void }) {
           <section className="paper-section">
             <h3>{sinceLabel(d, today)}</h3>
             <div className="paper-stats">
-              <span>
-                <b>{fmt(d.earned)}</b> monedas
-              </span>
-              <span>
-                <b>{fmt(d.taps)}</b> toques
-              </span>
-              <span>
-                <b>{d.balloons}</b> globos
-              </span>
-              <span>
-                <b>{d.missions}</b> misiones
-              </span>
+              {stats.map((x) => (
+                <div key={x.label} className={x.value > 0 ? '' : 'zero'}>
+                  <span>{x.emoji}</span>
+                  <b>{fmt(x.value)}</b>
+                  <small>{x.label}</small>
+                </div>
+              ))}
             </div>
           </section>
         )}
 
         <div className="paper-columns">
           <section className="paper-section">
-            <h3>📈 Bolsa</h3>
-            <p>
-              {up.def.emoji} <b>{up.def.name}</b> {up.pct >= 0 ? 'sube' : 'baja'} un <b className={up.pct >= 0 ? 'up' : 'down'}>{pct(up.pct)}</b> en 24 h.
-            </p>
-            <p>
-              {down.def.emoji} <b>{down.def.name}</b> {down.pct >= 0 ? 'sube solo' : 'cae'} un{' '}
-              <b className={down.pct >= 0 ? 'up' : 'down'}>{pct(down.pct)}</b>.
-            </p>
+            <h3>📈 Bolsa · 24 h</h3>
+            {[up, down].map((m) => (
+              <div key={m.def.id} className="paper-stock">
+                <span className="paper-stock-emoji">{m.def.emoji}</span>
+                <span className="paper-stock-main">
+                  <b>{m.def.name}</b>
+                  <span className="paper-stock-line">
+                    <Sparkline values={sparkline(m.def, t)} up={m.pct >= 0} />
+                    <span className={`paper-stock-pct ${m.pct >= 0 ? 'up' : 'down'}`}>
+                      {m.pct >= 0 ? '▲' : '▼'} {pct(m.pct)}
+                    </span>
+                  </span>
+                </span>
+              </div>
+            ))}
           </section>
 
           <section className="paper-section">
             <h3>🧩 Retos de ayer</h3>
             {!winners && <p className="paper-muted">Consultando a los jueces…</p>}
             {winners &&
-              PUZZLES.map((p, i) => (
-                <p key={p.kind}>
-                  {p.emoji} {p.name}:{' '}
-                  {winners[i] ? (
-                    <>
-                      ganó <b>{winners[i]!.name}</b>
-                      {winners[i]!.moves !== undefined && ` en ${winners[i]!.moves} movimientos`}
-                      {winners[i]!.timeMs !== undefined && ` (${fmtTime(winners[i]!.timeMs! / 1000)})`}
-                    </>
-                  ) : (
-                    <span className="paper-muted">sin resultados</span>
-                  )}
-                </p>
-              ))}
+              PUZZLES.map((p, i) => {
+                const w = winners[i];
+                return (
+                  <div key={p.kind} className="paper-winner">
+                    <span className="paper-winner-emoji">{p.emoji}</span>
+                    <span className="paper-winner-main">
+                      <small>
+                        {p.name}
+                        {w && ' · 👑'}
+                      </small>
+                      {w ? (
+                        <>
+                          <b>{w.name}</b>
+                          <span className="paper-winner-score">
+                            {[w.moves !== undefined && `${w.moves} mov.`, w.timeMs !== undefined && fmtTime(w.timeMs / 1000)].filter(Boolean).join(' · ')}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="paper-muted">Desierto</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
           </section>
         </div>
 
@@ -189,17 +225,30 @@ export function NewspaperScreen({ onClose }: { onClose: () => void }) {
         </section>
 
         <section className="paper-section paper-clara">
-          <h3>👩‍💼 La columna de Clara</h3>
-          <p>«{claraTip(s, t)}»</p>
+          <h3>Opinión</h3>
+          <div className="paper-clara-body">
+            <span className="paper-clara-face" aria-hidden>
+              👩‍💼
+            </span>
+            <blockquote>
+              <p>{claraTip(s, t)}</p>
+              <cite>— Clara, consejera del alcalde</cite>
+            </blockquote>
+          </div>
         </section>
 
         <section className="paper-section">
           <h3>📌 Clasificados</h3>
-          {classifieds(t).map((x) => (
-            <p key={x} className="paper-ad">
-              {x}
-            </p>
-          ))}
+          <div className="paper-ads">
+            {classifieds(t).map((x) => {
+              const [head, body] = splitAd(x);
+              return (
+                <p key={x} className="paper-ad">
+                  {head && <b>{head}</b>} {body}
+                </p>
+              );
+            })}
+          </div>
         </section>
 
         <button className="btn primary paper-done" onClick={onClose}>

@@ -60,17 +60,20 @@ export function cityPosition(uid: string): { x: number; y: number } {
   return { x: c.x, y: c.y };
 }
 
-/** Adornos del mapa (árboles y montañas), siempre en los mismos sitios. */
-export function landDecor(count = 40): { x: number; y: number; kind: 'tree' | 'mountain' }[] {
+/** Adornos del mapa (bosques y montañas), siempre en los mismos sitios. */
+export function landDecor(count = 60): { x: number; y: number; kind: 'tree' | 'mountain' }[] {
   const rand = mulberry32(hashString('mundo:adornos'));
   const out: { x: number; y: number; kind: 'tree' | 'mountain' }[] = [];
-  for (let i = 0; i < 2000 && out.length < count; i++) {
+  for (let i = 0; i < 3000 && out.length < count; i++) {
     const x = rand() * WORLD_W;
     const y = rand() * WORLD_H;
     if (onLand(x, y, 20)) out.push({ x, y, kind: rand() < 0.3 ? 'mountain' : 'tree' });
   }
   return out;
 }
+
+/** Zonas altas de cada continente (más oscuras): los círculos grandes, más pequeños. */
+export const HIGHLANDS: LandBlob[] = LAND.filter((b) => b.r > 60).map((b) => ({ x: b.x + b.r * 0.08, y: b.y - b.r * 0.06, r: b.r * 0.55 }));
 
 /** Radio del marcador de una ciudad (en píxeles de pantalla): crece con la era. */
 export function markerRadius(era: number): number {

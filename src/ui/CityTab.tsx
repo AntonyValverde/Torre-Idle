@@ -30,7 +30,7 @@ import { NewspaperCard, NewspaperScreen } from './Newspaper';
 import { CityScene } from './CityScene';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
-import { MissionsCard } from './MissionsCard';
+import { MissionsCard, MissionsTile, useMissionsOpen } from './MissionsCard';
 import { SEASON_LABEL, WEATHER_LABEL, seasonAt, weatherAt } from './weather';
 
 const AMOUNTS = [1, 10, -1] as const;
@@ -56,6 +56,9 @@ export function CityTab({ paused = false, onIncident, onWorld }: { paused?: bool
   const tut = currentStep(s)?.id;
   const law = currentLaw(s);
   const alert = conquestAlert(s, t, dateKey(t));
+  const ranking = isUnlocked(s, 'ranking');
+  const missions = isUnlocked(s, 'missions');
+  const [missionsOpen, toggleMissions] = useMissionsOpen();
 
   return (
     <div className="tab city-tab">
@@ -79,23 +82,34 @@ export function CityTab({ paused = false, onIncident, onWorld }: { paused?: bool
 
       <LawCard />
 
-      {isUnlocked(s, 'ranking') && <NewspaperCard onOpen={() => setPaper(true)} />}
+      {(ranking || missions) && (
+        <div className="city-hub">
+          {ranking && <NewspaperCard onOpen={() => setPaper(true)} />}
+          {cloudEnabled && ranking && (
+            <button className={`hub-tile hub-world${alert ? ' ready' : ''}`} onClick={onWorld} title={alert ?? 'Mapa del mundo'}>
+              {alert && <span className="hub-badge">!</span>}
+              <svg className="world-entry-art hub-art" viewBox="0 0 64 48" aria-hidden="true">
+                <ellipse cx="22" cy="30" rx="17" ry="11" className="sand" />
+                <ellipse cx="22" cy="29" rx="14.5" ry="9" className="land" />
+                <ellipse cx="49" cy="17" rx="11" ry="7.5" className="sand" />
+                <ellipse cx="49" cy="16.4" rx="9" ry="5.8" className="land" />
+                <path d="M12 30l2.6 -6l2.6 6zM16 32l2.2 -5l2.2 5z" className="pine" />
+                <path d="M24 31v-7h2v1.4h1.4v-1.4h1.4v1.4h1.4v-1.4h2v7z" className="castle" />
+                <path d="M28.6 23.6v-5" className="pole" />
+                <path d="M28.6 18.6l4 1.1l-4 1.1z" className="flag" />
+                <circle cx="47" cy="15.6" r="2.6" className="city" />
+                <circle cx="52.5" cy="17.4" r="1.9" className="city two" />
+              </svg>
+              <b>Mundo</b>
+              <small className={alert ? 'hub-alert' : ''}>{alert ?? 'Conquista'}</small>
+            </button>
+          )}
+          {missions && <MissionsTile open={missionsOpen} onToggle={toggleMissions} />}
+        </div>
+      )}
       {paper && <NewspaperScreen onClose={() => setPaper(false)} />}
 
-      {cloudEnabled && isUnlocked(s, 'ranking') && (
-        <button className="world-entry" onClick={onWorld}>
-          <span className="world-entry-icon">🌍</span>
-          <span className="world-entry-main">
-            <b>
-              Mapa del mundo {alert && <span className="world-entry-alert">{alert}</span>}
-            </b>
-            <small>Visita las ciudades de otros alcaldes y conquista territorios cada semana.</small>
-          </span>
-          <span className="world-entry-go">›</span>
-        </button>
-      )}
-
-      {isUnlocked(s, 'missions') && <MissionsCard />}
+      {missions && <MissionsCard open={missionsOpen} onToggle={toggleMissions} />}
 
       <DecreeCard />
 

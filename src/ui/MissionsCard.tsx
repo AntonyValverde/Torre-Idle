@@ -27,17 +27,9 @@ function readOpen(): boolean {
   }
 }
 
-export function MissionsCard() {
-  const s = useGame((st) => st.s);
+/** Si el panel de misiones está desplegado (se recuerda entre visitas). */
+export function useMissionsOpen(): [boolean, () => void] {
   const [open, setOpen] = useState(readOpen);
-  const [tab, setTab] = useState<'daily' | 'weekly'>('daily');
-  const m = s.missions;
-  const lg = s.league;
-  const div = divisionOf(lg.points);
-  const next = nextDivision(lg.points);
-  const claimable = claimableMissions(s);
-  const dailyDone = m.daily.filter((x) => x.c).length;
-
   const toggle = () => {
     setOpen(!open);
     try {
@@ -46,6 +38,39 @@ export function MissionsCard() {
       /* ignorar */
     }
   };
+  return [open, toggle];
+}
+
+/** Mosaico de la fila de accesos de la Ciudad: abre y cierra el panel de misiones. */
+export function MissionsTile({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const s = useGame((st) => st.s);
+  const claimable = claimableMissions(s);
+  const dailyDone = s.missions.daily.filter((x) => x.c).length;
+  const ready = claimable > 0 || !!s.league.prev || chestReady(s);
+  return (
+    <button className={`hub-tile hub-missions${open ? ' open' : ''}${ready ? ' ready' : ''}`} onClick={onToggle} aria-expanded={open}>
+      {claimable > 0 && <span className="hub-badge">{claimable}</span>}
+      <span className="hub-icon">📋</span>
+      <b>Misiones</b>
+      <small>
+        {dailyDone}/3 hoy {open ? '▴' : '▾'}
+      </small>
+    </button>
+  );
+}
+
+export function MissionsCard({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const s = useGame((st) => st.s);
+  const [tab, setTab] = useState<'daily' | 'weekly'>('daily');
+  const m = s.missions;
+  const lg = s.league;
+  const div = divisionOf(lg.points);
+  const next = nextDivision(lg.points);
+  const claimable = claimableMissions(s);
+  const dailyDone = m.daily.filter((x) => x.c).length;
+
+  // Cerrado solo asoma el premio de la liga, que no debe pasar desapercibido
+  if (!open && !lg.prev) return null;
 
   const claim = (kind: 'daily' | 'weekly', i: number) => {
     const msg = useGame.getState().claimMission(kind, i);
@@ -94,15 +119,17 @@ export function MissionsCard() {
         </button>
       )}
 
-      <button className="missions-head" onClick={toggle} aria-expanded={open}>
-        <b>📋 Misiones</b>
-        <small className="muted">{dailyDone}/3 hoy</small>
-        {claimable > 0 && <span className="seg-badge">{claimable}</span>}
-        <span className="league-chip" title="Puntos de la liga de esta semana">
-          {div.emoji} {lg.points} pts
-        </span>
-        <span className="chev">{open ? '▴' : '▾'}</span>
-      </button>
+      {open && (
+        <button className="missions-head" onClick={onToggle} aria-expanded={open}>
+          <b>📋 Misiones</b>
+          <small className="muted">{dailyDone}/3 hoy</small>
+          {claimable > 0 && <span className="seg-badge">{claimable}</span>}
+          <span className="league-chip" title="Puntos de la liga de esta semana">
+            {div.emoji} {lg.points} pts
+          </span>
+          <span className="chev">▴</span>
+        </button>
+      )}
 
       {open && (
         <>
