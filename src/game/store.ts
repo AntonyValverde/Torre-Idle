@@ -120,6 +120,7 @@ import {
   applySeason,
   withCapture,
   withReserve,
+  withSeasonSkipped,
   withWorld,
   type Report,
   type Reserve,
@@ -230,6 +231,8 @@ interface GameStore {
   noteCapture(): void;
   /** Conquista: cobra el premio de una temporada terminada (una vez). */
   claimConquest(week: string, rank: number, size: number, points: number): ReturnType<typeof seasonPrize> | null;
+  /** Conquista: da por cerrada una temporada sin premio (no saliste en la clasificación final). */
+  skipConquest(week: string): void;
   /** Reclama una misión completada; devuelve el texto del premio o null. */
   claimMission(kind: 'daily' | 'weekly', index: number): string | null;
   claimChest(): string | null;
@@ -361,6 +364,19 @@ function finishDaily(s: GameState, key: 'daily' | 'roads' | 'parks', date: strin
   return { next, reward: { coins, gems, streak, card } };
 }
 
+/** Más de un día "en el futuro" ya no es un reloj adelantado: es una partida corrupta. */
+const FUTURE_CLOCK_MAX_MS = 86_400_000;
+
+/** Fiesta (toques multiplicados): nunca acorta una fiesta ya activa más larga ni baja su multiplicador. */
+function withFestival(s: GameState, t: number, ms: number): GameState {
+  const active = s.tapBoostUntil > t;
+  return {
+    ...s,
+    tapBoostMult: active ? Math.max(s.tapBoostMult, festivalMult(s)) : festivalMult(s),
+    tapBoostUntil: Math.max(s.tapBoostUntil, t + festivalDuration(s, ms)),
+  };
+}
+
 export const useGame = create<GameStore>((set, get) => ({
   s: newState(now()),
   ready: false,
@@ -389,6 +405,9 @@ export const useGame = create<GameStore>((set, get) => ({
 
   init(state) {
     const t = now();
+    // Partida guardada con el reloj más de un día en el futuro: está corrupta (reloj del móvil mal puesto al
+    // guardar). Si se esperase a "alcanzar" esa hora, el juego quedaría congelado: se recorta a ahora.
+    if (state.lastTick - t > FUTURE_CLOCK_MAX_MS) state = { ...state, lastTick: t, ticketTime: Math.min(state.ticketTime, t) };
     // La ausencia se suma a lo que ya estuviera pendiente de recoger (se guarda con la partida)
     const { pending, direct } = accrueOffline(state, (t - state.lastTick) / 1000);
     // Si la partida viene "del futuro" (reloj adelantado), no se retrocede: se espera a que llegue esa hora.
@@ -657,6 +676,12 @@ export const useGame = create<GameStore>((set, get) => ({
     return r.prize;
   },
 
+  skipConquest(week) {
+    const { s } = get();
+    const next = withSeasonSkipped(s, week);
+    if (next !== s) set({ s: next });
+  },
+
   rewardTraffic(score) {
     const { s } = get();
     const t = now();
@@ -705,7 +730,7 @@ export const useGame = create<GameStore>((set, get) => ({
     let msg = `${def.emoji} ${def.title}`;
     switch (id) {
       case 'festival':
-        next = { ...s, tapBoostMult: festivalMult(s), tapBoostUntil: t + festivalDuration(s, 45_000) };
+        next = withFestival(s, t, 45_000);
         break;
       case 'obras':
         next = { ...s, boosts: addBoost(s, t, 'obras', 2, 180) };
@@ -815,7 +840,7 @@ export const useGame = create<GameStore>((set, get) => ({
         message = `⚡ Producción x${prize.mult} durante ${prize.seconds / 60} min`;
         break;
       case 'festival':
-        next = { ...next, tapBoostMult: festivalMult(s), tapBoostUntil: t + festivalDuration(s, 60_000) };
+        next = withFestival(next, t, 60_000);
         message = `🎉 ¡Fiesta! Toques x${festivalMult(s)} durante ${festivalDuration(s, 60_000) / 1000} s`;
         break;
       case 'rare': {

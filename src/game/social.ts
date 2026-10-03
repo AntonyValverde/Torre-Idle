@@ -1,3 +1,4 @@
+import { isNewDay } from './clock';
 import type { GameState } from './state';
 
 // Regalos entre ciudades: al visitar la ciudad de otro jugador se le puede dejar un regalo (uno al día
@@ -56,9 +57,12 @@ export function socialState(v: unknown): SocialState {
   };
 }
 
-/** El estado del día: si cambió el día, los contadores diarios empiezan de cero. */
+/**
+ * El estado del día: si avanzó el día, los contadores diarios empiezan de cero. Si el día "retrocede" (cambio
+ * de zona horaria o de reloj), se conservan: así no se pueden repetir los regalos del día.
+ */
 function today(s: SocialState, day: string): SocialState {
-  return s.day === day ? s : { ...s, day, sent: [], ticketsToday: 0 };
+  return isNewDay(s.day, day) ? { ...s, day, sent: [], ticketsToday: 0 } : s;
 }
 
 /** Por qué no se puede regalar a esa ciudad hoy (null: se puede). */

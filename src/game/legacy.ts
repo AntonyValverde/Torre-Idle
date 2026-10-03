@@ -166,7 +166,12 @@ export function hasNode(s: GameState, id: string): boolean {
 /** Estrellas gastadas en un nodo hasta su nivel actual. */
 export function spentOn(node: LegacyNode, lvl: number): number {
   let n = 0;
-  for (let l = 0; l < lvl; l++) n += node.cost(l);
+  // Un nivel por encima del máximo (partida corrupta) o un coste no finito pararía el bucle en Infinity/NaN
+  for (let l = 0; l < lvl && l < node.max; l++) {
+    const cost = node.cost(l);
+    if (!Number.isFinite(cost)) break;
+    n += cost;
+  }
   return n;
 }
 

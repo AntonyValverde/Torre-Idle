@@ -12,6 +12,28 @@ export const ARCADE_BOARDS: ArcadeBoard[] = ['stack', 'merge', 'thief', 'traffic
 /** Las reglas de Firestore no aceptan más de 999 movimientos en un reto diario. */
 export const DAILY_MOVES_MAX = 999;
 
+/**
+ * Tope de puntuación que aceptan las reglas de Firestore en cada ranking. Una marca mayor se sube recortada:
+ * si se enviase tal cual, las reglas la rechazarían y quedaría marcada como subida sin estar en el ranking.
+ */
+export const BOARD_CAP: Record<ArcadeBoard | 'city' | 'stars', number> = {
+  stack: 1000,
+  merge: 4_000_000,
+  thief: 3000,
+  traffic: 5000,
+  memory: 500,
+  fire: 5000,
+  metro: 5000,
+  towers: 5000,
+  city: Infinity,
+  stars: 1e9,
+};
+
+/** Puntuación tal como se sube al ranking: entero, no negativo y sin pasar del tope de las reglas. */
+export function clampScore(board: ArcadeBoard | 'city' | 'stars', score: number): number {
+  return Math.min(BOARD_CAP[board], Math.max(0, Math.floor(score)));
+}
+
 /** Como mucho se guardan unos pocos pendientes (de hoy y de ayer, uno por reto). */
 const PENDING_MAX = 9;
 

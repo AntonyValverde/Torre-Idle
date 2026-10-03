@@ -498,6 +498,77 @@ describe('progresión infinita', () => {
     expect(useGame.getState().s.tickets).toBe(ticketsAfterFree - 1 + refund);
   });
 
+  it('una partida guardada con el reloj un año en el futuro no congela el juego', () => {
+    const t = now();
+    const YEAR = 365 * 86_400_000;
+    useGame.getState().init({ ...newState(t), buildings: { casa: 10 }, lastTick: t + YEAR, ticketTime: t + YEAR, tickets: 1 });
+    const s0 = useGame.getState().s;
+    expect(s0.lastTick).toBeLessThanOrEqual(now() + 1000);
+    expect(s0.ticketTime).toBeLessThanOrEqual(now() + 1000);
+    // El tick vuelve a producir monedas en seguida
+    useGame.setState({ s: { ...s0, lastTick: now() - 1000 } });
+    useGame.getState().tick();
+    expect(useGame.getState().s.coins).toBeGreaterThan(s0.coins);
+    // Un reloj solo un poco adelantado (menos de un día) sigue esperando a que llegue esa hora
+    useGame.getState().init({ ...newState(t), lastTick: t + 3_600_000 });
+    expect(useGame.getState().s.lastTick).toBeGreaterThanOrEqual(t + 3_600_000);
+  });
+
+  it('normalize recorta horas y días del futuro y nunca deja cantidades negativas', () => {
+    const t = new Date(2026, 9, 3, 12).getTime();
+    const DAY = 86_400_000;
+    const far = t + 400 * DAY;
+    const s = normalize(
+      {
+        coins: -5,
+        gems: -1,
+        tickets: -2,
+        stars: -3,
+        starsSpent: -4,
+        lastTick: far,
+        ticketTime: far,
+        tapBoostUntil: far,
+        vipLast: far,
+        createdAt: far,
+        boosts: [{ k: 'x', m: 2, u: far }],
+        daily: { last: '2027-12-01', streak: 3, bestStreak: 3 },
+        roads: { last: '2026-10-03', streak: 1, bestStreak: 1 },
+        wheelLast: '2027-01-01',
+        missions: { day: '2027-01-01', week: '2027-01-01' },
+        league: { week: '2027-01-01', points: 5 },
+        paper: { day: '2027-01-01', read: '2027-01-01' },
+        social: { day: '2027-01-01', sent: ['a'] },
+        casino: { day: '2027-01-01', bought: 100 },
+        legacy: { capital: 2, arquitecto: 99, fantasma: 3, suerte: 0 },
+      },
+      t,
+    );
+    for (const k of ['coins', 'gems', 'tickets', 'stars', 'starsSpent'] as const) expect(s[k]).toBe(0);
+    // Las horas rotas vuelven a "ahora" (nada que esperar) o a 0 (caducado): la ciudad no se queda congelada
+    for (const k of ['lastTick', 'ticketTime', 'createdAt'] as const) expect(s[k]).toBe(t);
+    for (const k of ['tapBoostUntil', 'vipLast'] as const) expect(s[k]).toBe(0);
+    expect(s.boosts[0].u).toBe(0);
+    expect(s.daily.last).toBeNull();
+    expect(s.daily.streak).toBe(3);
+    // Hoy (y hasta dos días por delante, por zonas horarias) se conserva
+    expect(s.roads.last).toBe('2026-10-03');
+    expect(s.wheelLast).toBeNull();
+    expect(s.missions.day).toBeNull();
+    expect(s.missions.week).toBeNull();
+    expect(s.league.week).toBeNull();
+    expect(s.paper.day).toBeNull();
+    expect(s.paper.read).toBeNull();
+    expect(s.social.day).toBeNull();
+    expect(s.casino.day).toBeNull();
+    // Legado: nodos desconocidos fuera, niveles al tope del nodo, ceros fuera
+    expect(s.legacy).toEqual({ capital: 2, arquitecto: 15 });
+    // Valores normales no se tocan
+    const ok = normalize({ coins: 7, lastTick: t - 1000, daily: { last: '2026-10-02', streak: 1, bestStreak: 1 } }, t);
+    expect(ok.coins).toBe(7);
+    expect(ok.lastTick).toBe(t - 1000);
+    expect(ok.daily.last).toBe('2026-10-02');
+  });
+
   it('migra partidas antiguas sin campos nuevos', () => {
     const old = { coins: 10, totalEarned: 500, buildings: { choza: 3 }, boostMult: 2, boostUntil: 99 };
     const s = normalize(old, 0);

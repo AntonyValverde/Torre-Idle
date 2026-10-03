@@ -8,6 +8,8 @@ import { newPaper, paperState, type PaperState } from './paper';
 import { newSocial, socialState, type SocialState } from './social';
 import { casinoState, newCasino, type CasinoState } from './casino';
 import { conquestState, newConquest, type ConquestState } from './conquest';
+import { dateKey } from './clock';
+import { LEGACY_BY_ID } from './legacy';
 
 export interface Boost {
   k: string;
@@ -333,38 +335,63 @@ function numRecord(v: unknown): Record<string, number> {
   return out;
 }
 
+/** Niveles de legado: solo nodos que existen, sin pasar de su máximo. */
+function legacyLevels(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [id, lvl] of Object.entries(numRecord(v))) {
+    const node = LEGACY_BY_ID.get(id);
+    if (node && lvl > 0) out[id] = Math.min(node.max, Math.floor(lvl));
+  }
+  return out;
+}
+
+/** Más allá de un día en el futuro, una hora guardada es un reloj roto, no un reloj adelantado. */
+const FUTURE_MS = 86_400_000;
+/** Un "ahora" anterior a esto no es de fiar (reloj a cero): no sirve para juzgar si lo guardado está en el futuro. */
+const TRUSTED_NOW_MS = Date.UTC(2025, 0, 1);
+
 /** Completa una partida guardada (local o de la nube) con valores por defecto. */
 export function normalize(raw: unknown, t: number): GameState {
   const base = newState(t);
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Partial<GameState>;
-  const totalEarned = num(r.totalEarned, 0);
-  return {
+  const totalEarned = Math.max(0, num(r.totalEarned, 0));
+  // Horas (ms) y días (AAAA-MM-DD) guardados en el futuro: recortados o anulados para que el juego no se congele
+  // ni se queden los retos diarios bloqueados hasta "llegar" a esa fecha (los ms se recortan a un día por delante).
+  const trusted = t >= TRUSTED_NOW_MS;
+  // Más de un día por delante no es un reloj adelantado sino uno roto: vale el valor por defecto (ahora, o 0 = caducado)
+  const ms = (v: unknown, fallback: number) => {
+    const n = num(v, fallback);
+    return trusted && n > t + FUTURE_MS ? fallback : n;
+  };
+  const dayLimit = dateKey(t + 2 * FUTURE_MS);
+  const day = <K extends string | null>(k: K): K | null => (trusted && k && k > dayLimit ? null : k);
+  const s: GameState = {
     ...base,
     name: (typeof r.name === 'string' && isNameAllowed(sanitizeName(r.name)) && sanitizeName(r.name)) || base.name,
-    coins: num(r.coins, 0),
+    coins: Math.max(0, num(r.coins, 0)),
     totalEarned,
     allTimeEarned: Math.max(num(r.allTimeEarned, 0), totalEarned),
-    gems: num(r.gems, 0),
+    gems: Math.max(0, num(r.gems, 0)),
     buildings: numRecord(r.buildings),
     upgrades: Array.isArray(r.upgrades) ? r.upgrades.filter((x) => typeof x === 'string') : [],
     rare: Array.isArray(r.rare) ? r.rare.filter((x) => typeof x === 'string') : [],
     gemLevels: numRecord(r.gemLevels),
     era: Math.max(1, Math.floor(num(r.era, 1))),
-    stars: num(r.stars, 0),
-    starsSpent: num(r.starsSpent, 0),
-    legacy: numRecord(r.legacy),
+    stars: Math.max(0, num(r.stars, 0)),
+    starsSpent: Math.max(0, num(r.starsSpent, 0)),
+    legacy: legacyLevels(r.legacy),
     achievements: numRecord(r.achievements),
-    tickets: num(r.tickets, base.tickets),
-    ticketTime: num(r.ticketTime, t),
+    tickets: Math.max(0, num(r.tickets, base.tickets)),
+    ticketTime: ms(r.ticketTime, t),
     boosts: Array.isArray(r.boosts)
       ? r.boosts
           .filter((b) => b && typeof b.k === 'string' && Number.isFinite(b.m) && Number.isFinite(b.u))
-          .map((b) => ({ k: b.k, m: b.m, u: b.u }))
+          .map((b) => ({ k: b.k, m: b.m, u: ms(b.u, 0) }))
       : [],
     tapBoostMult: num(r.tapBoostMult, 1),
-    tapBoostUntil: num(r.tapBoostUntil, 0),
-    lastTick: num(r.lastTick, t),
+    tapBoostUntil: ms(r.tapBoostUntil, 0),
+    lastTick: ms(r.lastTick, t),
     taps: num(r.taps, 0),
     balloons: num(r.balloons, 0),
     stackBest: num(r.stackBest, 0),
@@ -378,7 +405,7 @@ export function normalize(raw: unknown, t: number): GameState {
     towersBest: num(r.towersBest, 0),
     submittedBest: numRecord(r.submittedBest),
     pendingDaily: pendingDaily(r.pendingDaily),
-    wheelLast: typeof r.wheelLast === 'string' ? r.wheelLast : null,
+    wheelLast: day(typeof r.wheelLast === 'string' ? r.wheelLast : null),
     wheelSpins: num(r.wheelSpins, 0),
     stocks: holdings(r.stocks),
     stockProfit: num(r.stockProfit, 0),
@@ -397,11 +424,22 @@ export function normalize(raw: unknown, t: number): GameState {
     advisors: advisorsState(r.advisors),
     // Sin campo (partidas de antes del árbol con ramas): la primera reorganización es gratis
     respecFree: r.respecFree !== false,
-    vipLast: num(r.vipLast, 0),
+    vipLast: ms(r.vipLast, 0),
     paper: paperState(r.paper),
     social: socialState(r.social),
     casino: casinoState(r.casino),
     conquest: conquestState(r.conquest),
-    createdAt: num(r.createdAt, t),
+    createdAt: ms(r.createdAt, t),
   };
+  // Claves de día/semana en el futuro (reloj roto al guardar): se anulan para que vuelva a contar como día nuevo
+  s.daily = { ...s.daily, last: day(s.daily.last) };
+  s.roads = { ...s.roads, last: day(s.roads.last) };
+  s.parks = { ...s.parks, last: day(s.parks.last) };
+  s.missions = { ...s.missions, day: day(s.missions.day), week: day(s.missions.week) };
+  s.league = { ...s.league, week: day(s.league.week) };
+  s.cup = { ...s.cup, week: day(s.cup.week) };
+  s.paper = { ...s.paper, day: day(s.paper.day), read: day(s.paper.read) };
+  s.social = { ...s.social, day: day(s.social.day) };
+  s.casino = { ...s.casino, day: day(s.casino.day) };
+  return s;
 }

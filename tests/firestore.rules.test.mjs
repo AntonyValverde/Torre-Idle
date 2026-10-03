@@ -167,6 +167,7 @@ const gBob = doc(bob, 'gifts/alice/inbox/bob');
 await ok('regalo: Bob deja un regalo en la ciudad de Alice', () => setDoc(gBob, gift()));
 await no('regalo: otro el mismo día', () => setDoc(gBob, gift()));
 await ok('regalo: renovarlo otro día', () => setDoc(gBob, gift({ day: tomorrow })));
+await no('regalo: volver a un día anterior (alternar hoy/mañana)', () => setDoc(gBob, gift()));
 await no('regalo: firmar como otro remitente', () => setDoc(doc(bob, 'gifts/alice/inbox/carol'), gift()));
 await no('regalo: a uno mismo', () => setDoc(doc(alice, 'gifts/alice/inbox/alice'), gift({ name: 'Alice' })));
 await no('regalo: a una ciudad que no existe', () => setDoc(doc(bob, 'gifts/fantasma/inbox/bob'), gift()));
@@ -277,18 +278,18 @@ console.log('conquest (Conquista)');
   const C = `conquest/${cupWeek}`;
   const W = `${C}/worlds/w0`;
   const SLOTS = ['-4_4', '4_-4', '0_4', '0_-4'];
-  const join = (db, uid, name, slot, { week = cupWeek, w = 'w0', capital = SLOTS[slot], troops = 20, members = slot + 1 } = {}) => {
+  const join = (db, uid, name, slot, { week = cupWeek, w = 'w0', capital = SLOTS[slot], troops = 20, members = slot + 1, prev } = {}) => {
     const base = `conquest/${week}`;
     const b = writeBatch(db);
     b.set(doc(db, `${base}/members/${uid}`), { w });
-    b.set(doc(db, `${base}/worlds/${w}`), { members });
+    b.set(doc(db, `${base}/worlds/${w}`), prev === undefined ? { members } : { members, prev });
     b.set(doc(db, `${base}/worlds/${w}/players/${uid}`), { name, slot, troops, t: serverTimestamp(), rDay: '', rToday: 0, last: '', sent: 0 });
     b.set(doc(db, `${base}/worlds/${w}/tiles/${capital}`), { owner: uid, name, g: 20, t: serverTimestamp(), ct: serverTimestamp(), capital: true, sent: 0, from: '', to: '' });
     return b.commit();
   };
   // Ataque: el territorio de origen baja (y dice a dónde mandó) y el objetivo pasa al atacante, en el mismo lote
-  // `p`: fuerza con bono de asalto; `assault`: apunta el bono en el alcalde (aAt) en el mismo lote
-  const attack = (db, uid, name, target, from, sent, left, g, { skipFrom = false, p, assault = false } = {}) => {
+  // `p`: fuerza con bono de asalto; `assault`: apunta el bono en el alcalde (aAt + aTo) en el mismo lote
+  const attack = (db, uid, name, target, from, sent, left, g, { skipFrom = false, p, assault = false, aTo = target } = {}) => {
     const b = writeBatch(db);
     if (!skipFrom) b.update(doc(db, `${W}/tiles/${from}`), { name, g: left, t: serverTimestamp(), to: target, sent, from: '' });
     b.set(doc(db, `${W}/tiles/${target}`), {
@@ -303,7 +304,7 @@ console.log('conquest (Conquista)');
       from,
       to: '',
     });
-    if (assault) b.update(doc(db, `${W}/players/${uid}`), { aAt: serverTimestamp() });
+    if (assault) b.update(doc(db, `${W}/players/${uid}`), { aAt: serverTimestamp(), aTo });
     return b.commit();
   };
   // Refuerzo desde la reserva: la reserva baja y el territorio propio sube, en el mismo lote
@@ -325,6 +326,19 @@ console.log('conquest (Conquista)');
   await no('conquista: ocupar una casilla ya dada', () => join(bob, 'bob', 'Bob', 0, { members: 1 }));
   await no('conquista: saltarse el contador', () => join(bob, 'bob', 'Bob', 2, { members: 3 }));
   await ok('conquista: el segundo alcalde, segunda capital', () => join(bob, 'bob', 'Bob', 1));
+
+  // Mundos nuevos: solo cuando el anterior está lleno (16). w2 lleno, w3 con un alcalde, w4 no existe
+  const frank = env.authenticatedContext('frank').firestore();
+  const gina = env.authenticatedContext('gina').firestore();
+  await seed(`${C}/worlds/w2`, { members: 16 });
+  await no('conquista: abrir w9 sin anterior', () => join(gina, 'gina', 'Gina', 0, { w: 'w9' }));
+  await no('conquista: abrir w5 con w4 inexistente', () => join(gina, 'gina', 'Gina', 0, { w: 'w5', prev: 'w4' }));
+  await no('conquista: abrir w5 saltándose mundos (w2 lleno)', () => join(gina, 'gina', 'Gina', 0, { w: 'w5', prev: 'w2' }));
+  await no('conquista: abrir w1 con w0 sin llenar', () => join(gina, 'gina', 'Gina', 0, { w: 'w1', prev: 'w0' }));
+  await ok('conquista: abrir w3 con w2 lleno', () => join(frank, 'frank', 'Frank', 0, { w: 'w3', prev: 'w2' }));
+  await no('conquista: abrir w4 con w3 sin llenar', () => join(gina, 'gina', 'Gina', 0, { w: 'w4', prev: 'w3' }));
+  await no('conquista: w0 con anterior', () => join(gina, 'gina', 'Gina', 0, { week: cupWeek, w: 'w0', prev: 'w2' }));
+  await ok('conquista: unirse a un mundo abierto (w3)', () => join(gina, 'gina', 'Gina', 1, { w: 'w3' }));
   await ok('conquista: lectura pública del mundo', () => getDocs(collection(anon, `${W}/tiles`)));
 
   // Bandidos: -4_3 tiene 4 (borde) y -3_3 tiene 7. Se ataca desde la capital (20 soldados)
@@ -381,6 +395,14 @@ console.log('conquest (Conquista)');
   await no('asalto: menos fuerza que soldados', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 12, 8, 2, { p: 11, assault: true }));
   await no('asalto: sobreviven más de los enviados', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 8, { p: 12, assault: true }));
   await no('asalto: guarnición inflada con el bono', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 3, { p: 12, assault: true }));
+  await no('asalto: bono apuntado a otro territorio', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 2, { p: 12, assault: true, aTo: '0_0' }));
+  await no('asalto: bono sin objetivo (solo aAt)', () => {
+    const b = writeBatch(alice);
+    b.update(doc(alice, `${W}/tiles/-3_3`), { name: 'Alice', g: 12, t: serverTimestamp(), to: '-2_2', sent: 8, from: '' });
+    b.set(doc(alice, `${W}/tiles/-2_2`), { owner: 'alice', name: 'Alice', g: 2, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent: 8, p: 12, from: '-3_3', to: '' });
+    b.update(doc(alice, `${W}/players/alice`), { aAt: serverTimestamp() });
+    return b.commit();
+  });
   await ok('asalto: tomar bandidos con bono x1,5', () => attack(alice, 'alice', 'Alice', '-2_2', '-3_3', 8, 12, 2, { p: 12, assault: true }));
   // 2_1 tiene 7 bandidos; alice ataca desde 1_1
   await seed(`${W}/tiles/1_1`, tileSeed('alice', 20, 0, 3600000));

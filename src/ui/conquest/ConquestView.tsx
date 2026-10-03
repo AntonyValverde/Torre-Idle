@@ -5,6 +5,7 @@ import { dateKey, now } from '../../game/clock';
 import { currentUid } from '../../game/cloud';
 import {
   ALL_TILES,
+  ASSAULT_COOLDOWN_MS,
   CENTER,
   CENTER_VALUE,
   SKEW_MS,
@@ -218,8 +219,13 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
     title: string;
   } | null>(null);
   const [bonus, setBonus] = useState<{ target: string; mult: number } | null>(null);
+  // Cuándo se lanzó el último asalto a cada territorio: el tiempo de espera empieza al lanzarlo, no al
+  // usar el bono, para que cerrar y volver a abrir el minijuego no sirva para repetirlo
+  const assaultedAt = useRef<Map<string, number>>(new Map());
   const cap = useGame((st) => recruitCap(st.s));
   const recruiting = useRef(false);
+  // Envío de reclutas que falló (día:cantidad): no se reintenta hasta que cambie
+  const recruitsFailed = useRef('');
 
   useEffect(() => watchWorld(week, w, setData, (e) => (console.warn(e), setError(true))), [week, w]);
   // Los contadores (recarga, escudos, fin de temporada) avanzan cada segundo
@@ -238,18 +244,27 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
     if (conquest.unread > 0) useGame.getState().readReports();
   }, [conquest.unread]);
 
-  // Reclutas ganados hoy jugando: se suman a la reserva al abrir la conquista
+  // Reclutas ganados hoy jugando: se suman a la reserva al abrir la conquista. Depende de los campos
+  // sueltos (no del objeto `mine`, que es nuevo en cada foto del mundo) para no repetirse en bucle.
+  const mineRDay = mine?.rDay;
+  const mineRToday = mine?.rToday;
   useEffect(() => {
-    if (!mine || recruiting.current) return;
+    const p = data?.players.find((x) => x.uid === me);
+    if (!p || recruiting.current) return;
     const day = dateKey(now());
-    const n = recruitsToSend(useGame.getState().s, mine, day);
+    const n = recruitsToSend(useGame.getState().s, p, day);
     if (n <= 0) return;
+    const key = `${day}:${n}`;
+    if (recruitsFailed.current === key) return;
     recruiting.current = true;
-    sendRecruits(week, w, mine, n, day, now())
+    sendRecruits(week, w, p, n, day, now())
       .then(() => useGame.getState().toast(`🎖️ +${n} reclutas para tu reserva`))
-      .catch((e) => console.warn('No se pudieron sumar los reclutas', e))
+      .catch((e) => {
+        recruitsFailed.current = key;
+        console.warn('No se pudieron sumar los reclutas', e);
+      })
       .finally(() => (recruiting.current = false));
-  }, [mine, conquest, week, w]);
+  }, [mineRDay, mineRToday, conquest.day, conquest.recruits, week, w]);
 
   const rows = useMemo(() => (data ? standings(data.tiles.values(), data.players) : []), [data]);
   // Cada rival, el color de su casilla; tú, siempre azul
@@ -311,7 +326,9 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   const tile = sel ? data.tiles.get(sel) : undefined;
   const ownerName = (uid: string) => data.players.find((p) => p.uid === uid)?.name ?? data.tiles.get(sel ?? '')?.name ?? '???';
   const nextMs = mine ? nextTroopMs(mine, t) : 0;
-  const assaultWait = mine ? assaultWaitMs(mine, t) : 0;
+  // Espera para otro asalto: la de la nube (último bono usado) o la local (último asalto lanzado a este territorio)
+  const localAssaultAt = sel ? (assaultedAt.current.get(sel) ?? 0) : 0;
+  const assaultWait = Math.max(mine ? assaultWaitMs(mine, t) : 0, localAssaultAt ? localAssaultAt + ASSAULT_COOLDOWN_MS - t : 0);
   const recruitsToday = mine && mine.rDay === dateKey(t) ? mine.rToday : 0;
   // Territorios que se pueden atacar ahora: los vecinos del origen elegido, o de cualquier territorio tuyo
   const near = new Set<string>();
@@ -334,6 +351,7 @@ function WorldBoard({ week, w, endsAt, onVisit }: { week: string; w: string; end
   const startAssault = () => {
     if (!sel || info?.kind !== 'attack') return;
     const who = tile ? ownerName(tile.owner) : sel === CENTER ? 'la Torre central' : 'los bandidos';
+    assaultedAt.current.set(sel, now());
     setAssault({
       target: sel,
       level: assaultLevel(info.need - 1),

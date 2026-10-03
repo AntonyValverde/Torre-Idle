@@ -78,7 +78,8 @@ export async function joinConquest(week: string, name: string): Promise<string> 
         if (members >= WORLD_MAX) continue;
         const base = ['conquest', week, 'worlds', w] as const;
         tx.set(doc(d, 'conquest', week, 'members', uid), { w });
-        tx.set(ref, { members: members + 1 });
+        // Un mundo nuevo (salvo w0) declara el anterior, que las reglas comprueban que está lleno
+        tx.set(ref, snap.exists() || i === 0 ? { members: members + 1 } : { members: 1, prev: `w${i - 1}` });
         tx.set(doc(d, ...base, 'players', uid), { name, slot: members, troops: START_TROOPS, t: serverTimestamp(), rDay: '', rToday: 0, last: '', sent: 0 });
         tx.set(doc(d, ...base, 'tiles', CAPITAL_SLOTS[members]), {
           owner: uid,
@@ -203,8 +204,8 @@ export async function attackFrom(
   // El origen baja (y dice a dónde mandó cuántos); el objetivo pasa a ser tuyo con lo que sobra
   b.update(doc(d, ...base, 'tiles', from), { name, g: left, t: serverTimestamp(), to: target, sent, from: '' });
   b.set(doc(d, ...base, 'tiles', target), { owner: uid, name, g, t: serverTimestamp(), ct: serverTimestamp(), capital: false, sent, p, from, to: '' });
-  // Con bono de asalto: queda apuntado (las reglas solo dejan uno cada 10 min)
-  if (p > sent) b.update(doc(d, ...base, 'players', uid), { aAt: serverTimestamp() });
+  // Con bono de asalto: queda apuntado con su objetivo (las reglas solo dejan uno cada 10 min y para ese territorio)
+  if (p > sent) b.update(doc(d, ...base, 'players', uid), { aAt: serverTimestamp(), aTo: target });
   // Parte de batalla para el alcalde que pierde el territorio (lo verá al volver)
   if (tile) b.set(doc(collection(d, ...base, 'players', tile.owner, 'reports')), { by: uid, name, tile: target, at: serverTimestamp() });
   await b.commit();

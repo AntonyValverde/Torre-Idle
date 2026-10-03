@@ -1,5 +1,6 @@
 import { hashString } from '../minigames/rng';
 import { advisorMult } from './advisors';
+import { isNewDay } from './clock';
 import { cupStart, cupWeekKey } from './cup';
 import { currentLaw, lawMult } from './laws';
 import type { GameState } from './state';
@@ -307,6 +308,8 @@ export interface ConquestState {
   /** Semana y mundo en que juega el alcalde (para los partes y el premio). */
   week: string | null;
   w: string | null;
+  /** Temporada anterior con el premio aún sin cobrar (se guarda al pasar a la nueva, hasta cobrarla). */
+  prev: { week: string; w: string } | null;
   /** Hora (del servidor) del último parte de batalla ya visto. */
   seenAt: number;
   /** Últimos partes de batalla. */
@@ -340,6 +343,7 @@ export function newConquest(): ConquestState {
     recruits: 0,
     week: null,
     w: null,
+    prev: null,
     seenAt: 0,
     reports: [],
     lost: 0,
@@ -372,6 +376,7 @@ export function conquestState(v: unknown): ConquestState {
     recruits: Math.min(RECRUITS_MAX, count(r.recruits)),
     week: text(r.week),
     w: text(r.w),
+    prev: r.prev && typeof r.prev === 'object' && typeof r.prev.week === 'string' && typeof r.prev.w === 'string' ? { week: r.prev.week, w: r.prev.w } : null,
     seenAt: count(r.seenAt),
     reports: Array.isArray(r.reports)
       ? r.reports
@@ -424,10 +429,30 @@ export function conquestAlert(s: GameState, ms: number, today: string): string |
   return null;
 }
 
-/** Apunta en qué semana y mundo juega el alcalde. */
+/**
+ * Apunta en qué semana y mundo juega el alcalde. Si la temporada que deja atrás aún no se cobró, la
+ * recuerda en `prev` para que las novedades cobren su premio (y lean sus últimos partes) más tarde.
+ */
 export function withWorld(s: GameState, week: string, w: string): GameState {
-  if (s.conquest.week === week && s.conquest.w === w) return s;
-  return { ...s, conquest: { ...s.conquest, week, w } };
+  const c = s.conquest;
+  if (c.week === week && c.w === w) return s;
+  const pending = c.week && c.w && c.week < week && c.claimed !== c.week;
+  const prev = pending ? { week: c.week as string, w: c.w as string } : c.prev;
+  return { ...s, conquest: { ...c, week, w, prev } };
+}
+
+/** Temporada que terminó sin cobrar (null si no hay): la recordada en `prev` o la actual si ya es vieja. */
+export function pendingSeason(c: ConquestState, week: string): { week: string; w: string } | null {
+  if (c.prev && c.claimed !== c.prev.week) return c.prev;
+  if (c.week && c.w && c.week < week && c.claimed !== c.week) return { week: c.week, w: c.w };
+  return null;
+}
+
+/** Da por cerrada una temporada sin premio (el alcalde no salió en la clasificación final). */
+export function withSeasonSkipped(s: GameState, week: string): GameState {
+  const c = s.conquest;
+  if (c.claimed === week && !c.prev) return s;
+  return { ...s, conquest: { ...c, claimed: week, prev: c.prev?.week === week ? null : c.prev } };
 }
 
 /** Guarda los partes de batalla nuevos. Devuelve también los recién llegados. */
@@ -465,6 +490,7 @@ export function applySeason(s: GameState, week: string, rank: number, size: numb
   const conquest: ConquestState = {
     ...c,
     claimed: week,
+    prev: c.prev?.week === week ? null : c.prev,
     wins: c.wins + (prize.win ? 1 : 0),
     podiums: c.podiums + (prize.podium ? 1 : 0),
     history: [...c.history, { week, rank, size, points, gems: prize.gems }].slice(-HISTORY_MAX),
@@ -484,10 +510,12 @@ export function recruitMult(s: GameState): number {
 
 /** Suma reclutas de hoy por jugar (con el multiplicador y el tope diario). */
 export function addRecruits(s: GameState, n: number, day: string): GameState {
-  const before = s.conquest.day === day ? s.conquest.recruits : 0;
+  // El contador solo vuelve a cero cuando el día avanza (un reloj atrasado no lo borra)
+  const fresh = isNewDay(s.conquest.day, day);
+  const before = fresh ? 0 : s.conquest.recruits;
   const recruits = Math.max(before, Math.min(recruitCap(s), before + Math.round(n * recruitMult(s))));
-  if (recruits === s.conquest.recruits && s.conquest.day === day) return s;
-  return { ...s, conquest: { ...s.conquest, day, recruits } };
+  if (recruits === s.conquest.recruits && !fresh) return s;
+  return { ...s, conquest: { ...s.conquest, day: fresh ? day : s.conquest.day, recruits } };
 }
 
 /** Reclutas ganados hoy que aún no están en la reserva de la nube. */

@@ -28,7 +28,9 @@ import {
   applySeason,
   conquestAlert,
   newConquest,
+  pendingSeason,
   withReserve,
+  withSeasonSkipped,
   seasonPrize,
   withWorld,
   banditGarrison,
@@ -202,6 +204,13 @@ describe('Conquista: reclutas en la partida', () => {
     expect(addRecruits(s, 3, '2026-10-03').conquest).toMatchObject({ day: '2026-10-03', recruits: 3 });
   });
 
+  it('un reloj atrasado (día anterior) no borra el contador de hoy', () => {
+    const s = addRecruits(newState(0), 10, '2026-10-03');
+    expect(addRecruits(s, 5, '2026-10-02').conquest).toMatchObject({ day: '2026-10-03', recruits: 15 });
+    // Y al avanzar el día sí empieza de cero
+    expect(addRecruits(s, 5, '2026-10-04').conquest).toMatchObject({ day: '2026-10-04', recruits: 5 });
+  });
+
   it('solo se envían los que aún no están en la reserva', () => {
     const s = addRecruits(newState(0), 10, '2026-10-02');
     expect(recruitsToSend(s, { rDay: '2026-10-02', rToday: 4 }, '2026-10-02')).toBe(6);
@@ -276,6 +285,40 @@ describe('Conquista: partes de batalla y premios', () => {
     expect(applySeason(s, '2026-09-28', 1, 4, 10)).toBeNull();
     expect(citySnapshot(s).conq).toBe(1);
     expect(citySnapshot(newState(0)).conq).toBeUndefined();
+  });
+
+  it('al pasar a la temporada nueva, la anterior sin cobrar se recuerda en prev', () => {
+    const old = withWorld(newState(0), '2026-09-21', 'w0');
+    const s = withWorld(old, '2026-09-28', 'w3');
+    expect(s.conquest).toMatchObject({ week: '2026-09-28', w: 'w3', prev: { week: '2026-09-21', w: 'w0' } });
+    expect(pendingSeason(s.conquest, '2026-09-28')).toEqual({ week: '2026-09-21', w: 'w0' });
+    // Sin apuntar aún la nueva, la pendiente es la semana actual (ya vieja)
+    expect(pendingSeason(old.conquest, '2026-09-28')).toEqual({ week: '2026-09-21', w: 'w0' });
+    expect(pendingSeason(old.conquest, '2026-09-21')).toBeNull();
+    // Cambiar de mundo dentro de la misma semana no apunta nada
+    expect(withWorld(old, '2026-09-21', 'w1').conquest.prev).toBeNull();
+  });
+
+  it('si la anterior ya se cobró, no se guarda en prev', () => {
+    let s = withWorld(newState(0), '2026-09-21', 'w0');
+    s = applySeason(s, '2026-09-21', 2, 4, 6)!.s;
+    s = withWorld(s, '2026-09-28', 'w3');
+    expect(s.conquest.prev).toBeNull();
+    expect(pendingSeason(s.conquest, '2026-09-28')).toBeNull();
+  });
+
+  it('cobrar (o cerrar sin premio) la temporada recordada borra prev', () => {
+    const s = withWorld(withWorld(newState(0), '2026-09-21', 'w0'), '2026-09-28', 'w3');
+    const paid = applySeason(s, '2026-09-21', 1, 4, 10)!.s;
+    expect(paid.conquest).toMatchObject({ claimed: '2026-09-21', prev: null, week: '2026-09-28', w: 'w3' });
+    expect(pendingSeason(paid.conquest, '2026-09-28')).toBeNull();
+    const skipped = withSeasonSkipped(s, '2026-09-21');
+    expect(skipped.conquest).toMatchObject({ claimed: '2026-09-21', prev: null, wins: 0, history: [] });
+    expect(skipped.gems).toBe(s.gems);
+    expect(pendingSeason(skipped.conquest, '2026-09-28')).toBeNull();
+    // prev se normaliza (vale null si falta o es raro)
+    expect(conquestState({ prev: { week: 5 } }).prev).toBeNull();
+    expect(conquestState({ prev: { week: '2026-09-21', w: 'w0' } }).prev).toEqual({ week: '2026-09-21', w: 'w0' });
   });
 });
 

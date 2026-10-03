@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties, type ComponentType } from 'react';
 import { track } from './firebase';
 import { completeGoogleRedirect, loadBestState, loadLocal, saveLocal, startAutoSave, syncRankingName } from './game/cloud';
 import { eraHue } from './game/economy';
@@ -28,27 +28,68 @@ import { TUTORIAL_DONE } from './game/tutorial';
 import { UpgradesTab } from './ui/UpgradesTab';
 import { useUpdate } from './ui/update';
 
+const RELOAD_KEY = 'torre-chunk-reload';
+
+/**
+ * Como lazy(), pero si el trozo no se descarga (red caída, versión nueva desplegada con otros nombres de fichero)
+ * reintenta al segundo y, si vuelve a fallar, recarga la página una sola vez (sessionStorage evita el bucle).
+ * Así el ticket ya gastado al abrir un arcade no se pierde en una pantalla en blanco.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyRetry<T extends { default: ComponentType<any> }>(load: () => Promise<T>) {
+  return lazy(() =>
+    load().catch(
+      () =>
+        new Promise<T>((resolve, reject) => {
+          setTimeout(() => {
+            load()
+              .then((m) => {
+                try {
+                  sessionStorage.removeItem(RELOAD_KEY);
+                } catch {
+                  /* sin almacenamiento */
+                }
+                resolve(m);
+              })
+              .catch((e: unknown) => {
+                let reloaded = false;
+                try {
+                  reloaded = sessionStorage.getItem(RELOAD_KEY) === '1';
+                  if (!reloaded) sessionStorage.setItem(RELOAD_KEY, '1');
+                } catch {
+                  /* sin almacenamiento: no se recarga, para no entrar en bucle */
+                  reloaded = true;
+                }
+                if (!reloaded) location.reload();
+                else reject(e);
+              });
+          }, 1000);
+        }),
+    ),
+  );
+}
+
 // El panel solo se descarga si lo abre el administrador
-const AdminPanel = lazy(() => import('./admin/AdminPanel'));
+const AdminPanel = lazyRetry(() => import('./admin/AdminPanel'));
 
 // Los minijuegos y la Copa se descargan al abrirlos por primera vez, así el arranque pesa menos.
 // La PWA los guarda igual con el resto de la versión, así que también funcionan sin conexión.
-const DailyScreen = lazy(() => import('./minigames/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
-const FireScreen = lazy(() => import('./minigames/fire/FireScreen').then((m) => ({ default: m.FireScreen })));
-const MemoryScreen = lazy(() => import('./minigames/memory/MemoryScreen').then((m) => ({ default: m.MemoryScreen })));
-const MergeScreen = lazy(() => import('./minigames/merge/MergeScreen').then((m) => ({ default: m.MergeScreen })));
-const MetroScreen = lazy(() => import('./minigames/metro/MetroScreen').then((m) => ({ default: m.MetroScreen })));
-const ParksScreen = lazy(() => import('./minigames/parks/ParksScreen').then((m) => ({ default: m.ParksScreen })));
-const RoadsScreen = lazy(() => import('./minigames/roads/RoadsScreen').then((m) => ({ default: m.RoadsScreen })));
-const StackScreen = lazy(() => import('./minigames/stack/StackScreen').then((m) => ({ default: m.StackScreen })));
-const StockScreen = lazy(() => import('./minigames/stocks/StockScreen').then((m) => ({ default: m.StockScreen })));
-const ThiefScreen = lazy(() => import('./minigames/thief/ThiefScreen').then((m) => ({ default: m.ThiefScreen })));
-const TrafficScreen = lazy(() => import('./minigames/traffic/TrafficScreen').then((m) => ({ default: m.TrafficScreen })));
-const WheelScreen = lazy(() => import('./minigames/wheel/WheelScreen').then((m) => ({ default: m.WheelScreen })));
-const CupScreen = lazy(() => import('./ui/cup/CupScreen').then((m) => ({ default: m.CupScreen })));
-const CasinoScreen = lazy(() => import('./minigames/casino/CasinoScreen').then((m) => ({ default: m.CasinoScreen })));
-const TowersScreen = lazy(() => import('./minigames/towers/TowersScreen').then((m) => ({ default: m.TowersScreen })));
-const WorldScreen = lazy(() => import('./ui/WorldMap').then((m) => ({ default: m.WorldScreen })));
+const DailyScreen = lazyRetry(() => import('./minigames/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
+const FireScreen = lazyRetry(() => import('./minigames/fire/FireScreen').then((m) => ({ default: m.FireScreen })));
+const MemoryScreen = lazyRetry(() => import('./minigames/memory/MemoryScreen').then((m) => ({ default: m.MemoryScreen })));
+const MergeScreen = lazyRetry(() => import('./minigames/merge/MergeScreen').then((m) => ({ default: m.MergeScreen })));
+const MetroScreen = lazyRetry(() => import('./minigames/metro/MetroScreen').then((m) => ({ default: m.MetroScreen })));
+const ParksScreen = lazyRetry(() => import('./minigames/parks/ParksScreen').then((m) => ({ default: m.ParksScreen })));
+const RoadsScreen = lazyRetry(() => import('./minigames/roads/RoadsScreen').then((m) => ({ default: m.RoadsScreen })));
+const StackScreen = lazyRetry(() => import('./minigames/stack/StackScreen').then((m) => ({ default: m.StackScreen })));
+const StockScreen = lazyRetry(() => import('./minigames/stocks/StockScreen').then((m) => ({ default: m.StockScreen })));
+const ThiefScreen = lazyRetry(() => import('./minigames/thief/ThiefScreen').then((m) => ({ default: m.ThiefScreen })));
+const TrafficScreen = lazyRetry(() => import('./minigames/traffic/TrafficScreen').then((m) => ({ default: m.TrafficScreen })));
+const WheelScreen = lazyRetry(() => import('./minigames/wheel/WheelScreen').then((m) => ({ default: m.WheelScreen })));
+const CupScreen = lazyRetry(() => import('./ui/cup/CupScreen').then((m) => ({ default: m.CupScreen })));
+const CasinoScreen = lazyRetry(() => import('./minigames/casino/CasinoScreen').then((m) => ({ default: m.CasinoScreen })));
+const TowersScreen = lazyRetry(() => import('./minigames/towers/TowersScreen').then((m) => ({ default: m.TowersScreen })));
+const WorldScreen = lazyRetry(() => import('./ui/WorldMap').then((m) => ({ default: m.WorldScreen })));
 
 const loading = (
   <div className="game-screen splash">
@@ -114,7 +155,12 @@ export default function App() {
     const lock = claimTab(() => {
       // Otra pestaña abrió el juego: guardamos y nos quedamos quietos
       lost = true;
-      if (useGame.getState().ready) saveLocal(useGame.getState().s);
+      if (useGame.getState().ready) {
+        // Solo si no pisamos una partida más avanzada ya guardada (p. ej. la otra pestaña llevaba tiempo jugando)
+        const cur = useGame.getState().s;
+        const disk = loadLocal();
+        if (!disk || (disk.allTimeEarned <= cur.allTimeEarned && disk.lastTick <= cur.lastTick)) saveLocal(cur);
+      }
       shutdown();
       setOtherTab(true);
     });

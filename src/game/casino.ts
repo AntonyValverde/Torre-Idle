@@ -5,7 +5,7 @@ import { cashMultAt, crashPoint, rocketAutoPay, rocketOver, ROCKET_MAX, type Roc
 import { isValidBet, rouletteWin, spinRoulette, totalStake } from '../minigames/casino/roulette';
 import { SCRATCH_PRICE, newTicket, type ScratchTicket } from '../minigames/casino/scratch';
 import { spinSlots } from '../minigames/casino/slots';
-import { dateKey } from './clock';
+import { dateKey, isNewDay } from './clock';
 import { randomCard, type CardId } from './cup';
 import { addBoost, productionPerSec } from './economy';
 import { lawMult } from './laws';
@@ -155,10 +155,10 @@ export function casinoOpen(s: GameState): boolean {
   return s.era >= CASINO_ERA;
 }
 
-/** Contadores del día al día de hoy. */
+/** Contadores del día al día de hoy. Solo se reinician si el día avanzó (no al retroceder el reloj o la zona horaria). */
 export function casinoToday(c: CasinoState, t: number): CasinoState {
   const today = dateKey(t);
-  return c.day === today ? c : { ...c, day: today, bonus: false, bought: 0, freeScratch: false };
+  return isNewDay(c.day, today) ? { ...c, day: today, bonus: false, bought: 0, freeScratch: false } : c;
 }
 
 export function vipIndex(c: CasinoState): number {
@@ -372,8 +372,16 @@ export function buyShopItem(s: GameState, id: ShopId, t: number, rand: () => num
   let card: CardId | undefined;
   switch (id) {
     case 'fiesta':
-      // Varias fiestas seguidas se suman, hasta 3 minutos
-      next = { ...next, tapBoostMult: 7, tapBoostUntil: Math.min(t + 180_000, Math.max(next.tapBoostUntil, t) + 60_000) };
+      {
+        // Varias fiestas seguidas se suman, hasta 3 minutos; una fiesta más larga ya activa (decreto, rueda) no se acorta
+        // ni pierde su multiplicador si era mayor
+        const active = next.tapBoostUntil > t;
+        next = {
+          ...next,
+          tapBoostMult: active ? Math.max(next.tapBoostMult, 7) : 7,
+          tapBoostUntil: Math.max(next.tapBoostUntil, Math.min(t + 180_000, Math.max(next.tapBoostUntil, t) + 60_000)),
+        };
+      }
       break;
     case 'ticket':
       next = { ...next, tickets: next.tickets + 1 };

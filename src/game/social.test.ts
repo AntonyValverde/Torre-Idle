@@ -42,6 +42,19 @@ describe('regalos enviados', () => {
     s = applyGiftSent(s, 'bob', D2);
     expect(s.social.sent).toEqual(['bob']);
   });
+
+  it('si el día retrocede (zona horaria o reloj), los contadores de hoy no se reinician', () => {
+    let s = base();
+    for (const u of ['c1', 'c2', 'c3', 'c4', 'c5']) s = applyGiftSent(s, u, D2);
+    expect(giftsLeft(s, D2)).toBe(0);
+    // "Ayer" según el reloj cambiado: siguen contando los cinco regalos de hoy
+    expect(giftsLeft(s, D1)).toBe(0);
+    expect(giftBlock(s, 'c1', D1, 'me')).toContain('Ya le dejaste');
+    expect(applyGiftSent(s, 'c9', D1)).toBe(s);
+    const r = applyGiftsReceived({ ...s, social: { ...s.social, ticketsToday: GIFT_TICKETS_PER_DAY } }, [gift('z', 5000)], D1);
+    expect(r.tickets).toBe(0);
+    expect(r.s.social.day).toBe(D2);
+  });
 });
 
 describe('regalos recibidos', () => {

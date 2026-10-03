@@ -30,7 +30,16 @@ import { auth, db } from '../firebase';
 import { citySnapshot, parseCups, parseLayout, type CitySnapshot } from './cities';
 import { dateKey, now, resyncFromDevice, setServerTime, weekKey } from './clock';
 import { cupWeekKey } from './cup';
-import { addPendingDaily, clampDailyMoves, isArcadeBoard, livePendingDaily, markSubmitted, nextResend, removePendingDaily } from './pending';
+import {
+  addPendingDaily,
+  clampDailyMoves,
+  clampScore,
+  isArcadeBoard,
+  livePendingDaily,
+  markSubmitted,
+  nextResend,
+  removePendingDaily,
+} from './pending';
 import { newState, normalize, type GameState } from './state';
 import type { GiftIn } from './social';
 import { useGame } from './store';
@@ -236,10 +245,14 @@ export async function loadBestState(local: GameState | null): Promise<GameState>
   return best;
 }
 
-/** Como loadBestState, pero también devuelve la partida de la nube (null si no hay o no se pudo leer). */
-async function pickBest(local: GameState | null): Promise<{ best: GameState | null; cloud: GameState | null }> {
+/**
+ * Como loadBestState, pero también devuelve la partida de la nube (null si no hay) y si la lectura llegó a hacerse:
+ * `readOk` false distingue "sin conexión" de "la cuenta no tiene partida".
+ */
+async function pickBest(local: GameState | null): Promise<{ best: GameState | null; cloud: GameState | null; readOk: boolean }> {
   let best = local;
   let cloudState: GameState | null = null;
+  let readOk = false;
   try {
     const cloud = await withTimeout(fetchCloud(), 7000);
     if (cloud) {
@@ -247,11 +260,12 @@ async function pickBest(local: GameState | null): Promise<{ best: GameState | nu
       cloudState = cloud.state;
       if (cloud.state && (!best || cloud.state.allTimeEarned > best.allTimeEarned)) best = cloud.state;
       cloudRead = true;
+      readOk = true;
     }
   } catch (e) {
     console.warn('Sin conexión con Firebase, usando partida local', e);
   }
-  return { best, cloud: cloudState };
+  return { best, cloud: cloudState, readOk };
 }
 
 /** Reintenta leer la nube (tras un arranque sin conexión) y carga esa partida si va más avanzada. */
@@ -355,6 +369,17 @@ async function resolveConflict(uid: string) {
   }
 }
 
+/** Olvida lo que el guardado automático en marcha ya subió (se fija al arrancarlo). */
+let autoSaveReset: () => void = () => {};
+
+/**
+ * Al cambiar de cuenta: lo que ya se subió (liga, ciudad pública, marca de la ciudad) se subió con el uid
+ * anterior, así que con la cuenta nueva hay que volver a subirlo.
+ */
+export function resetAutoSaveState() {
+  autoSaveReset();
+}
+
 /** Guardado automático: local cada 5 s, nube cada 60 s y al minimizar la app. */
 export function startAutoSave(): () => void {
   let lastCloud = Date.now();
@@ -364,6 +389,11 @@ export function startAutoSave(): () => void {
   let leagueSent = '';
   let lastCityDoc = 0;
   let citySent = '';
+  autoSaveReset = () => {
+    lastCityScore = 0;
+    leagueSent = '';
+    citySent = '';
+  };
 
   const flush = () => {
     const s = useGame.getState().s;
@@ -418,6 +448,7 @@ export function startAutoSave(): () => void {
 
   return () => {
     clearInterval(timer);
+    autoSaveReset = () => {};
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('pagehide', onHide);
   };
@@ -476,7 +507,8 @@ const lastScoreWrite = new Map<string, number>();
 export async function submitScore(board: Board, score: number, name: string) {
   const uid = currentUid();
   if (!uid || !db || !(score >= 0)) return;
-  const n = Math.floor(score);
+  // Sin pasar del tope de las reglas: si no, rechazarían la marca y quedaría apuntada como subida sin estarlo
+  const n = clampScore(board, score);
   const arcade = isArcadeBoard(board);
   cache.delete(board);
   scoresInFlight.add(board);
@@ -882,7 +914,12 @@ async function switchToExistingAccount(e: unknown): Promise<'switched'> {
     // La del invitado se guarda siempre: si gana la de la nube (o la nube rechaza luego el guardado), es la que se pierde
     keepReplaced(local);
     await signInWithCredential(auth, cred);
+    // Cuenta nueva: lo leído de la nube era de la otra. Hasta volver a leer, saveCloud se pone al día antes de subir.
+    cloudRead = false;
+    resetAutoSaveState();
     const picked = await pickBest(local);
+    // Sin leer la nube no se sabe qué partida tiene la cuenta: no se sobrescribe nada
+    if (!picked.readOk) throw new Error('Sin conexión: inténtalo de nuevo');
     best = picked.best ?? local;
     // Si gana la del invitado, la que se sobrescribe es la que ya tenía la cuenta de Google
     if (best === local && picked.cloud) keepReplaced(picked.cloud);
@@ -893,7 +930,8 @@ async function switchToExistingAccount(e: unknown): Promise<'switched'> {
   } finally {
     switching = false;
   }
-  await saveCloud(useGame.getState().s);
+  // Si falla, el guardado automático lo reintenta: el cambio de cuenta ya está hecho
+  await saveCloud(useGame.getState().s).catch(() => {});
   cache.clear();
   return 'switched';
 }

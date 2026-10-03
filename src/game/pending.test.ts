@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   ARCADE_BOARDS,
+  BOARD_CAP,
   addPendingDaily,
   clampDailyMoves,
+  clampScore,
   livePendingDaily,
   markSubmitted,
   nextResend,
@@ -39,6 +41,17 @@ describe('récords pendientes de subir', () => {
   it('se salta los rankings que ya se están subiendo', () => {
     const s = state({ stackBest: 5, thiefBest: 30 });
     expect(nextResend(s, (b) => b === 'stack')).toEqual({ board: 'thief', score: 30 });
+  });
+
+  it('las marcas se recortan al tope que aceptan las reglas de cada ranking', () => {
+    expect(clampScore('metro', 7000)).toBe(5000);
+    expect(clampScore('fire', 5000.9)).toBe(5000);
+    expect(clampScore('memory', 42)).toBe(42);
+    expect(clampScore('stack', -3)).toBe(0);
+    expect(clampScore('merge', 1e9)).toBe(4_000_000);
+    expect(clampScore('stars', 2e9)).toBe(1e9);
+    expect(clampScore('city', 1e15)).toBe(1e15);
+    for (const b of ARCADE_BOARDS) expect(Number.isFinite(BOARD_CAP[b])).toBe(true);
   });
 
   it('lo ya subido nunca baja', () => {

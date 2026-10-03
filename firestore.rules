@@ -216,7 +216,8 @@ service cloud.firestore {
 
       allow read: if isOwner(toUid) || isAdmin();
       allow create: if isOwner(fromUid) && validGift();
-      allow update: if isOwner(fromUid) && validGift() && incoming().day != resource.data.day;
+      // Solo se renueva en un día posterior: alternar hoy/mañana no vale para regalar dos veces
+      allow update: if isOwner(fromUid) && validGift() && incoming().day > resource.data.day;
       allow delete: if isOwner(toUid) || isAdmin();
     }
 
@@ -413,12 +414,23 @@ service cloud.firestore {
           && getAfter(conqDoc(week, w, 'players', request.auth.uid)).data.slot == count;
       }
 
+      // Un mundo nuevo solo se abre cuando el anterior (`prev`, que viene en el documento) está lleno:
+      // w0 no necesita anterior; w{n} exige que w{n-1} exista con 16 alcaldes
+      function prevFull(prev) {
+        return prev is string && prev.matches('^w[0-9]{1,3}$')
+          && w == 'w' + string(int(prev[1:prev.size()]) + 1)
+          && get(/databases/$(database)/documents/conquest/$(week)/worlds/$(prev)).data.members >= 16;
+      }
+
       allow read: if true;
       allow create: if conqOpen(week) && w.matches('^w[0-9]{1,3}$')
-        && incoming().keys().hasOnly(['members']) && incoming().members == 1
+        && incoming().members == 1
+        && ((w == 'w0' && incoming().keys().hasOnly(['members']))
+          || (incoming().keys().hasOnly(['members', 'prev']) && prevFull(incoming().prev)))
         && joining(0);
       allow update: if conqOpen(week)
-        && incoming().keys().hasOnly(['members'])
+        && incoming().keys().hasOnly(['members', 'prev'])
+        && (!('prev' in incoming()) || incoming().prev == resource.data.get('prev', null))
         && incoming().members == resource.data.members + 1 && incoming().members <= 16
         && joining(resource.data.members);
       allow delete: if isAdmin();
@@ -426,13 +438,14 @@ service cloud.firestore {
 
     match /conquest/{week}/worlds/{w}/players/{uid} {
       function shape(d) {
-        return d.keys().hasOnly(['name', 'slot', 'troops', 't', 'rDay', 'rToday', 'last', 'sent', 'aAt'])
+        return d.keys().hasOnly(['name', 'slot', 'troops', 't', 'rDay', 'rToday', 'last', 'sent', 'aAt', 'aTo'])
           && d.keys().hasAll(['name', 'slot', 'troops', 't', 'rDay', 'rToday', 'last', 'sent'])
           && validName(d.name)
           && d.troops is number && d.troops >= 0 && d.troops <= 200
           && d.rToday is int && d.rToday >= 0 && d.rToday <= 45
           && d.sent is int && d.last is string && d.rDay is string
-          && (!('aAt' in d) || d.aAt is timestamp);
+          && (!('aAt' in d) || d.aAt is timestamp)
+          && (!('aTo' in d) || d.aTo is string);
       }
 
       function joined() {
@@ -440,7 +453,7 @@ service cloud.firestore {
         return d.slot is int && d.slot >= 0 && d.slot < 16
           && d.slot == getAfter(/databases/$(database)/documents/conquest/$(week)/worlds/$(w)).data.members - 1
           && d.troops == 20 && d.t == request.time
-          && d.rDay == '' && d.rToday == 0 && d.last == '' && d.sent == 0 && !('aAt' in d)
+          && d.rDay == '' && d.rToday == 0 && d.last == '' && d.sent == 0 && !('aAt' in d) && !('aTo' in d)
           && getAfter(/databases/$(database)/documents/conquest/$(week)/members/$(uid)).data.w == w
           && getAfter(conqDoc(week, w, 'tiles', conqSlots()[d.slot])).data.owner == uid;
       }
@@ -454,11 +467,13 @@ service cloud.firestore {
           && conqTroopsFit(old, d.troops + d.sent);
       }
 
-      // Ataque con bono de asalto: solo cambia `aAt`, y como mucho uno cada 10 min (el territorio lo comprueba)
+      // Ataque con bono de asalto: solo cambian `aAt` y `aTo` (el territorio atacado, para que un bono valga
+      // para una sola conquista del lote), y como mucho uno cada 10 min (el territorio lo comprueba)
       function assault() {
         let old = resource.data;
-        return onlyChanged(['aAt'])
+        return onlyChanged(['aAt', 'aTo'])
           && incoming().aAt == request.time
+          && 'aTo' in incoming() && conqTile(incoming().aTo)
           && (!('aAt' in old) || request.time > old.aAt + duration.value(10, 'm'));
       }
 
@@ -477,7 +492,9 @@ service cloud.firestore {
       allow update: if isOwner(uid) && conqOpen(week) && shape(incoming())
         && incoming().slot == resource.data.slot
         && (assault()
-          || (incoming().get('aAt', null) == resource.data.get('aAt', null) && (sends() || recruits() || onlyChanged(['name']))));
+          || (incoming().get('aAt', null) == resource.data.get('aAt', null)
+            && incoming().get('aTo', null) == resource.data.get('aTo', null)
+            && (sends() || recruits() || onlyChanged(['name']))));
       allow delete: if isAdmin();
     }
 
@@ -506,11 +523,12 @@ service cloud.firestore {
       }
 
       // Fuerza del ataque: los soldados enviados, o hasta x1,5 con un bono de asalto apuntado en este lote
+      // y dirigido a este territorio (`aTo`): un bono no sirve para varias conquistas del mismo lote
       function power() {
         let d = incoming();
         let p = d.get('p', d.sent);
         return p >= d.sent && p * 2 <= d.sent * 3
-          && (p == d.sent || me().get('aAt', null) == request.time);
+          && (p == d.sent || (me().get('aAt', null) == request.time && me().get('aTo', '') == tid));
       }
 
       // Ataque: los soldados salen en este mismo lote de un territorio propio vecino (`from`), que baja

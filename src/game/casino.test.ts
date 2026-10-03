@@ -17,6 +17,7 @@ import {
   buyPacks,
   buyScratch,
   buyShopItem,
+  casinoToday,
   cashRocket,
   claimBonus,
   claimWelcome,
@@ -24,6 +25,7 @@ import {
   launchRocket,
   maxBet,
   packPrice,
+  packsLeft,
   playRoulette,
   playSlots,
   settleRocket,
@@ -143,6 +145,12 @@ describe('fichas', () => {
     expect(b.chips).toBe(100);
     expect(claimBonus(b.s, T + 1000)).toBeNull();
     expect(claimBonus(b.s, T + DAY)).not.toBeNull();
+    // Retroceder el reloj a "ayer" no devuelve el bono ni las compras del día
+    expect(claimBonus(b.s, T - DAY)).toBeNull();
+    const bought = buyPacks({ ...b.s, coins: 1e12 }, T, 999)!.s;
+    expect(packsLeft(bought, T - DAY)).toBe(0);
+    expect(casinoToday(bought.casino, T - DAY)).toBe(bought.casino);
+    expect(casinoToday(bought.casino, T + DAY).bought).toBe(0);
   });
 
   it('comprar fichas gasta monedas sin tocar lo ganado (estrellas y ranking) y tiene tope diario', () => {
@@ -297,7 +305,18 @@ describe('tienda y guardado', () => {
       if (item.id === 'ticket') expect(r.s.tickets).toBe(s.tickets + 1);
       if (item.id === 'gems') expect(r.s.gems).toBe(s.gems + 5);
       if (item.id === 'boost') expect(r.s.boosts.some((b) => b.k === 'casino' && b.m === 2)).toBe(true);
-      if (item.id === 'fiesta') expect(r.s.tapBoostUntil).toBe(T + 60_000);
+      if (item.id === 'fiesta') {
+        expect(r.s.tapBoostUntil).toBe(T + 60_000);
+        expect(r.s.tapBoostMult).toBe(7);
+        // Una fiesta más larga y más fuerte ya activa (decreto con Fiestero) no se acorta ni pierde fuerza
+        const big = buyShopItem({ ...s, tapBoostMult: 10, tapBoostUntil: T + 200_000 }, 'fiesta', T, Math.random)!.s;
+        expect(big.tapBoostUntil).toBe(T + 200_000);
+        expect(big.tapBoostMult).toBe(10);
+        // Una fiesta caducada no cuenta: empieza una nueva normal
+        const old = buyShopItem({ ...s, tapBoostMult: 10, tapBoostUntil: T - 1 }, 'fiesta', T, Math.random)!.s;
+        expect(old.tapBoostUntil).toBe(T + 60_000);
+        expect(old.tapBoostMult).toBe(7);
+      }
       if (item.id === 'card') expect(Object.values(r.s.cup.cards).reduce((a, b) => a + b, 0)).toBe(1);
       expect(buyShopItem(player(item.price - 1), item.id, T, Math.random)).toBeNull();
     }

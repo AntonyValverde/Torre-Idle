@@ -118,6 +118,15 @@ export function ConquestBoard({
   // Destello cuando un territorio cambia de dueño (lo veas tú o llegue de otro alcalde)
   const prev = useRef<Map<string, string> | null>(null);
   const [bursts, setBursts] = useState<Burst[]>([]);
+  // Temporizadores de los destellos en marcha: solo se cancelan al desmontar (cada tanda tiene el suyo)
+  const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const id of pending) clearTimeout(id);
+      pending.clear();
+    };
+  }, []);
   useEffect(() => {
     const now = new Map([...tiles].map(([id, x]) => [id, x.owner]));
     const before = prev.current;
@@ -128,8 +137,11 @@ export function ConquestBoard({
     if (!fresh.length) return;
     setBursts((b) => [...b, ...fresh]);
     const keys = new Set(fresh.map((f) => f.key));
-    const timer = setTimeout(() => setBursts((b) => b.filter((x) => !keys.has(x.key))), 1300);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
+      setBursts((b) => b.filter((x) => !keys.has(x.key)));
+    }, 1300);
+    timers.current.add(timer);
   }, [tiles, hueOf]);
 
   const owned = (id: string) => tiles.get(id);
