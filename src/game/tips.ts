@@ -173,6 +173,14 @@ export const TIPS: TipDef[] = [
     feature: 'profile',
   },
   {
+    id: 'install',
+    emoji: '📲',
+    title: 'Juega desde la app',
+    text: 'Puedes tener la ciudad como una app más del móvil, sin pasar por ninguna tienda: en 🏅 Logros → 👤 Perfil toca 📲 Instalar la app. En iPhone se hace desde Safari: Compartir → «Añadir a pantalla de inicio». Si juegas como invitado, vincula antes tu cuenta con Google para no perder la ciudad por el camino.',
+    place: 'guide',
+    feature: 'profile',
+  },
+  {
     id: 'law',
     emoji: '⚖️',
     title: 'Leyes de era',

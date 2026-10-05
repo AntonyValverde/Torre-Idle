@@ -5,8 +5,11 @@ import App from './App';
 import { saveLocal } from './game/cloud';
 import { useGame } from './game/store';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { listenInstall } from './ui/install';
 import { useUpdate } from './ui/update';
 import './styles.css';
+
+listenInstall();
 
 const updateSW = registerSW({
   immediate: true,

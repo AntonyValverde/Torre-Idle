@@ -11,6 +11,7 @@ import { isSoundOn, setSoundOn } from './haptics';
 import { isMusicOn, musicVolume, nowPlaying, setMusicOn, setMusicVolume } from './music/engine';
 import { SuggestionBox } from './SuggestionBox';
 import { GiftsCard } from './Gifts';
+import { InstallCard } from './InstallCard';
 import { PassCard } from './PassCard';
 import { ClaraTip, GuideCard } from './ClaraTip';
 import { currentStep } from '../game/tutorial';
@@ -134,6 +135,8 @@ function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: 
           </>
         )}
       </div>
+
+      <InstallCard guest={cloudEnabled && !google} />
 
       {cloudEnabled && account && (
         <div className="card">
