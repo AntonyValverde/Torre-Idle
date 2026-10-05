@@ -10,6 +10,10 @@ import { MetroGame } from '../../minigames/metro/MetroGame';
 import { StackGame } from '../../minigames/stack/StackGame';
 import { ThiefGame } from '../../minigames/thief/ThiefScreen';
 import { TrafficGame } from '../../minigames/traffic/TrafficGame';
+import { ArtilleryGameView } from '../../minigames/artillery/ArtilleryScreen';
+import { DuelGameView } from '../../minigames/duel/DuelScreen';
+import { FlakGameView } from '../../minigames/flak/FlakScreen';
+import { LanesGameView } from '../../minigames/lanes/LanesScreen';
 import { celebrate } from '../celebrate';
 import { sfx } from '../haptics';
 import { GameScreen, Modal } from '../Modal';
@@ -25,6 +29,10 @@ const GAMES: Record<CupGame, (p: Props) => ReactElement> = {
   metro: (p) => <MetroGame onGameOver={p.onOver} onScore={p.onScore} />,
   traffic: (p) => <TrafficGame onGameOver={p.onOver} onScore={p.onScore} />,
   stack: (p) => <StackGame onGameOver={p.onOver} onScore={p.onScore} />,
+  flak: (p) => <FlakGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
+  artillery: (p) => <ArtilleryGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
+  lanes: (p) => <LanesGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
+  duel: (p) => <DuelGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
 };
 
 /**

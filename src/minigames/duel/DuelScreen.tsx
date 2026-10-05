@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { fetchDuelRivals } from '../../game/cloud';
+import { useGame } from '../../game/store';
 import { celebrate } from '../../ui/celebrate';
 import { sfx, tone, vibrate } from '../../ui/haptics';
 import { WarScreen, type WarSummary, type WarViewProps } from '../war/WarScreen';
 import {
   BANNERS,
   BEATS,
-  GENERALS,
   ROUNDS,
   UNITS,
   UNIT_INFO,
   battlePoints,
+  generalInfo,
   newDuel,
   nextBattle,
   play,
@@ -53,6 +55,19 @@ export function DuelGameView({ onOver, onScore }: WarViewProps) {
   });
   const redraw = () => setFrame((f) => f + 1);
 
+  // Alcaldes de verdad para las batallas avanzadas (si no hay conexión, solo salen los inventados)
+  useEffect(() => {
+    let alive = true;
+    fetchDuelRivals()
+      .then((r) => {
+        if (alive) game.current.rivals = r;
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Al perder el último estandarte, se enseña la derrota un momento y se cobra
   const g = game.current;
   useEffect(() => {
@@ -72,6 +87,7 @@ export function DuelGameView({ onOver, onScore }: WarViewProps) {
     if (busyUntil) return;
     const r = play(game.current, u, Math.random);
     if (!r) return;
+    useGame.getState().noteDuelPick(u);
     const res = r.round.result;
     if (res === 'win') {
       tone(880, 0.08, 'triangle', 0.05);
@@ -97,7 +113,7 @@ export function DuelGameView({ onOver, onScore }: WarViewProps) {
     redraw();
   };
 
-  const general = GENERALS[g.general];
+  const general = generalInfo(g);
   const last = g.rounds[g.rounds.length - 1];
   const { won, lost } = tally(g);
 

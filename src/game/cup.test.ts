@@ -20,6 +20,8 @@ import {
   trainingCost,
   type CardId,
   cupEvents,
+  cupGamesFor,
+  WAR_CUP_WEEK,
   cupPhase,
   cupRewards,
   cupStart,
@@ -75,6 +77,18 @@ describe('calendario de la Copa', () => {
     expect(new Set(Object.values(a)).size).toBe(4);
     const weeks = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].map((w) => JSON.stringify(cupEvents(w)));
     expect(new Set(weeks).size).toBeGreaterThan(1);
+  });
+
+  it('los juegos de guerra solo entran desde su semana y no cambian las Copas anteriores', () => {
+    const classic = ['thief', 'fire', 'metro', 'traffic', 'memory', 'stack'];
+    // Esta semana (ya anunciada) y las anteriores: las mismas pruebas que antes de añadirlos
+    expect(cupEvents('2026-10-05')).toEqual({ g1: 'memory', g2: 'stack', g3: 'fire', f: 'thief' });
+    for (const w of ['2026-09-28', '2026-10-05']) expect(Object.values(cupEvents(w)).every((g) => classic.includes(g))).toBe(true);
+    expect(cupGamesFor('2026-10-05')).toHaveLength(6);
+    expect(cupGamesFor(WAR_CUP_WEEK)).toHaveLength(10);
+    // Desde entonces, a veces sale alguno
+    const later = Array.from({ length: 20 }, (_, i) => Object.values(cupEvents(cupWeekKey(cupStart(WAR_CUP_WEEK) + i * 7 * 86_400_000)))).flat();
+    expect(later.some((g) => !classic.includes(g))).toBe(true);
   });
 
   it('nivel según las monedas ganadas', () => {

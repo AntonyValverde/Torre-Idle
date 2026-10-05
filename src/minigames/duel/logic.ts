@@ -2,7 +2,9 @@
 // arqueros a la caballería y la caballería a la infantería. Cada batalla son 5 rondas: los dos bandos
 // tienen 5 unidades (a la vista del otro) y en cada ronda sacan una a la vez. Cada general rival tiene
 // su manía, que se anuncia antes de empezar: leerla es la gracia. Ganar la batalla trae a otro general
-// más listo; perder cuesta un estandarte y con tres perdidos se acaba la campaña.
+// más listo; perder cuesta un estandarte y con tres perdidos se acaba la campaña. Desde la séptima
+// batalla pueden salir alcaldes de verdad: juegan con el estilo que publicó su ciudad (qué unidades
+// sacan más a menudo en sus duelos), sin que tengan que estar conectados.
 
 export type Unit = 'inf' | 'arc' | 'cav';
 export const UNITS: Unit[] = ['inf', 'arc', 'cav'];
@@ -25,7 +27,42 @@ export const ROUND_POINTS = 1;
 
 export type Hand = Record<Unit, number>;
 
-export type Personality = 'bravo' | 'muro' | 'arquera' | 'zorro' | 'espejo' | 'calculo';
+export type Personality = 'bravo' | 'muro' | 'arquera' | 'zorro' | 'espejo' | 'calculo' | 'rival';
+
+/** Estilo de un general: qué parte de las veces saca cada unidad (suma 1). */
+export type Style = Record<Unit, number>;
+
+/** Un alcalde de verdad contra el que se puede batallar. */
+export interface Rival {
+  name: string;
+  style: Style;
+}
+
+/** Unidades sacadas antes de publicar un estilo (con menos no dice nada del jugador). */
+export const STYLE_MIN_PICKS = 10;
+/** Probabilidad de que un veterano sea un alcalde de verdad (si hay alguno). */
+export const RIVAL_CHANCE = 0.5;
+
+/** Estilo público ("40-35-25": % de infantería, arqueros y caballería), o null si aún jugó poco. */
+export function styleString(picks: Hand): string | null {
+  const n = handSize(picks);
+  if (n < STYLE_MIN_PICKS) return null;
+  return UNITS.map((u) => Math.round((picks[u] / n) * 100)).join('-');
+}
+
+/** Lee un estilo publicado; null si no es válido. */
+export function parseStyle(v: unknown): Style | null {
+  if (typeof v !== 'string' || !/^[0-9]{1,3}-[0-9]{1,3}-[0-9]{1,3}$/.test(v)) return null;
+  const [inf, arc, cav] = v.split('-').map(Number);
+  const n = inf + arc + cav;
+  if (inf > 100 || arc > 100 || cav > 100 || n <= 0) return null;
+  return { inf: inf / n, arc: arc / n, cav: cav / n };
+}
+
+/** Lo que más saca un estilo, para el aviso ("🐎 45 %"). */
+export function styleTell(s: Style): string {
+  return `Alcalde de verdad. Suele sacar: ${UNITS.map((u) => `${UNIT_INFO[u].emoji} ${Math.round(s[u] * 100)} %`).join(' · ')}`;
+}
 
 export const GENERALS: Record<Personality, { name: string; emoji: string; tell: string }> = {
   bravo: { name: 'General Bravo', emoji: '🤠', tell: 'Le encanta cargar con la caballería.' },
@@ -34,6 +71,7 @@ export const GENERALS: Record<Personality, { name: string; emoji: string; tell: 
   zorro: { name: 'El Zorro', emoji: '🦊', tell: 'Cree que repetirás y saca lo que gana a tu última unidad.' },
   espejo: { name: 'Generala Espejo', emoji: '🪞', tell: 'Suele copiar la unidad que acabas de usar.' },
   calculo: { name: 'Mariscal Ábaco', emoji: '🧮', tell: 'Cuenta tus tropas y juega lo que más le conviene.' },
+  rival: { name: 'Alcalde', emoji: '🏙️', tell: 'Juega como un alcalde de verdad.' },
 };
 
 /** Orden de los primeros rivales; después se repiten al azar y con más mano izquierda. */
@@ -55,6 +93,10 @@ export interface Round {
 export interface DuelGame {
   battle: number;
   general: Personality;
+  /** El alcalde de verdad de esta batalla (solo con general 'rival'). */
+  rival: Rival | null;
+  /** Alcaldes que pueden salir como veteranos (se cargan de la nube al empezar). */
+  rivals: Rival[];
   mine: Hand;
   theirs: Hand;
   rounds: Round[];
@@ -90,12 +132,24 @@ export function battlePoints(battle: number): number {
   return 3 + Math.min(battle, 10);
 }
 
-export function newBattle(battle: number, rand: () => number): Pick<DuelGame, 'battle' | 'general' | 'mine' | 'theirs' | 'rounds' | 'result'> {
-  return { battle, general: generalFor(battle, rand), mine: randomHand(rand), theirs: randomHand(rand), rounds: [], result: null };
+export function newBattle(
+  battle: number,
+  rand: () => number,
+  rivals: Rival[] = [],
+): Pick<DuelGame, 'battle' | 'general' | 'rival' | 'mine' | 'theirs' | 'rounds' | 'result'> {
+  const veteran = battle > ORDER.length && rivals.length > 0 && rand() < RIVAL_CHANCE;
+  const rival = veteran ? rivals[Math.floor(rand() * rivals.length)] : null;
+  return { battle, general: rival ? 'rival' : generalFor(battle, rand), rival, mine: randomHand(rand), theirs: randomHand(rand), rounds: [], result: null };
 }
 
 export function newDuel(rand: () => number): DuelGame {
-  return { ...newBattle(1, rand), banners: BANNERS, score: 0, battlesWon: 0, roundsWon: 0, over: false };
+  return { ...newBattle(1, rand), rivals: [], banners: BANNERS, score: 0, battlesWon: 0, roundsWon: 0, over: false };
+}
+
+/** Nombre, cara y manía del general de la batalla actual. */
+export function generalInfo(g: Pick<DuelGame, 'general' | 'rival'>): { name: string; emoji: string; tell: string } {
+  if (g.general === 'rival' && g.rival) return { name: g.rival.name, emoji: GENERALS.rival.emoji, tell: styleTell(g.rival.style) };
+  return GENERALS[g.general];
 }
 
 /**
@@ -108,7 +162,7 @@ export function focus(battle: number): number {
 }
 
 /** Pesos con los que el general rival elige cada unidad que le queda. */
-export function weights(g: Pick<DuelGame, 'general' | 'mine' | 'theirs' | 'rounds' | 'battle'>): Record<Unit, number> {
+export function weights(g: Pick<DuelGame, 'general' | 'rival' | 'mine' | 'theirs' | 'rounds' | 'battle'>): Record<Unit, number> {
   const w: Record<Unit, number> = { inf: 0, arc: 0, cav: 0 };
   const last = g.rounds.length ? g.rounds[g.rounds.length - 1].mine : null;
   const f = focus(g.battle);
@@ -131,6 +185,10 @@ export function weights(g: Pick<DuelGame, 'general' | 'mine' | 'theirs' | 'round
         break;
       case 'espejo':
         if (last && u === last) x *= f;
+        break;
+      case 'rival':
+        // Saca cada unidad tanto más cuanto más la usa ese alcalde en sus duelos
+        if (g.rival) x *= 1 + g.rival.style[u] * f * 1.5;
         break;
       case 'calculo': {
         // Valor esperado contra lo que te queda (como si sacaras al azar)
@@ -198,7 +256,7 @@ export function play(g: DuelGame, mine: Unit, rand: () => number): PlayResult | 
 /** Pasa a la siguiente batalla (tras ganar o empatar se cambia de general; tras perder, también). */
 export function nextBattle(g: DuelGame, rand: () => number) {
   if (g.over || !g.result) return;
-  Object.assign(g, newBattle(g.battle + 1, rand));
+  Object.assign(g, newBattle(g.battle + 1, rand, g.rivals));
 }
 
 export function tally(g: Pick<DuelGame, 'rounds'>): { won: number; lost: number } {

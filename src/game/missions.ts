@@ -29,7 +29,11 @@ export type MissionEvent =
   | 'stack'
   | 'thief'
   | 'memory'
-  | 'merge';
+  | 'merge'
+  | 'flak'
+  | 'artillery'
+  | 'lanes'
+  | 'duel';
 
 export interface MissionDef {
   id: string;
@@ -39,7 +43,16 @@ export interface MissionDef {
   target: number;
   emoji: string;
   text: string;
+  /**
+   * Fecha (o lunes de la semana) desde la que puede salir. Las misiones nuevas llevan fecha para no
+   * cambiar las ya repartidas: el sorteo de cada día depende de cuántas haya en cada grupo.
+   */
+  since?: string;
 }
+
+/** Desde cuándo salen las misiones de los juegos de guerra (día y semana). */
+export const WAR_MISSIONS_DAY = '2026-10-07';
+export const WAR_MISSIONS_WEEK = '2026-10-12';
 
 export interface MissionSlot {
   id: string;
@@ -85,6 +98,10 @@ const DAILY: MissionDef[][] = [
     { id: 'd-merge', event: 'merge', kind: 'max', target: 128, emoji: '🧱', text: 'Consigue la ficha 128 en Fusión' },
     { id: 'd-fire', event: 'fire', kind: 'max', target: 40, emoji: '🚒', text: 'Consigue 40 puntos en Bomberos' },
     { id: 'd-metro', event: 'metro', kind: 'max', target: 15, emoji: '🚇', text: 'Lleva a 15 viajeros en Metro' },
+    { id: 'd-flak', event: 'flak', kind: 'max', target: 50, emoji: '🛡️', text: 'Consigue 50 puntos en Defensa antiaérea', since: WAR_MISSIONS_DAY },
+    { id: 'd-artillery', event: 'artillery', kind: 'max', target: 25, emoji: '🎯', text: 'Consigue 25 puntos en Artillería', since: WAR_MISSIONS_DAY },
+    { id: 'd-lanes', event: 'lanes', kind: 'max', target: 40, emoji: '🚧', text: 'Consigue 40 puntos en Defensa de calles', since: WAR_MISSIONS_DAY },
+    { id: 'd-duel', event: 'duel', kind: 'max', target: 12, emoji: '🎖️', text: 'Consigue 12 puntos en Duelo de generales', since: WAR_MISSIONS_DAY },
   ],
   [
     { id: 'd-daily', event: 'daily', kind: 'sum', target: 1, emoji: '🌃', text: 'Completa el Apagón diario' },
@@ -109,6 +126,10 @@ const WEEKLY: MissionDef[][] = [
     { id: 'w-memory', event: 'memory', kind: 'max', target: 9, emoji: '🧠', text: 'Supera 9 rondas en Memoria' },
     { id: 'w-fire', event: 'fire', kind: 'max', target: 120, emoji: '🚒', text: 'Consigue 120 puntos en Bomberos' },
     { id: 'w-metro', event: 'metro', kind: 'max', target: 50, emoji: '🚇', text: 'Lleva a 50 viajeros en Metro' },
+    { id: 'w-flak', event: 'flak', kind: 'max', target: 180, emoji: '🛡️', text: 'Consigue 180 puntos en Defensa antiaérea', since: WAR_MISSIONS_WEEK },
+    { id: 'w-artillery', event: 'artillery', kind: 'max', target: 80, emoji: '🎯', text: 'Consigue 80 puntos en Artillería', since: WAR_MISSIONS_WEEK },
+    { id: 'w-lanes', event: 'lanes', kind: 'max', target: 130, emoji: '🚧', text: 'Consigue 130 puntos en Defensa de calles', since: WAR_MISSIONS_WEEK },
+    { id: 'w-duel', event: 'duel', kind: 'max', target: 45, emoji: '🎖️', text: 'Consigue 45 puntos en Duelo de generales', since: WAR_MISSIONS_WEEK },
   ],
   [
     { id: 'w-puzzle', event: 'puzzle', kind: 'sum', target: 6, emoji: '🧩', text: 'Completa 6 retos diarios (Apagón, Calles o Plan verde)' },
@@ -127,17 +148,20 @@ export const PUZZLE_POINTS = 15;
 /** Tope de puntos por semana (las reglas de Firestore lo exigen). */
 export const LEAGUE_MAX = 1000;
 
-function pick(groups: MissionDef[][], seed: string): MissionSlot[] {
+function pick(groups: MissionDef[][], seed: string, key: string): MissionSlot[] {
   const rand = mulberry32(hashString(seed));
-  return groups.map((g) => ({ id: g[Math.floor(rand() * g.length)].id, p: 0, c: false }));
+  return groups.map((all) => {
+    const g = all.filter((m) => !m.since || m.since <= key);
+    return { id: g[Math.floor(rand() * g.length)].id, p: 0, c: false };
+  });
 }
 
 export function dailyMissions(date: string): MissionSlot[] {
-  return pick(DAILY, 'misiones:' + date);
+  return pick(DAILY, 'misiones:' + date, date);
 }
 
 export function weeklyMissions(week: string): MissionSlot[] {
-  return pick(WEEKLY, 'semana:' + week);
+  return pick(WEEKLY, 'semana:' + week, week);
 }
 
 export function newMissions(): MissionsState {

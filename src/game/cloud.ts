@@ -44,6 +44,7 @@ import { newState, normalize, type GameState } from './state';
 import type { GiftIn } from './social';
 import { useGame } from './store';
 import { WAR_GAMES, type WarGame } from './war';
+import { parseStyle, type Rival } from '../minigames/duel/logic';
 
 const LOCAL_KEY = 'torre-save-v1';
 const BACKUP_KEY = 'torre-save-backup';
@@ -698,7 +699,7 @@ export interface PublicCity extends CitySnapshot {
 }
 
 export function citySignature(c: CitySnapshot): string {
-  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}|${c.gifts ?? 0}|${c.conq ?? 0}|${c.deco ?? ''}`;
+  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}|${c.gifts ?? 0}|${c.conq ?? 0}|${c.deco ?? ''}|${c.army ?? ''}`;
 }
 
 /** Publica la ciudad del jugador (solo lo que se ve al visitarla). */
@@ -734,6 +735,7 @@ function parseCity(uid: string, x: Record<string, unknown> | undefined): PublicC
     gifts: Math.max(0, Math.floor(n(x.gifts))),
     conq: Math.max(0, Math.floor(n(x.conq))),
     ...(parseDecos(x.deco).length ? { deco: parseDecos(x.deco).join(',') } : {}),
+    ...(parseStyle(x.army) ? { army: x.army as string } : {}),
     updatedAt: (x.updatedAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null,
   };
 }
@@ -745,6 +747,16 @@ export async function fetchActiveCities(n = 15): Promise<PublicCity[]> {
   await ensureUser();
   const snap = await getDocs(query(collection(d, 'cities'), orderBy('updatedAt', 'desc'), limit(n)));
   return snap.docs.map((x) => parseCity(x.id, x.data())).filter((c): c is PublicCity => !!c);
+}
+
+/** Alcaldes con estilo de general publicado (para el Duelo), sin contarte a ti. Reutiliza las ciudades del mapa. */
+export async function fetchDuelRivals(): Promise<Rival[]> {
+  const me = currentUid();
+  const cities = await fetchWorldCities();
+  return cities.flatMap((c) => {
+    const style = c.uid !== me ? parseStyle(c.army) : null;
+    return style ? [{ name: c.name, style }] : [];
+  });
 }
 
 // El mapa del mundo lee muchas ciudades de golpe: se guardan unos minutos para no releerlas al reabrirlo

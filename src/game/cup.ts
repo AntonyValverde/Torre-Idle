@@ -16,7 +16,7 @@ export const GROUP_MAX = 8;
 /** Puntos por puesto en cada prueba del grupo. */
 export const PLACE_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 
-export type CupGame = 'thief' | 'fire' | 'metro' | 'traffic' | 'memory' | 'stack';
+export type CupGame = 'thief' | 'fire' | 'metro' | 'traffic' | 'memory' | 'stack' | 'flak' | 'artillery' | 'lanes' | 'duel';
 export type CupSlot = 'g1' | 'g2' | 'g3' | 'f';
 export const GROUP_SLOTS: CupSlot[] = ['g1', 'g2', 'g3'];
 export type CupPhase = 'signup' | 'groups' | 'final';
@@ -28,8 +28,20 @@ export const CUP_GAME_INFO: Record<CupGame, { emoji: string; name: string; unit:
   traffic: { emoji: '🚦', name: 'Semáforo', unit: 'coches' },
   memory: { emoji: '🧠', name: 'Memoria', unit: 'rondas' },
   stack: { emoji: '🏗️', name: 'Stack Tower', unit: 'pisos' },
+  flak: { emoji: '🛡️', name: 'Defensa antiaérea', unit: 'pts' },
+  artillery: { emoji: '🎯', name: 'Artillería', unit: 'pts' },
+  lanes: { emoji: '🚧', name: 'Defensa de calles', unit: 'pts' },
+  duel: { emoji: '🎖️', name: 'Duelo de generales', unit: 'pts' },
 };
-const CUP_GAMES = Object.keys(CUP_GAME_INFO) as CupGame[];
+/** Pruebas de siempre (el orden importa: de él sale el sorteo de cada semana). */
+const CLASSIC_GAMES: CupGame[] = ['thief', 'fire', 'metro', 'traffic', 'memory', 'stack'];
+/** Los juegos de guerra entran desde esta Copa: las semanas anteriores no cambian de pruebas. */
+export const WAR_CUP_WEEK = '2026-10-12';
+
+/** Pruebas que pueden salir en una semana. */
+export function cupGamesFor(week: string): CupGame[] {
+  return week >= WAR_CUP_WEEK ? (Object.keys(CUP_GAME_INFO) as CupGame[]) : CLASSIC_GAMES;
+}
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -69,7 +81,7 @@ export function cupPhase(ms: number): PhaseInfo {
 /** Las tres pruebas del sábado y la de la final: distintas cada semana, iguales para todos. */
 export function cupEvents(week: string): Record<CupSlot, CupGame> {
   const rand = mulberry32(hashString('copa:' + week));
-  const games = CUP_GAMES.slice();
+  const games = cupGamesFor(week).slice();
   for (let i = games.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [games[i], games[j]] = [games[j], games[i]];

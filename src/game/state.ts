@@ -77,6 +77,8 @@ export interface GameState {
   artilleryBest: number;
   lanesBest: number;
   duelBest: number;
+  /** Unidades que el jugador ha sacado en el Duelo: de aquí sale su estilo público de general. */
+  duelPicks: { inf: number; arc: number; cav: number };
   /** Apagón diario. */
   daily: DailyRecord;
   /** Conecta las calles (segundo puzzle diario). */
@@ -186,6 +188,7 @@ export function newState(t: number): GameState {
     artilleryBest: 0,
     lanesBest: 0,
     duelBest: 0,
+    duelPicks: { inf: 0, arc: 0, cav: 0 },
     daily: { last: null, streak: 0, bestStreak: 0 },
     roads: { last: null, streak: 0, bestStreak: 0 },
     parks: { last: null, streak: 0, bestStreak: 0 },
@@ -424,6 +427,11 @@ export function normalize(raw: unknown, t: number): GameState {
     artilleryBest: num(r.artilleryBest, 0),
     lanesBest: num(r.lanesBest, 0),
     duelBest: num(r.duelBest, 0),
+    duelPicks: {
+      inf: Math.max(0, num(r.duelPicks?.inf, 0)),
+      arc: Math.max(0, num(r.duelPicks?.arc, 0)),
+      cav: Math.max(0, num(r.duelPicks?.cav, 0)),
+    },
     submittedBest: numRecord(r.submittedBest),
     pendingDaily: pendingDaily(r.pendingDaily),
     wheelLast: day(typeof r.wheelLast === 'string' ? r.wheelLast : null),

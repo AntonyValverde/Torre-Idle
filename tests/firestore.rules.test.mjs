@@ -165,6 +165,11 @@ await no('ciudad: regalos decimales', () => setDoc(doc(erin, 'cities/erin'), cit
 await no('ciudad: regalos como texto', () => setDoc(doc(erin, 'cities/erin'), city({ name: 'Erin', gifts: 'mil' })));
 await no('ciudad: conquistas negativas', () => setDoc(doc(erin, 'cities/erin'), city({ name: 'Erin', conq: -1 })));
 await ok('ciudad: con conquistas ganadas (⚔️)', () => setDoc(doc(erin, 'cities/erin'), city({ name: 'Erin', conq: 2 })));
+const gina = env.authenticatedContext('gina').firestore();
+await no('ciudad: estilo de general mal formado', () => setDoc(doc(gina, 'cities/gina'), city({ name: 'Gina', army: 'caballería' })));
+await no('ciudad: estilo de general con cuatro cifras', () => setDoc(doc(gina, 'cities/gina'), city({ name: 'Gina', army: '1000-0-0' })));
+await no('ciudad: estilo de general como número', () => setDoc(doc(gina, 'cities/gina'), city({ name: 'Gina', army: 40 })));
+await ok('ciudad: con estilo de general del Duelo', () => setDoc(doc(gina, 'cities/gina'), city({ name: 'Gina', army: '40-35-25' })));
 
 console.log('gifts (regalos entre ciudades)');
 // El regalo se renueva otro día (posterior); mañana sigue dentro del margen de ±36 h de las reglas

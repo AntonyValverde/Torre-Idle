@@ -183,7 +183,7 @@ service cloud.firestore {
     match /cities/{uid} {
       function validCity() {
         let d = incoming();
-        return d.keys().hasOnly(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'cups', 'gifts', 'conq', 'deco', 'updatedAt'])
+        return d.keys().hasOnly(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'cups', 'gifts', 'conq', 'deco', 'army', 'updatedAt'])
           && d.keys().hasAll(['name', 'era', 'layout', 'buildings', 'earned', 'stars', 'updatedAt'])
           && validName(d.name)
           && d.era is int && d.era >= 1 && d.era <= 1000000
@@ -200,6 +200,8 @@ service cloud.firestore {
           && (!('conq' in d) || (d.conq is int && d.conq >= 0 && d.conq <= 10000))
           // Cosméticos de la ciudad (pase de temporada y tienda): hasta ocho ids en minúsculas separados por comas (opcional)
           && (!('deco' in d) || (d.deco is string && d.deco.matches('^[a-z]{3,12}(,[a-z]{3,12}){0,7}$')))
+          // Estilo de general en el Duelo: % de infantería, arqueros y caballería ("40-35-25"), opcional
+          && (!('army' in d) || (d.army is string && d.army.matches('^[0-9]{1,3}-[0-9]{1,3}-[0-9]{1,3}$')))
           && d.updatedAt == request.time;
       }
 

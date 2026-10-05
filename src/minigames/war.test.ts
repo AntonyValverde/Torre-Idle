@@ -4,6 +4,7 @@ import { newState, normalize } from '../game/state';
 import { ACHIEVEMENTS } from '../game/economy';
 import { BOARD_CAP, localBest, nextResend } from '../game/pending';
 import { WAR_GAMES, warGems } from '../game/war';
+import { citySnapshot } from '../game/cities';
 import { mulberry32 } from './rng';
 import * as flak from './flak/logic';
 import * as art from './artillery/logic';
@@ -325,6 +326,38 @@ describe('Duelo de generales', () => {
     const g = duel.newDuel(mulberry32(1));
     g.mine = { inf: 0, arc: 5, cav: 0 };
     expect(duel.play(g, 'inf', mulberry32(1))).toBeNull();
+  });
+});
+
+describe('Duelo contra alcaldes de verdad', () => {
+  it('el estilo público sale tras unas rondas y se lee de vuelta', () => {
+    expect(duel.styleString({ inf: 3, arc: 2, cav: 1 })).toBeNull();
+    expect(duel.styleString({ inf: 4, arc: 4, cav: 2 })).toBe('40-40-20');
+    expect(duel.parseStyle('40-40-20')).toEqual({ inf: 0.4, arc: 0.4, cav: 0.2 });
+    for (const bad of ['caballería', '1000-0-0', '0-0-0', 40, null, '40-40']) expect(duel.parseStyle(bad)).toBeNull();
+  });
+
+  it('solo salen como veteranos (desde la batalla 7) y juegan con su estilo', () => {
+    const rival = { name: 'Ana', style: { inf: 0.1, arc: 0.1, cav: 0.8 } };
+    for (let b = 1; b <= duel.ORDER.length; b++) expect(duel.newBattle(b, () => 0, [rival]).rival).toBeNull();
+    const vet = duel.newBattle(7, () => 0, [rival]);
+    expect(vet.general).toBe('rival');
+    expect(duel.generalInfo(vet)).toMatchObject({ name: 'Ana' });
+    expect(duel.generalInfo(vet).tell).toContain('80 %');
+    // Sin rivales cargados, veteranos inventados
+    expect(duel.newBattle(7, () => 0, []).general).not.toBe('rival');
+    const g = { ...duel.newDuel(mulberry32(1)), ...vet, theirs: { inf: 1, arc: 1, cav: 1 } };
+    const w = duel.weights(g);
+    expect(w.cav).toBeGreaterThan(w.inf * 2);
+  });
+
+  it('las unidades sacadas se guardan y la ciudad publica el estilo', () => {
+    useGame.setState({ s: newState(Date.now()) });
+    expect(citySnapshot(useGame.getState().s).army).toBeUndefined();
+    for (let i = 0; i < 10; i++) useGame.getState().noteDuelPick(i < 5 ? 'cav' : i < 8 ? 'inf' : 'arc');
+    expect(useGame.getState().s.duelPicks).toEqual({ inf: 3, arc: 2, cav: 5 });
+    expect(citySnapshot(useGame.getState().s).army).toBe('30-20-50');
+    expect(normalize({ duelPicks: { inf: 2, arc: -1 } }, 0).duelPicks).toEqual({ inf: 2, arc: 0, cav: 0 });
   });
 });
 

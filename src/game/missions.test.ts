@@ -50,6 +50,20 @@ describe('misiones', () => {
     expect(ids.size).toBeGreaterThan(8);
   });
 
+  it('las misiones de guerra solo salen desde su fecha y no cambian las de antes', () => {
+    const war = /^[dw]-(flak|artillery|lanes|duel)$/;
+    // Antes de la fecha: ninguna de guerra (y las de esos días siguen siendo las mismas que antes)
+    for (let d = 1; d <= 6; d++) expect(dailyMissions(`2026-10-0${d}`).some((m) => war.test(m.id))).toBe(false);
+    expect(dailyMissions('2026-10-04').map((m) => m.id)).toEqual(['d-decree', 'd-memory', 'd-roads']);
+    expect(weeklyMissions('2026-10-05').some((m) => war.test(m.id))).toBe(false);
+    // Desde la fecha salen a veces
+    const seen = new Set<string>();
+    for (let d = 7; d <= 31; d++) for (const m of dailyMissions(`2026-10-${String(d).padStart(2, '0')}`)) seen.add(m.id);
+    for (let w = 0; w < 30; w++) for (const m of weeklyMissions(`2027-0${1 + (w % 9)}-${String(1 + w).padStart(2, '0')}`)) seen.add(m.id);
+    expect([...seen].some((id) => war.test(id) && id.startsWith('d-'))).toBe(true);
+    expect([...seen].some((id) => war.test(id) && id.startsWith('w-'))).toBe(true);
+  });
+
   it('el progreso suma o guarda el máximo, sin pasar del objetivo', () => {
     let s = withDay(at(2026, 9, 30));
     s = {

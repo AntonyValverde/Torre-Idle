@@ -228,6 +228,8 @@ interface GameStore {
   rewardTowers(score: number): ThiefReward;
   /** Premio de un juego de guerra del arcade (Defensa antiaérea, Artillería, Defensa de calles, Duelo). */
   rewardWar(game: WarGame, score: number): ThiefReward;
+  /** Apunta una unidad sacada en el Duelo (para el estilo público de general). */
+  noteDuelPick(unit: 'inf' | 'arc' | 'cav'): void;
   /** Conquista: apunta en qué semana y mundo juega el alcalde. */
   setConquestWorld(week: string, w: string): void;
   /** Conquista: guarda los partes de batalla nuevos y devuelve los recién llegados. */
@@ -670,8 +672,13 @@ export const useGame = create<GameStore>((set, get) => ({
     const gems = warGems(game, score);
     const key = WAR_INFO[game].best;
     const prev = s[key];
-    set({ s: bump({ ...addCoins(s, coins), gems: s.gems + gems, [key]: Math.max(prev, score) }, 'arcade') });
+    set({ s: bump(bump({ ...addCoins(s, coins), gems: s.gems + gems, [key]: Math.max(prev, score) }, 'arcade'), game, score) });
     return { coins, gems, newBest: score > prev };
+  },
+
+  noteDuelPick(unit) {
+    const { s } = get();
+    set({ s: { ...s, duelPicks: { ...s.duelPicks, [unit]: s.duelPicks[unit] + 1 } } });
   },
 
   setConquestWorld(week, w) {

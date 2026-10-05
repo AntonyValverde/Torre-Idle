@@ -1,6 +1,7 @@
 import { BUILDINGS, totalBuildings } from './economy';
 import { DECO_PUBLIC_MAX, PASS_DECOS, activeDecos } from './pass';
 import type { GameState } from './state';
+import { styleString } from '../minigames/duel/logic';
 
 // Ciudad pública: lo justo para dibujar la ciudad de otro jugador cuando la visitas.
 
@@ -20,6 +21,8 @@ export interface CitySnapshot {
   conq?: number;
   /** Cosméticos activos de la ciudad ("zeppelin,garden"). Solo se envía si hay alguno. */
   deco?: string;
+  /** Estilo de general en el Duelo ("40-35-25"). Solo se envía tras unas cuantas rondas. */
+  army?: string;
 }
 
 const DECO_RE = new RegExp('^[a-z]{3,12}(,[a-z]{3,12}){0,' + (DECO_PUBLIC_MAX - 1) + '}$');
@@ -47,6 +50,7 @@ export function citySnapshot(s: GameState): CitySnapshot {
     ...(s.social.received > 0 ? { gifts: Math.min(10_000_000, Math.floor(s.social.received)) } : {}),
     ...(s.conquest.wins > 0 ? { conq: Math.min(10_000, Math.floor(s.conquest.wins)) } : {}),
     ...(activeDecos(s.pass).length ? { deco: activeDecos(s.pass).join(',') } : {}),
+    ...(styleString(s.duelPicks) ? { army: styleString(s.duelPicks)! } : {}),
   };
 }
 
