@@ -1,4 +1,4 @@
-import { drawCard, forgetHand, rankOf, type Card } from './cards';
+import { drawCard, rankOf, type Card } from './cards';
 
 // Más alto o más bajo: sale una carta y hay que adivinar si la siguiente será más alta o más baja
 // (si es igual, se pierde). Cada acierto multiplica el premio según lo difícil que era, con un 3%
@@ -49,10 +49,7 @@ export function hiloGuess(run: HiLoRun, g: HiLoGuess): HiLoRun {
   const r = rankOf(next);
   const ok = g === 'hi' ? r > rank : r < rank;
   const cards = [...run.cards, next];
-  if (!ok) {
-    forgetHand(run.id);
-    return { ...run, n: run.n + 1, cards, result: 'lose', paid: 0 };
-  }
+  if (!ok) return { ...run, n: run.n + 1, cards, result: 'lose', paid: 0 };
   const mult = Math.min(HILO_MAX, Math.floor(run.mult * step * 100) / 100);
   const won = { ...run, n: run.n + 1, cards, mult };
   // En el tope se cobra solo
@@ -66,6 +63,5 @@ export function canCash(run: HiLoRun): boolean {
 
 export function hiloCash(run: HiLoRun): HiLoRun {
   if (run.result || run.cards.length < 2) return run;
-  forgetHand(run.id);
   return { ...run, result: 'cash', paid: Math.floor(run.bet * run.mult) };
 }

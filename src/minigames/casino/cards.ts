@@ -18,8 +18,14 @@ export function cardAt(seed: number, n: number): Card {
   return Math.floor(mulberry32((seed ^ Math.imul(n + 1, 0x9e3779b1)) >>> 0)() * 52);
 }
 
-/** Secreto de cada mano abierta, solo en memoria. */
+/** Secreto de cada mano, solo en memoria (las más antiguas se olvidan al pasar de SECRETS_MAX). */
 const secrets = new Map<number, number>();
+const SECRETS_MAX = 256;
+
+function remember(id: number, secret: number) {
+  secrets.set(id, secret);
+  while (secrets.size > SECRETS_MAX) secrets.delete(secrets.keys().next().value as number);
+}
 
 function randomSeed(): number {
   const c = globalThis.crypto;
@@ -32,12 +38,12 @@ export function drawCard(id: number, n: number): Card {
   let secret = secrets.get(id);
   if (secret === undefined) {
     secret = randomSeed();
-    secrets.set(id, secret);
+    remember(id, secret);
   }
   return cardAt(secret, n);
 }
 
-/** Olvida el secreto de una mano terminada (para no acumularlos). */
+/** Olvida el secreto de una mano (como si la pestaña se hubiera recargado). */
 export function forgetHand(id: number) {
   secrets.delete(id);
 }
@@ -55,6 +61,6 @@ export function cardLabel(c: Card): { rank: string; suit: string; red: boolean }
 /** Id público de una mano nueva, con su secreto ya sorteado. */
 export function newHandId(rand: () => number): number {
   const id = Math.floor(rand() * 4294967296) >>> 0;
-  secrets.set(id, randomSeed());
+  remember(id, randomSeed());
   return id;
 }

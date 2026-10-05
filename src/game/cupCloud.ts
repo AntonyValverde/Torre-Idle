@@ -6,6 +6,7 @@ import {
   getDocFromServer,
   getDocsFromServer,
   limit,
+  onSnapshot,
   query,
   serverTimestamp,
   setDoc,
@@ -161,17 +162,62 @@ export async function fetchCupResults(week: string, fresh = false): Promise<Map<
     ? query(col, where('updatedAt', '>', Timestamp.fromMillis(Math.max(0, base.snap.maxAt - RESULTS_OVERLAP_MS))), limit(MAX_PLAYERS))
     : query(col, limit(MAX_PLAYERS));
   const res = await getDocsFromServer(q);
-  const docs = res.docs.map((x) => {
-    const v = x.data();
-    return {
-      uid: x.id,
-      result: { g1: int(v.g1), g2: int(v.g2), g3: int(v.g3), f: int(v.f) },
-      at: v.updatedAt instanceof Timestamp ? v.updatedAt.toMillis() : 0,
-    };
-  });
+  const docs = res.docs.map(parseResult);
   const snap = mergeResults(base?.snap ?? null, docs);
   resultsCache.set(week, { at: t, fullAt: base ? base.fullAt : t, snap });
   return snap.data;
+}
+
+function parseResult(x: { id: string; data(): Record<string, unknown> }) {
+  const v = x.data();
+  return {
+    uid: x.id,
+    result: { g1: int(v.g1), g2: int(v.g2), g3: int(v.g3), f: int(v.f) },
+    at: v.updatedAt instanceof Timestamp ? v.updatedAt.toMillis() : 0,
+  };
+}
+
+/**
+ * Marcas en vivo: tras una lectura completa, escucha solo las marcas que se suban a partir de ahí
+ * (una lectura por marca nueva, ninguna mientras nadie juega). Devuelve la función para dejar de escuchar.
+ * Si la escucha falla, avisa por `onError` y quien llama vuelve al sondeo.
+ */
+export function watchCupResults(week: string, onData: (results: Map<string, CupResult>) => void, onError: (e: unknown) => void): () => void {
+  let stopped = false;
+  let unsub = () => {};
+  (async () => {
+    try {
+      const d = need();
+      const base = await fetchCupResults(week);
+      if (stopped) return;
+      onData(base);
+      const since = Math.max(0, (resultsCache.get(week)?.snap.maxAt ?? 0) - RESULTS_OVERLAP_MS);
+      const q = query(collection(d, 'cup', week, 'results'), where('updatedAt', '>', Timestamp.fromMillis(since)), limit(MAX_PLAYERS));
+      unsub = onSnapshot(
+        q,
+        (res) => {
+          // Solo datos del servidor: la caché local vacía no debe hacerse pasar por "nadie ha jugado"
+          if (res.metadata.fromCache) return;
+          const docs = res.docChanges().filter((c) => c.type !== 'removed').map((c) => parseResult(c.doc));
+          if (!docs.length) return;
+          const cur = resultsCache.get(week);
+          const t = Date.now();
+          const snap = mergeResults(cur?.snap ?? null, docs);
+          resultsCache.set(week, { at: t, fullAt: cur?.fullAt ?? t, snap });
+          onData(snap.data);
+        },
+        (e) => {
+          if (!stopped) onError(e);
+        },
+      );
+    } catch (e) {
+      if (!stopped) onError(e);
+    }
+  })();
+  return () => {
+    stopped = true;
+    unsub();
+  };
 }
 
 /** La próxima lectura de marcas va a la nube aunque la última sea reciente (y sigue pidiendo solo lo nuevo). */

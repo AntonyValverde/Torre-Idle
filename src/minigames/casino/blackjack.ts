@@ -1,4 +1,4 @@
-import { drawCard, forgetHand, rankOf, type Card } from './cards';
+import { drawCard, rankOf, type Card } from './cards';
 
 // Blackjack con baraja infinita: el crupier pide hasta 17 y se planta con 17 blando, el blackjack
 // paga 3:2, se puede doblar con las dos primeras cartas y no hay separación. Si el crupier tiene
@@ -45,7 +45,6 @@ function draw(h: BjHand): Card {
 const RETURN: Record<BjResult, number> = { blackjack: 2.5, win: 2, push: 1, lose: 0, bust: 0 };
 
 function settle(h: BjHand, result: BjResult): BjHand {
-  forgetHand(h.id);
   return { ...h, result, paid: Math.floor(h.bet * (h.doubled ? 2 : 1) * RETURN[result]) };
 }
 

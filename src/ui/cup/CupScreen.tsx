@@ -44,7 +44,7 @@ import {
   type SeasonRow,
   type StandingRow,
 } from '../../game/cup';
-import { cupEntryCount, fetchCupEntries, fetchCupResults, fetchCupSummary, fetchSeason, registerCup, syncCupBest } from '../../game/cupCloud';
+import { cupEntryCount, fetchCupEntries, fetchCupResults, fetchCupSummary, fetchSeason, registerCup, syncCupBest, watchCupResults } from '../../game/cupCloud';
 import { productionPerSec } from '../../game/economy';
 import { fmt, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
@@ -82,7 +82,7 @@ export function Trophies({ e }: { e: Pick<CupEntry, 'gold' | 'silver' | 'bronze'
 
 /**
  * Inscritos y resultados de una semana, ya convertidos en grupos y clasificaciones. Con `poll` se
- * recargan cada 30 s (solo mientras se juega: una Copa terminada ya no cambia).
+ * reciben en vivo (solo mientras se juega: una Copa terminada ya no cambia).
  */
 function useCupData(week: string, enabled: boolean, poll: boolean) {
   const [view, setView] = useState<CupView | null>(null);
@@ -108,17 +108,46 @@ function useCupData(week: string, enabled: boolean, poll: boolean) {
   // Siempre resultados recientes al abrir (la caché solo evita lecturas repetidas en pocos segundos)
   useEffect(() => {
     load(true);
-    if (!enabled || !poll) return;
-    // Con la app en segundo plano no se lee nada; al volver se pone al día
+    if (!enabled || !poll || !cloudEnabled) return;
+    // En vivo: se escuchan solo las marcas nuevas mientras la pestaña está a la vista. Si la escucha
+    // falla (red, permisos) se vuelve al sondeo cada 30 s. Cada 10 min una lectura completa, para
+    // notar las marcas que el administrador borró.
     const visible = () => document.visibilityState === 'visible';
-    const id = setInterval(() => visible() && load(true), 30_000);
-    const onVisible = () => visible() && load(true);
+    let stop = () => {};
+    let fallback: ReturnType<typeof setInterval> | null = null;
+    const apply = (res: Map<string, CupResult>) => {
+      setError(false);
+      setResults(res);
+      fetchCupEntries(week)
+        .then((entries) => setView(buildCup(entries, res, week)))
+        .catch(() => {});
+    };
+    const start = () => {
+      stop();
+      if (fallback || !visible()) return;
+      stop = watchCupResults(week, apply, (e) => {
+        console.warn('Copa en vivo', e);
+        stop();
+        if (!fallback) fallback = setInterval(() => visible() && load(true), 30_000);
+      });
+    };
+    start();
+    const full = setInterval(() => visible() && load(true), 10 * 60_000);
+    const onVisible = () => {
+      if (visible()) start();
+      else {
+        stop();
+        stop = () => {};
+      }
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      clearInterval(id);
+      stop();
+      clearInterval(full);
+      if (fallback) clearInterval(fallback);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [load, enabled, poll]);
+  }, [load, enabled, poll, week]);
 
   return { view, results, error, reload: load };
 }

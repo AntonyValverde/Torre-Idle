@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../minigames/rng';
 import { basicMove, bjDeal, bjDouble, bjHit, bjStand, handValue, type BjHand } from '../minigames/casino/blackjack';
-import { cardAt, drawCard, forgetHand, newHandId } from '../minigames/casino/cards';
+import { cardAt, drawCard, forgetHand, newHandId, rankOf } from '../minigames/casino/cards';
 import { hiloCash, hiloGuess, hiloStart, stepMult, winChance } from '../minigames/casino/hilo';
 import { cashMultAt, crashPoint, msToMult, rocketOver } from '../minigames/casino/rocket';
 import { betReturn, isValidBet } from '../minigames/casino/roulette';
@@ -266,9 +266,10 @@ describe('partidas a medias', () => {
     const reloaded = normalize(JSON.parse(JSON.stringify(s)), T);
     const g = s.casino.hilo!.cards[0] % 13 < 6 ? 'hi' : 'lo';
     expect(hiloMove(reloaded, g)!.run.cards).toEqual(hiloMove(s, g)!.run.cards);
-    // Un acierto seguro para comprobar el cobro
+    // Comprobar el cobro: se apuesta en la dirección posible según la primera carta (las cartas son aleatorias)
     const run = hiloStart(10, 1);
-    const next = hiloGuess(run, 'hi');
+    const next = hiloGuess(run, rankOf(run.cards[0]) < 7 ? 'hi' : 'lo');
+    expect(next.cards.length).toBe(2);
     if (!next.result) expect(hiloCash(next).paid).toBe(Math.floor(10 * next.mult));
     s = hiloMove(s, g)!.s;
     if (!s.casino.hilo!.result) {

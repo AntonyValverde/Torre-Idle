@@ -34,6 +34,7 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
   - Cada prueba da puntos por puesto en el grupo (10, 8, 6, 5, 4, 3, 2, 1).
   - El **rival directo** es quien va justo por delante, con una barra que compara los puntos.
 - **Domingo: final** entre los 2 primeros de cada grupo (4 si solo hay un grupo), con una prueba sorpresa y 3 intentos.
+- **En vivo**: mientras se juega, las clasificaciones se actualizan al instante con las marcas que suben los demás (una lectura por marca nueva, ninguna con la pestaña en segundo plano).
 - **Lunes: ceremonia** con podio y premios: gemas y tickets para todos los que juegan, más copas de oro, plata o bronce para el podio. Las copas se ven en la plaza de tu ciudad, en tu vitrina del Perfil y junto a tu nombre en la Copa.
 - **Preparación** (pestaña 🏋️ de la Copa):
   - **Centro de entrenamiento**: se mejora con monedas (el coste depende de tu producción), hasta el nivel 5. Cada nivel da +2% en las marcas de la Copa, y los niveles 2 y 4 añaden un hueco de carta (de 1 a 3).
