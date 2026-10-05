@@ -43,6 +43,7 @@ import {
 import { newState, normalize, type GameState } from './state';
 import type { GiftIn } from './social';
 import { useGame } from './store';
+import { WAR_GAMES, type WarGame } from './war';
 
 const LOCAL_KEY = 'torre-save-v1';
 const BACKUP_KEY = 'torre-save-backup';
@@ -458,8 +459,8 @@ export function startAutoSave(): () => void {
 // Rankings
 // =====================================================================
 
-export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro' | 'towers';
-export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers'];
+export type Board = 'stack' | 'merge' | 'city' | 'stars' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro' | 'towers' | WarGame;
+export const BOARDS: Board[] = ['stack', 'merge', 'city', 'stars', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers', ...WAR_GAMES];
 
 /** Colección de cada reto diario en Firestore: `daily` (Apagón), `roads` (Conecta las calles) y `parks` (Plan verde). */
 export type DailyKind = 'daily' | 'roads' | 'parks';

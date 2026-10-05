@@ -90,6 +90,10 @@ const WheelScreen = lazyRetry(() => import('./minigames/wheel/WheelScreen').then
 const CupScreen = lazyRetry(() => import('./ui/cup/CupScreen').then((m) => ({ default: m.CupScreen })));
 const CasinoScreen = lazyRetry(() => import('./minigames/casino/CasinoScreen').then((m) => ({ default: m.CasinoScreen })));
 const TowersScreen = lazyRetry(() => import('./minigames/towers/TowersScreen').then((m) => ({ default: m.TowersScreen })));
+const FlakScreen = lazyRetry(() => import('./minigames/flak/FlakScreen').then((m) => ({ default: m.FlakScreen })));
+const ArtilleryScreen = lazyRetry(() => import('./minigames/artillery/ArtilleryScreen').then((m) => ({ default: m.ArtilleryScreen })));
+const LanesScreen = lazyRetry(() => import('./minigames/lanes/LanesScreen').then((m) => ({ default: m.LanesScreen })));
+const DuelScreen = lazyRetry(() => import('./minigames/duel/DuelScreen').then((m) => ({ default: m.DuelScreen })));
 const WorldScreen = lazyRetry(() => import('./ui/WorldMap').then((m) => ({ default: m.WorldScreen })));
 
 const loading = (
@@ -285,6 +289,10 @@ export default function App() {
             {game === 'metro' && <MetroScreen onClose={() => setGame(null)} />}
             {game === 'casino' && <CasinoScreen onClose={() => setGame(null)} />}
             {game === 'towers' && <TowersScreen onClose={() => setGame(null)} />}
+            {game === 'flak' && <FlakScreen onClose={() => setGame(null)} />}
+            {game === 'artillery' && <ArtilleryScreen onClose={() => setGame(null)} />}
+            {game === 'lanes' && <LanesScreen onClose={() => setGame(null)} />}
+            {game === 'duel' && <DuelScreen onClose={() => setGame(null)} />}
           </Suspense>
         </ErrorBoundary>
       )}

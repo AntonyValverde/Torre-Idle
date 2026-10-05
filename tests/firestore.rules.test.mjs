@@ -96,6 +96,11 @@ await ok('metro', () => setDoc(doc(bob, 'leaderboards/metro/scores/bob'), { name
 await no('metro decimal', () => setDoc(doc(alice, 'leaderboards/metro/scores/alice'), { name: 'Alice', score: 7.5, updatedAt: serverTimestamp() }));
 await ok('guerra de torres', () => setDoc(doc(bob, 'leaderboards/towers/scores/bob'), { name: 'Bob', score: 42, updatedAt: serverTimestamp() }));
 await no('guerra de torres imposible', () => setDoc(doc(alice, 'leaderboards/towers/scores/alice'), { name: 'Alice', score: 5001, updatedAt: serverTimestamp() }));
+for (const board of ['flak', 'artillery', 'lanes', 'duel']) {
+  await ok(`juego de guerra ${board}`, () => setDoc(doc(bob, `leaderboards/${board}/scores/bob`), { name: 'Bob', score: 120, updatedAt: serverTimestamp() }));
+  await no(`juego de guerra ${board} imposible`, () => setDoc(doc(alice, `leaderboards/${board}/scores/alice`), { name: 'Alice', score: 5001, updatedAt: serverTimestamp() }));
+}
+await no('ranking inventado', () => setDoc(doc(alice, 'leaderboards/war/scores/alice'), { name: 'Alice', score: 1, updatedAt: serverTimestamp() }));
 await new Promise((r) => setTimeout(r, 5500));
 await ok('récord mayor tras 5 s', () => setDoc(la, { name: 'Alice', score: 20, updatedAt: serverTimestamp() }));
 

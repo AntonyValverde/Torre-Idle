@@ -72,6 +72,11 @@ export interface GameState {
   metroBest: number;
   /** Récord de puntos en Guerra de torres. */
   towersBest: number;
+  /** Récords de los juegos de guerra: Defensa antiaérea, Artillería, Defensa de calles y Duelo de generales. */
+  flakBest: number;
+  artilleryBest: number;
+  lanesBest: number;
+  duelBest: number;
   /** Apagón diario. */
   daily: DailyRecord;
   /** Conecta las calles (segundo puzzle diario). */
@@ -177,6 +182,10 @@ export function newState(t: number): GameState {
     fireBest: 0,
     metroBest: 0,
     towersBest: 0,
+    flakBest: 0,
+    artilleryBest: 0,
+    lanesBest: 0,
+    duelBest: 0,
     daily: { last: null, streak: 0, bestStreak: 0 },
     roads: { last: null, streak: 0, bestStreak: 0 },
     parks: { last: null, streak: 0, bestStreak: 0 },
@@ -411,6 +420,10 @@ export function normalize(raw: unknown, t: number): GameState {
     fireBest: num(r.fireBest, 0),
     metroBest: num(r.metroBest, 0),
     towersBest: num(r.towersBest, 0),
+    flakBest: num(r.flakBest, 0),
+    artilleryBest: num(r.artilleryBest, 0),
+    lanesBest: num(r.lanesBest, 0),
+    duelBest: num(r.duelBest, 0),
     submittedBest: numRecord(r.submittedBest),
     pendingDaily: pendingDaily(r.pendingDaily),
     wheelLast: day(typeof r.wheelLast === 'string' ? r.wheelLast : null),

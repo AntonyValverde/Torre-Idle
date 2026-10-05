@@ -113,6 +113,7 @@ import { casinoOpen } from './casino';
 import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { PAPER_GEMS, paperUnread } from './paper';
+import { WAR_INFO, warCoins, warGems, type WarGame } from './war';
 import { applyGiftSent, applyGiftsReceived, type GiftIn } from './social';
 import {
   RECRUIT_DAILY,
@@ -225,6 +226,8 @@ interface GameStore {
   rewardFire(score: number): ThiefReward;
   rewardMetro(score: number): StackReward;
   rewardTowers(score: number): ThiefReward;
+  /** Premio de un juego de guerra del arcade (Defensa antiaérea, Artillería, Defensa de calles, Duelo). */
+  rewardWar(game: WarGame, score: number): ThiefReward;
   /** Conquista: apunta en qué semana y mundo juega el alcalde. */
   setConquestWorld(week: string, w: string): void;
   /** Conquista: guarda los partes de batalla nuevos y devuelve los recién llegados. */
@@ -658,6 +661,17 @@ export const useGame = create<GameStore>((set, get) => ({
     const gems = score >= 130 ? 6 : score >= 80 ? 4 : score >= 45 ? 2 : score >= 20 ? 1 : 0;
     set({ s: bump({ ...addCoins(s, coins), gems: s.gems + gems, towersBest: Math.max(s.towersBest, score) }, 'arcade') });
     return { coins, gems, newBest: score > s.towersBest };
+  },
+
+  rewardWar(game, score) {
+    const { s } = get();
+    const pps = productionPerSec(s, now(), false);
+    const coins = Math.round(warCoins(game, score, pps) * fxMult(s, 'arcadeCoins'));
+    const gems = warGems(game, score);
+    const key = WAR_INFO[game].best;
+    const prev = s[key];
+    set({ s: bump({ ...addCoins(s, coins), gems: s.gems + gems, [key]: Math.max(prev, score) }, 'arcade') });
+    return { coins, gems, newBest: score > prev };
   },
 
   setConquestWorld(week, w) {

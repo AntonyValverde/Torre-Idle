@@ -27,15 +27,15 @@ describe('récords pendientes de subir', () => {
   });
 
   it('cubre todos los minijuegos con ranking y redondea hacia abajo', () => {
-    const s = state({ mergeBest: 1500.7, thiefBest: 40, trafficBest: 33, memoryBest: 8, fireBest: 70, metroBest: 21, towersBest: 17 });
+    const s = state({ mergeBest: 1500.7, thiefBest: 40, trafficBest: 33, memoryBest: 8, fireBest: 70, metroBest: 21, towersBest: 17, flakBest: 90.5, artilleryBest: 44, lanesBest: 120, duelBest: 31 });
     const seen: string[] = [];
     let cur = s;
     for (let next = nextResend(cur); next; next = nextResend(cur)) {
       seen.push(`${next.board}:${next.score}`);
       cur = markSubmitted(cur, next.board, next.score);
     }
-    expect(seen).toEqual(['merge:1500', 'thief:40', 'traffic:33', 'memory:8', 'fire:70', 'metro:21', 'towers:17']);
-    expect(ARCADE_BOARDS).toHaveLength(8);
+    expect(seen).toEqual(['merge:1500', 'thief:40', 'traffic:33', 'memory:8', 'fire:70', 'metro:21', 'towers:17', 'flak:90', 'artillery:44', 'lanes:120', 'duel:31']);
+    expect(ARCADE_BOARDS).toHaveLength(12);
   });
 
   it('se salta los rankings que ya se están subiendo', () => {

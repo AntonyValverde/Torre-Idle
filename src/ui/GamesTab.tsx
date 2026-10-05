@@ -8,6 +8,7 @@ import { vipReady } from '../game/legacy';
 import { CASINO_ERA, casinoOpen, casinoToday } from '../game/casino';
 import { CupCard } from './cup/CupCard';
 import { ClaraTip } from './ClaraTip';
+import { WAR_GAMES, type WarGame } from '../game/war';
 
 export type GameId =
   | 'stack'
@@ -23,10 +24,11 @@ export type GameId =
   | 'fire'
   | 'metro'
   | 'casino'
-  | 'towers';
+  | 'towers'
+  | WarGame;
 
 /** Juegos que cuestan un ticket al entrar. */
-export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers'];
+export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers', ...WAR_GAMES];
 
 const NEW_TAG = <span className="new-tag">NUEVO</span>;
 
@@ -121,6 +123,46 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
           <b>Guerra de torres {NEW_TAG}</b>
           <small>Arrastra de tu torre a otra vecina para enviar soldados. ¡Conquista todas las del rival!</small>
           <small className="game-meta">🏆 Récord: {s.towersBest} pts</small>
+        </div>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
+      </button>
+
+      <button className="game-card flak" disabled={!canPlay} onClick={() => onPlay('flak')}>
+        <span className="game-emoji">🛡️</span>
+        <div className="game-info">
+          <b>Defensa antiaérea {NEW_TAG}</b>
+          <small>Toca el cielo para derribar lo que cae sobre tu ciudad. ¡Las explosiones encadenadas puntúan más!</small>
+          <small className="game-meta">🏆 Récord: {s.flakBest} pts</small>
+        </div>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
+      </button>
+
+      <button className="game-card artillery" disabled={!canPlay} onClick={() => onPlay('artillery')}>
+        <span className="game-emoji">🎯</span>
+        <div className="game-info">
+          <b>Artillería {NEW_TAG}</b>
+          <small>Apunta el cañón de la muralla y frena las máquinas de asedio. Ojo con el viento.</small>
+          <small className="game-meta">🏆 Récord: {s.artilleryBest} pts</small>
+        </div>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
+      </button>
+
+      <button className="game-card lanes" disabled={!canPlay} onClick={() => onPlay('lanes')}>
+        <span className="game-emoji">🚧</span>
+        <div className="game-info">
+          <b>Defensa de calles {NEW_TAG}</b>
+          <small>Construye torretas, barricadas y cañones para que no lleguen al ayuntamiento.</small>
+          <small className="game-meta">🏆 Récord: {s.lanesBest} pts</small>
+        </div>
+        <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
+      </button>
+
+      <button className="game-card duel" disabled={!canPlay} onClick={() => onPlay('duel')}>
+        <span className="game-emoji">🎖️</span>
+        <div className="game-info">
+          <b>Duelo de generales {NEW_TAG}</b>
+          <small>Infantería, arqueros o caballería: lee la manía de cada general y gana sus batallas.</small>
+          <small className="game-meta">🏆 Récord: {s.duelBest} pts</small>
         </div>
         <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
       </button>

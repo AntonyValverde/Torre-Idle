@@ -5907,6 +5907,23 @@ img.splash-logo {
   background: linear-gradient(135deg, #2a5fc8, #3a2a8a);
 }
 
+/* Juegos de guerra */
+.game-card.flak:not(:disabled) {
+  background: linear-gradient(135deg, #1d2a6a, #7a2a5a);
+}
+
+.game-card.artillery:not(:disabled) {
+  background: linear-gradient(135deg, #6a4a2a, #2a6a8a);
+}
+
+.game-card.lanes:not(:disabled) {
+  background: linear-gradient(135deg, #3a6b2f, #6a5a8a);
+}
+
+.game-card.duel:not(:disabled) {
+  background: linear-gradient(135deg, #8a6a1a, #6a2a2a);
+}
+
 /* Bomberos */
 .fire-danger {
   height: 8px;

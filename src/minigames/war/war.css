@@ -1,0 +1,553 @@
+/* ---------- Juegos de guerra del arcade (Defensa antiaérea, Artillería, Defensa de calles, Duelo) ---------- */
+
+.war-host {
+  height: 100%;
+}
+
+.war-wrap {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.war-wrap.shake {
+  animation: shake 0.35s linear;
+}
+
+.war-field {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.45);
+}
+
+.war-flash {
+  fill: #ffe066;
+  font-weight: 800;
+  stroke: rgba(8, 14, 30, 0.85);
+  stroke-width: 0.6;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+.war-flash.bad {
+  fill: #ff6b81;
+}
+
+/* Avisos de oleada: arriba y sin oscurecer el campo (se sigue jugando debajo) */
+.countdown.war-banner {
+  background: transparent;
+  align-items: flex-start;
+  padding: 34% 16px 0;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.war-hearts {
+  font-size: 1rem !important;
+  letter-spacing: -2px;
+  white-space: nowrap;
+}
+
+.war-ammo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+}
+
+/* Defensa antiaérea */
+.flak-field {
+  background: linear-gradient(180deg, #0b1030 0%, #1d2350 55%, #3b2c5c 85%, #5a3a4e 100%);
+}
+
+.flak-star {
+  fill: rgba(255, 255, 255, 0.7);
+}
+
+.flak-ground {
+  fill: #1b1a24;
+}
+
+.flak-building {
+  fill: #2a3352;
+  stroke: rgba(150, 170, 230, 0.35);
+  stroke-width: 0.4;
+}
+
+.flak-win {
+  fill: #ffd76a;
+  opacity: 0.85;
+}
+
+.flak-win.off {
+  fill: #141a30;
+}
+
+.flak-rubble {
+  fill: #3a3440;
+  stroke: #ff8a4a;
+  stroke-width: 0.35;
+}
+
+.flak-battery {
+  fill: #5a6b7e;
+  stroke: #c9d6e6;
+  stroke-width: 0.4;
+}
+
+.flak-barrel {
+  fill: #c9d6e6;
+}
+
+.flak-enemy {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 0.35;
+}
+
+.flak-enemy.split {
+  stroke: #ff5a5f;
+  stroke-width: 0.6;
+}
+
+.flak-enemy.fast {
+  stroke: #ffe066;
+}
+
+.flak-shot {
+  fill: #fff;
+}
+
+.flak-shot-trail {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.35;
+}
+
+.flak-mark {
+  stroke: #7ad7ff;
+  stroke-width: 0.5;
+  fill: none;
+}
+
+/* Artillería */
+.art-field {
+  background: linear-gradient(180deg, #7fb6e6 0%, #b9dbef 60%, #e9e2c8 100%);
+}
+
+.art-hills {
+  fill: #7d9a6a;
+  opacity: 0.6;
+}
+
+.art-ground {
+  fill: #6b8a4a;
+}
+
+.art-wall {
+  fill: #9a8f80;
+  stroke: #4d463d;
+  stroke-width: 0.5;
+}
+
+.art-wall.cracked {
+  fill: #7d6f62;
+}
+
+.art-bricks {
+  stroke: rgba(60, 52, 44, 0.45);
+  stroke-width: 0.35;
+  fill: none;
+}
+
+.art-barrel {
+  fill: #2c2f38;
+}
+
+.art-cannon {
+  fill: #4a3a2a;
+  stroke: #1d1610;
+  stroke-width: 0.5;
+}
+
+.art-reload {
+  stroke: #ffb938;
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.art-dot {
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 0.2;
+}
+
+.art-wood {
+  fill: #8a5a32;
+  stroke: #3d2614;
+  stroke-width: 0.4;
+}
+
+.art-wood.dark {
+  fill: #6e4526;
+}
+
+.art-log {
+  fill: #c69a63;
+  stroke: #3d2614;
+  stroke-width: 0.3;
+}
+
+.art-slot {
+  fill: #2a1a0e;
+}
+
+.art-wheel {
+  fill: #2a2420;
+  stroke: #b9a487;
+  stroke-width: 0.3;
+}
+
+.art-horse {
+  fill: #5a3d2a;
+}
+
+.art-legs,
+.art-lance {
+  stroke: #3a281b;
+  stroke-width: 0.6;
+  fill: none;
+}
+
+.art-lance {
+  stroke: #d8d2c4;
+  stroke-width: 0.4;
+}
+
+.art-rider {
+  fill: #c8402a;
+}
+
+.art-hp {
+  fill: rgba(0, 0, 0, 0.3);
+}
+
+.art-hp.on {
+  fill: #ff5a5f;
+}
+
+.art-enemy.hurt {
+  opacity: 0.55;
+}
+
+.art-shell {
+  fill: #1d1f26;
+}
+
+.art-trail {
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+.art-blast {
+  fill: #ffb938;
+  stroke: #ff5a3a;
+  stroke-width: 0.6;
+}
+
+/* Defensa de calles */
+.lanes-field {
+  background: #3c6b3f;
+}
+
+.lanes-street {
+  fill: #3a3d48;
+}
+
+.lanes-dash {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.6;
+  stroke-dasharray: 3 3;
+}
+
+.lanes-block {
+  fill: #2f5534;
+}
+
+.lanes-slot {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 0.4;
+  stroke-dasharray: 1.5 1;
+}
+
+.lanes-slot.free {
+  stroke: rgba(122, 215, 255, 0.7);
+}
+
+.lanes-slot.taken {
+  fill: rgba(0, 0, 0, 0.25);
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-dasharray: none;
+}
+
+.lanes-def text,
+.lanes-enemy text {
+  pointer-events: none;
+}
+
+.lanes-enemy.hurt {
+  opacity: 0.6;
+}
+
+.lanes-bar {
+  fill: rgba(0, 0, 0, 0.5);
+}
+
+.lanes-bar.hp {
+  fill: #6ee07a;
+}
+
+.lanes-bar.foe {
+  fill: #ff5a5f;
+}
+
+.lanes-tracer {
+  stroke: #ffe066;
+  stroke-width: 0.6;
+}
+
+.lanes-tracer.cannon {
+  stroke: #ff8a4a;
+  stroke-width: 1.6;
+}
+
+.lanes-hall {
+  fill: #6a5a8a;
+}
+
+.lanes-bar-row {
+  display: grid;
+  grid-template-columns: auto repeat(3, 1fr);
+  gap: 6px;
+  align-items: stretch;
+}
+
+.lanes-money {
+  display: flex;
+  align-items: center;
+  font-weight: 800;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.lanes-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 2px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+}
+
+.lanes-pick span {
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+.lanes-pick small {
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.lanes-pick.on {
+  border-color: #7ad7ff;
+  box-shadow: 0 0 0 2px rgba(122, 215, 255, 0.35);
+}
+
+.lanes-pick.poor {
+  opacity: 0.55;
+}
+
+/* Duelo de generales */
+.duel-wrap {
+  overflow-y: auto;
+}
+
+.duel-general {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 12px;
+}
+
+.duel-general div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.duel-general small {
+  color: var(--muted);
+}
+
+.duel-face {
+  font-size: 2rem;
+}
+
+.duel-hand {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: 1.3rem;
+}
+
+.duel-hand span.none {
+  opacity: 0.3;
+}
+
+.duel-hand b {
+  font-size: 0.9rem;
+  margin-left: 2px;
+}
+
+.duel-arena {
+  flex: 1;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 60%, #3c6b3f, #22402a 75%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.duel-clash {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: 4px 12px;
+  animation: popUp 0.2s ease-out;
+}
+
+.duel-clash small {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.duel-clash.idle small {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.duel-unit {
+  font-size: 2.8rem;
+  line-height: 1;
+}
+
+.duel-clash.win .duel-unit.theirs,
+.duel-clash.lose .duel-unit.mine {
+  opacity: 0.4;
+  filter: grayscale(0.8);
+}
+
+.duel-vs {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #ffe066;
+}
+
+.duel-rounds {
+  display: flex;
+  gap: 8px;
+  font-size: 1.1rem;
+}
+
+.duel-rounds span {
+  width: 1.6em;
+  height: 1.6em;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+.duel-rounds span.now {
+  box-shadow: 0 0 0 2px #ffe066;
+}
+
+.duel-picks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.duel-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+}
+
+.duel-pick span {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.duel-pick small {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.duel-pick:disabled {
+  opacity: 0.4;
+}
+
+.duel-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.duel-result.win {
+  border-color: #ffd24a;
+}
+
+.duel-result.lose {
+  border-color: #ff6b81;
+}

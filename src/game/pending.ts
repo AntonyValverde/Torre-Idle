@@ -1,13 +1,14 @@
 import { prevDateKey } from './clock';
 import type { GameState, PendingDaily } from './state';
+import { WAR_GAMES, warBest, type WarGame } from './war';
 
 // Subidas a los rankings que pueden fallar (sin conexión, sin sesión todavía, app cerrada antes de
 // que llegue la escritura). La partida recuerda qué récord ya se subió y qué retos diarios faltan,
 // y el guardado automático los reintenta.
 
 /** Rankings de minijuegos que dependen de un récord guardado en la partida. */
-export type ArcadeBoard = 'stack' | 'merge' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro' | 'towers';
-export const ARCADE_BOARDS: ArcadeBoard[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers'];
+export type ArcadeBoard = 'stack' | 'merge' | 'thief' | 'traffic' | 'memory' | 'fire' | 'metro' | 'towers' | WarGame;
+export const ARCADE_BOARDS: ArcadeBoard[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers', ...WAR_GAMES];
 
 /** Las reglas de Firestore no aceptan más de 999 movimientos en un reto diario. */
 export const DAILY_MOVES_MAX = 999;
@@ -25,6 +26,10 @@ export const BOARD_CAP: Record<ArcadeBoard | 'city' | 'stars', number> = {
   fire: 5000,
   metro: 5000,
   towers: 5000,
+  flak: 5000,
+  artillery: 5000,
+  lanes: 5000,
+  duel: 5000,
   city: Infinity,
   stars: 1e9,
 };
@@ -60,6 +65,8 @@ export function localBest(s: GameState, board: ArcadeBoard): number {
       return s.metroBest;
     case 'towers':
       return s.towersBest;
+    default:
+      return warBest(s, board);
   }
 }
 

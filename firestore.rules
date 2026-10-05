@@ -92,7 +92,9 @@ service cloud.firestore {
           || (board == 'memory' && s is int && s >= 0 && s <= 500)
           || (board == 'fire' && s is int && s >= 0 && s <= 5000)
           || (board == 'metro' && s is int && s >= 0 && s <= 5000)
-          || (board == 'towers' && s is int && s >= 0 && s <= 5000);
+          || (board == 'towers' && s is int && s >= 0 && s <= 5000)
+          // Juegos de guerra: Defensa antiaérea, Artillería, Defensa de calles y Duelo de generales
+          || (board in ['flak', 'artillery', 'lanes', 'duel'] && s is int && s >= 0 && s <= 5000);
       }
 
       function validEntry() {
