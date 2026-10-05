@@ -1,5 +1,5 @@
 import { BUILDINGS, totalBuildings } from './economy';
-import { PASS_DECOS } from './pass';
+import { DECO_PUBLIC_MAX, PASS_DECOS, activeDecos } from './pass';
 import type { GameState } from './state';
 
 // Ciudad pública: lo justo para dibujar la ciudad de otro jugador cuando la visitas.
@@ -18,11 +18,11 @@ export interface CitySnapshot {
   gifts?: number;
   /** Temporadas de Conquista ganadas (banderas azules). Solo se envía si hay alguna. */
   conq?: number;
-  /** Cosméticos del pase de temporada ("zeppelin,aurora"). Solo se envía si hay alguno. */
+  /** Cosméticos activos de la ciudad ("zeppelin,garden"). Solo se envía si hay alguno. */
   deco?: string;
 }
 
-const DECO_RE = /^[a-z]{3,12}(,[a-z]{3,12}){0,3}$/;
+const DECO_RE = new RegExp('^[a-z]{3,12}(,[a-z]{3,12}){0,' + (DECO_PUBLIC_MAX - 1) + '}$');
 
 /**
  * Cuántos edificios de cada tipo se dibujan: 0 si no hay, y luego 1–4 según la cantidad
@@ -46,7 +46,7 @@ export function citySnapshot(s: GameState): CitySnapshot {
     cups: [s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons].map((n) => Math.min(99999, Math.floor(n))).join(','),
     ...(s.social.received > 0 ? { gifts: Math.min(10_000_000, Math.floor(s.social.received)) } : {}),
     ...(s.conquest.wins > 0 ? { conq: Math.min(10_000, Math.floor(s.conquest.wins)) } : {}),
-    ...(s.pass.decos.length ? { deco: s.pass.decos.slice(0, 4).join(',') } : {}),
+    ...(activeDecos(s.pass).length ? { deco: activeDecos(s.pass).join(',') } : {}),
   };
 }
 

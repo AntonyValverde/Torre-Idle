@@ -139,7 +139,7 @@ await no('ciudad: publicar la de otro', () => setDoc(doc(bob, 'cities/alice'), c
 await no('ciudad: plano mal formado', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', layout: '<img src=x>' })));
 await no('ciudad: tamaño de edificio imposible', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', layout: '9,9,9' })));
 await no('ciudad: cosmético mal formado', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', deco: 'Zeppelin,<b>' })));
-await no('ciudad: demasiados cosméticos', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', deco: 'a1,bb,ccc,dddd,eeee' })));
+await no('ciudad: demasiados cosméticos', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', deco: 'aaa,bbb,ccc,ddd,eee,fff,ggg,hhh,iii' })));
 await no('ciudad: campo extra', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', admin: true })));
 await no('ciudad: falta un campo', () => {
   const { stars, ...rest } = city({ name: 'Bob' });

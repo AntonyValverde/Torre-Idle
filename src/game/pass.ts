@@ -30,20 +30,44 @@ export interface PassState {
   xp: number;
   /** Niveles ya cobrados (0..PASS_LEVELS.length). */
   claimed: number;
-  /** Cosméticos conseguidos (ids de PASS_DECOS), de todas las temporadas. */
+  /** Cosméticos conseguidos (ids de PASS_DECOS): los de temporada por el pase y los de la tienda con gemas. */
   decos: string[];
+  /** Cosméticos conseguidos pero apagados (no se dibujan ni se publican). */
+  hidden: string[];
   /** Puntos ganados en total (para el periódico y las estadísticas). */
   total: number;
 }
 
-/** Cosméticos exclusivos por temporada (el de la temporada n es DECOS[n % DECOS.length]). */
-export const PASS_DECOS: Record<string, { emoji: string; name: string; desc: string }> = {
+export interface DecoDef {
+  emoji: string;
+  name: string;
+  desc: string;
+  /** Precio en gemas en la tienda de Decoración; sin precio = exclusivo del pase de temporada. */
+  price?: number;
+}
+
+/**
+ * Cosméticos de la ciudad. Los cuatro primeros son exclusivos de temporada (el de la temporada n es
+ * DECO_ORDER[n % 4]); el resto se compra con gemas en Mejoras → Decoración. Todos se dibujan en la
+ * escena de la ciudad y viajan en el campo `deco` de la ciudad pública.
+ */
+export const PASS_DECOS: Record<string, DecoDef> = {
   zeppelin: { emoji: '🛩️', name: 'Zepelín dorado', desc: 'Un zepelín dorado sobrevuela tu ciudad' },
   aurora: { emoji: '🌌', name: 'Aurora', desc: 'Una aurora boreal ilumina tus noches' },
   fountain: { emoji: '⛲', name: 'Fuente de mármol', desc: 'Una fuente monumental en la plaza' },
   lanterns: { emoji: '🏮', name: 'Farolillos', desc: 'Farolillos de colores entre los edificios' },
+  garden: { emoji: '🌷', name: 'Jardín floral', desc: 'Parterres de flores delante del ayuntamiento', price: 40 },
+  kites: { emoji: '🪁', name: 'Cometas', desc: 'Cometas de colores bailan sobre la ciudad', price: 50 },
+  birds: { emoji: '🕊️', name: 'Bandada', desc: 'Una bandada de pájaros cruza el cielo', price: 60 },
+  statue: { emoji: '🗽', name: 'Estatua del alcalde', desc: 'Una estatua tuya en la plaza', price: 90 },
+  neon: { emoji: '💡', name: 'Luces de neón', desc: 'Los edificios se perfilan con neón por la noche', price: 100 },
+  fireworks: { emoji: '🎆', name: 'Fuegos artificiales', desc: 'Fuegos artificiales cada noche', price: 120 },
 };
 const DECO_ORDER = ['zeppelin', 'aurora', 'fountain', 'lanterns'];
+/** Ids de la tienda, en orden de precio. */
+export const SHOP_DECOS = Object.keys(PASS_DECOS).filter((id) => PASS_DECOS[id].price !== undefined);
+/** Máximo de cosméticos que viajan en la ciudad pública (lo mismo que admiten las reglas). */
+export const DECO_PUBLIC_MAX = 8;
 
 export function seasonDeco(season: number): string {
   return DECO_ORDER[((season % DECO_ORDER.length) + DECO_ORDER.length) % DECO_ORDER.length];
@@ -87,7 +111,7 @@ export const PASS_MAX = PASS_LEVELS.length;
 export const PASS_TOTAL_XP = PASS_LEVELS.reduce((n, l) => n + l.cost, 0);
 
 export function newPass(season = 0): PassState {
-  return { season, xp: 0, claimed: 0, decos: [], total: 0 };
+  return { season, xp: 0, claimed: 0, decos: [], hidden: [], total: 0 };
 }
 
 /** Temporada del pase en un instante dado (la de la Copa). */
@@ -146,7 +170,7 @@ export function rolloverPass(p: PassState, season: number): { pass: PassState; o
   const level = passLevel(p.xp);
   const owed: PassReward[] = [];
   for (let l = p.claimed + 1; l <= level; l++) owed.push(passRewardAt(l, p.season));
-  return { pass: { ...newPass(season), decos: p.decos, total: p.total }, owed };
+  return { pass: { ...newPass(season), decos: p.decos, hidden: p.hidden, total: p.total }, owed };
 }
 
 /** Cobra el siguiente nivel pendiente; null si no hay. */
@@ -158,8 +182,33 @@ export function claimNext(p: PassState): { pass: PassState; level: number; rewar
   return { pass: { ...p, claimed: level, decos }, level, reward };
 }
 
-export function hasDeco(p: PassState, id: string): boolean {
+/** Conseguido (aunque esté apagado). */
+export function ownsDeco(p: PassState, id: string): boolean {
   return p.decos.includes(id);
+}
+
+/** Conseguido y encendido: es lo que se dibuja y se publica. */
+export function hasDeco(p: PassState, id: string): boolean {
+  return p.decos.includes(id) && !p.hidden.includes(id);
+}
+
+/** Cosméticos activos, en el orden en que se consiguieron (como mucho DECO_PUBLIC_MAX). */
+export function activeDecos(p: PassState): string[] {
+  return p.decos.filter((d) => !p.hidden.includes(d)).slice(0, DECO_PUBLIC_MAX);
+}
+
+/** Compra un cosmético de la tienda; null si no existe, ya se tiene o no alcanzan las gemas. */
+export function buyDecoWith(p: PassState, id: string, gems: number): { pass: PassState; price: number } | null {
+  const price = PASS_DECOS[id]?.price;
+  if (price === undefined || p.decos.includes(id) || !(gems >= price)) return null;
+  return { pass: { ...p, decos: [...p.decos, id] }, price };
+}
+
+/** Enciende o apaga un cosmético conseguido. */
+export function toggleDeco(p: PassState, id: string): PassState {
+  if (!p.decos.includes(id)) return p;
+  const hidden = p.hidden.includes(id) ? p.hidden.filter((d) => d !== id) : [...p.hidden, id];
+  return { ...p, hidden };
 }
 
 /** Texto corto de un premio, para los avisos. */
@@ -194,6 +243,7 @@ export function passState(v: unknown, season: number): PassState {
     xp: int(r.xp, 0),
     claimed: Math.min(PASS_MAX, int(r.claimed, 0)),
     decos: Array.isArray(r.decos) ? r.decos.filter((d): d is string => typeof d === 'string' && d in PASS_DECOS) : [],
+    hidden: Array.isArray(r.hidden) ? r.hidden.filter((d): d is string => typeof d === 'string' && d in PASS_DECOS) : [],
     total: int(r.total, 0),
   };
 }

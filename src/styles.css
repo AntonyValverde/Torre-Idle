@@ -6151,6 +6151,81 @@ img.splash-logo {
   margin-top: 4px;
 }
 
+/* ---------- Decoración (Mejoras → Decoración) ---------- */
+
+/* Cinco secciones en Mejoras: letra un punto más pequeña para que quepan en 360px sin desplazarse */
+.segmented.wide.five button {
+  padding: 7px 0;
+  font-size: 0.74rem;
+}
+
+/* Interruptor Visible/Oculto de un cosmético conseguido */
+.deco-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.deco-toggle .deco-knob {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.deco-toggle .deco-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.deco-toggle.on {
+  background: linear-gradient(180deg, #a9ecff, #4aa8ff);
+  border-color: transparent;
+  color: #04213f;
+}
+
+.deco-toggle.on .deco-knob {
+  background: rgba(4, 33, 63, 0.3);
+}
+
+.deco-toggle.on .deco-knob::after {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+/* Cuándo lo da el pase (cosmético de temporada que aún no se tiene) */
+.deco-tag {
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 /* ---------- Pase de temporada ---------- */
 
 .card.pass-card {

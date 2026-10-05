@@ -22,6 +22,7 @@ import { useGame } from '../game/store';
 import { currentStep, isUnlocked } from '../game/tutorial';
 import { advisorsAlert } from '../game/advisors';
 import { CASINO_ERA } from '../game/casino';
+import { PASS_DECOS, SHOP_DECOS, ownsDeco, hasDeco, seasonDeco } from '../game/pass';
 import { sfx, vibrate } from './haptics';
 import { Council } from './Council';
 import { LawCard } from './LawCard';
@@ -29,7 +30,7 @@ import { LegacyTree } from './LegacyTree';
 import { Modal } from './Modal';
 import { ClaraTip } from './ClaraTip';
 
-type Section = 'upgrades' | 'council' | 'gems' | 'legacy';
+type Section = 'upgrades' | 'council' | 'gems' | 'deco' | 'legacy';
 
 export function UpgradesTab() {
   const s = useGame((st) => st.s);
@@ -49,7 +50,7 @@ export function UpgradesTab() {
 
   return (
     <div className="tab">
-      <div className="segmented wide four">
+      <div className="segmented wide four five">
         <button className={section === 'upgrades' ? 'active' : ''} onClick={() => setSection('upgrades')}>
           🪙 Mejoras{upgradesCount > 0 && <span className="seg-badge">{upgradesCount}</span>}
         </button>
@@ -59,6 +60,9 @@ export function UpgradesTab() {
         <button className={section === 'gems' ? 'active' : ''} onClick={() => setSection('gems')}>
           💎 Gemas
         </button>
+        <button className={section === 'deco' ? 'active' : ''} onClick={() => setSection('deco')}>
+          🎀 Decoración
+        </button>
         <button className={section === 'legacy' ? 'active' : ''} onClick={() => setSection('legacy')}>
           ⭐ Legado{pendingStars(s) > 0 && <span className="seg-badge">!</span>}
         </button>
@@ -66,6 +70,7 @@ export function UpgradesTab() {
       {section === 'upgrades' && <CoinUpgrades />}
       {section === 'council' && <Council />}
       {section === 'gems' && <GemShop />}
+      {section === 'deco' && <DecoShop />}
       {section === 'legacy' && <Legacy />}
     </div>
   );
@@ -170,6 +175,130 @@ function GemShop() {
         <small>Gana gemas en Fusión, el Apagón diario, logros, decretos y globos dorados. También compran sobres de consejeros en 🧑‍💼 Consejo.</small>
       </div>
       <ShopList items={GEM_SHOP} level={(id) => gemLevel(s, id)} budget={s.gems} currency="💎" onBuy={buyGem} />
+    </>
+  );
+}
+
+/** Cosméticos de temporada: los cuatro exclusivos del nivel 25 del pase, en el orden en que rotan. */
+const SEASON_DECOS = [0, 1, 2, 3].map(seasonDeco);
+
+/** Interruptor Visible/Oculto de un cosmético conseguido. */
+function DecoToggle({ id }: { id: string }) {
+  const pass = useGame((st) => st.s.pass);
+  const toggle = useGame((st) => st.toggleDeco);
+  const on = hasDeco(pass, id);
+  return (
+    <button
+      type="button"
+      className={`deco-toggle${on ? ' on' : ''}`}
+      aria-pressed={on}
+      aria-label={`${PASS_DECOS[id].name}: ${on ? 'visible' : 'oculto'}`}
+      onClick={() => {
+        toggle(id);
+        sfx('tap');
+        vibrate(8);
+      }}
+    >
+      <span className="deco-knob" />
+      {on ? 'Visible' : 'Oculto'}
+    </button>
+  );
+}
+
+/** Tienda de Decoración: cosméticos de la ciudad con gemas y los exclusivos del pase de temporada. */
+function DecoShop() {
+  const s = useGame((st) => st.s);
+  const pass = s.pass;
+  const ownedShop = SHOP_DECOS.filter((id) => ownsDeco(pass, id)).length;
+  const ownedSeason = SEASON_DECOS.filter((id) => ownsDeco(pass, id)).length;
+
+  const buy = (id: string) => {
+    const price = useGame.getState().buyDeco(id);
+    if (!price) return;
+    sfx('buy');
+    vibrate(15);
+    useGame.getState().toast(`🎀 ${PASS_DECOS[id].name} añadido a tu ciudad`);
+    track('deco_buy', { id });
+  };
+
+  /** Texto de un cosmético de temporada que aún no se tiene: en qué temporada lo da el pase. */
+  const seasonTag = (id: string) => {
+    const at = [0, 1, 2, 3].map((k) => pass.season + k).find((n) => seasonDeco(n) === id) ?? pass.season;
+    return at === pass.season ? 'Nivel 25 del pase de esta temporada' : `Nivel 25 del pase · Temporada ${at + 1}`;
+  };
+
+  return (
+    <>
+      <div className="currency-banner gem">
+        <span className="big">💎 {fmt(s.gems)}</span>
+        <small>Decora tu ciudad. Lo que compres se ve también cuando otros alcaldes te visitan.</small>
+      </div>
+
+      <div className="section-head">
+        <h2>Tienda</h2>
+        <small className="muted">
+          {ownedShop}/{SHOP_DECOS.length}
+        </small>
+      </div>
+      <ul className="list">
+        {SHOP_DECOS.map((id) => {
+          const d = PASS_DECOS[id];
+          const price = d.price ?? 0;
+          const owned = ownsDeco(pass, id);
+          const can = !owned && s.gems >= price;
+          return (
+            <li key={id} className={`row${can ? ' can' : ''}`}>
+              <span className="row-emoji">{d.emoji}</span>
+              <div className="row-main">
+                <b>
+                  {d.name}
+                  {owned && <span className="owned">✓</span>}
+                </b>
+                <small>{d.desc}</small>
+              </div>
+              {owned ? (
+                <DecoToggle id={id} />
+              ) : (
+                <button
+                  className={`buy gem${can ? ' can' : ''}`}
+                  style={{ '--p': `${Math.min(100, (s.gems / price) * 100)}%` } as CSSProperties}
+                  disabled={!can}
+                  onClick={() => buy(id)}
+                >
+                  {fmt(price)} 💎
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="section-head">
+        <h2>De temporada</h2>
+        <small className="muted">
+          {ownedSeason}/{SEASON_DECOS.length}
+        </small>
+      </div>
+      <ul className="list">
+        {SEASON_DECOS.map((id) => {
+          const d = PASS_DECOS[id];
+          const owned = ownsDeco(pass, id);
+          return (
+            <li key={id} className={`row${owned ? '' : ' locked'}`}>
+              <span className="row-emoji">{d.emoji}</span>
+              <div className="row-main">
+                <b>
+                  {d.name}
+                  {owned && <span className="owned">✓</span>}
+                </b>
+                <small>{d.desc}</small>
+                {!owned && <small className="deco-tag">🎫 {seasonTag(id)}</small>}
+              </div>
+              {owned && <DecoToggle id={id} />}
+            </li>
+          );
+        })}
+      </ul>
     </>
   );
 }

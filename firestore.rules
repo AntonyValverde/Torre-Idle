@@ -196,8 +196,8 @@ service cloud.firestore {
           && (!('gifts' in d) || (d.gifts is int && d.gifts >= 0 && d.gifts <= 10000000))
           // Temporadas de Conquista ganadas (bandera en la ciudad): opcional
           && (!('conq' in d) || (d.conq is int && d.conq >= 0 && d.conq <= 10000))
-          // Cosméticos del pase de temporada: hasta cuatro ids en minúsculas separados por comas (opcional)
-          && (!('deco' in d) || (d.deco is string && d.deco.matches('^[a-z]{3,12}(,[a-z]{3,12}){0,3}$')))
+          // Cosméticos de la ciudad (pase de temporada y tienda): hasta ocho ids en minúsculas separados por comas (opcional)
+          && (!('deco' in d) || (d.deco is string && d.deco.matches('^[a-z]{3,12}(,[a-z]{3,12}){0,7}$')))
           && d.updatedAt == request.time;
       }
 

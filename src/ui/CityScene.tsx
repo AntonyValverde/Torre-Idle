@@ -105,6 +105,17 @@ interface Spark {
   hue: number;
 }
 
+/** Estallido de los fuegos artificiales del pase: las chispas se calculan a partir de su edad (sin asignar nada por frame). */
+interface Burst {
+  x: number;
+  y: number;
+  hue: number;
+  age: number;
+  life: number;
+  vx: Float32Array;
+  vy: Float32Array;
+}
+
 interface Drop {
   x: number;
   y: number;
@@ -406,6 +417,13 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
     let shake = 0;
     // Zepelín dorado (cosmético del pase): posición horizontal relativa, da la vuelta sin fin
     let zepX = Math.random();
+    // Resto de cosméticos del pase: bandada, cometas y fuegos de cada noche
+    const LANTERN_COLORS = ['#ff5a5a', '#ffb13d', '#ffe24a', '#4ddc8a', '#4ab8ff', '#ff6fd8', '#c38bff'];
+    let birdT = Math.random() * 40;
+    const kites = [350, 48, 200].map((hue, i) => ({ x: 0.2 + i * 0.3, y: 0.2 + (i % 2) * 0.07, hue, phase: i * 2.1 }));
+    const decoBursts: Burst[] = [];
+    const decoRocket = { alive: false, x: 0, y: 0, vy: 0, top: 0, hue: 0 };
+    let decoFuse = 3 + Math.random() * 3;
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -531,6 +549,375 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       ctx.fillRect(x - 4 * scale, y + ry - 1 * scale, 8 * scale, 3.5 * scale);
       ctx.fillStyle = `rgba(255,236,170,${0.5 + night * 0.5})`;
       ctx.fillRect(x - 1 * scale, y + ry, 2 * scale, 2 * scale);
+    }
+
+    // ---------- Cosméticos del pase de temporada (cada uno solo si la ciudad lo tiene activo) ----------
+
+    /** Aurora boreal: tres cortinas verdes, violetas y turquesas que ondean despacio, solo de noche y detrás de las nubes. */
+    function drawAurora(t: number, night: number) {
+      const colors = ['110,255,180', '160,120,255', '90,220,255'];
+      for (let i = 0; i < 3; i++) {
+        const y0 = H * (0.05 + i * 0.055);
+        const thick = (14 + i * 4) * scale;
+        const g = ctx.createLinearGradient(0, y0, 0, y0 + thick * 2.2);
+        g.addColorStop(0, `rgba(${colors[i]},0)`);
+        g.addColorStop(0.35, `rgba(${colors[i]},${0.17 * night})`);
+        g.addColorStop(1, `rgba(${colors[i]},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(-10, y0);
+        for (let x = 0; x <= W + 20; x += 16) ctx.lineTo(x, y0 + Math.sin(x / (70 + i * 15) + t / (1600 + i * 500)) * 9 * scale);
+        for (let x = W + 20; x >= 0; x -= 16) ctx.lineTo(x, y0 + thick * 1.6 + Math.sin(x / (55 + i * 10) - t / (1900 + i * 400)) * 12 * scale);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    /** Bandada: nueve pájaros en "V" suelta que cruzan el cielo cada 40 s, aleteando. */
+    function drawBirds(t: number, dt: number, night: number) {
+      birdT += dt;
+      const p = (birdT % 40) / 40;
+      const lx = W * (-0.15 + p * 1.3);
+      const ly = H * 0.15 + Math.sin(t / 2300) * 10 * scale;
+      ctx.strokeStyle = `rgba(30,24,60,${0.8 - night * 0.45})`;
+      ctx.lineWidth = Math.max(1, 1.1 * scale);
+      ctx.beginPath();
+      for (let i = 0; i < 9; i++) {
+        const row = Math.ceil(i / 2);
+        const side = i % 2 ? -1 : 1;
+        const x = lx - row * 9 * scale + Math.sin(t / 900 + i * 1.7) * 2 * scale;
+        const y = ly + side * row * 5.5 * scale + Math.sin(t / 1100 + i) * 2 * scale;
+        const flap = Math.sin(t / 110 + i * 0.9) * 2.2 * scale;
+        ctx.moveTo(x - 3.2 * scale, y - flap);
+        ctx.lineTo(x, y + 0.6 * scale);
+        ctx.lineTo(x + 3.2 * scale, y - flap);
+      }
+      ctx.stroke();
+    }
+
+    /** Cometas: tres rombos de colores con cola ondulante que van a la deriva por lo alto; de noche apenas se ven. */
+    function drawKites(t: number, night: number) {
+      ctx.globalAlpha = 1 - night * 0.55;
+      const w = 4.5 * scale;
+      const h = 6.5 * scale;
+      for (const k of kites) {
+        const x = (k.x + Math.sin(t / 4200 + k.phase) * 0.045) * W;
+        const y = (k.y + Math.sin(t / 1700 + k.phase * 2) * 0.02) * H;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.cos(t / 4200 + k.phase) * 0.35);
+        ctx.fillStyle = `hsl(${k.hue} 85% 60%)`;
+        ctx.beginPath();
+        ctx.moveTo(0, -h * 0.55);
+        ctx.lineTo(w, 0);
+        ctx.lineTo(0, h * 0.45);
+        ctx.lineTo(-w, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        ctx.fillRect(-0.4 * scale, -h * 0.55, 0.8 * scale, h);
+        // Cola ondulante
+        ctx.strokeStyle = `hsl(${k.hue} 70% 75%)`;
+        ctx.lineWidth = Math.max(1, 0.8 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, h * 0.45);
+        for (let j = 1; j <= 5; j++) ctx.lineTo(Math.sin(t / 180 + k.phase + j * 1.1) * 2.5 * scale * (j / 5), h * 0.45 + j * 3.5 * scale);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    /** Fuegos artificiales de cada noche: un cohete cada 4-7 s que estalla en un anillo de 20 chispas (como mucho 2 estallidos vivos). */
+    function drawNightFireworks(dt: number, night: number) {
+      const gy = groundY();
+      const r = decoRocket;
+      if (!r.alive && night > 0.4) {
+        decoFuse -= dt;
+        if (decoFuse <= 0 && decoBursts.length < 2) {
+          decoFuse = 4 + Math.random() * 3;
+          r.alive = true;
+          r.x = W * (0.12 + Math.random() * 0.76);
+          r.y = gy;
+          r.vy = -(220 + Math.random() * 90) * scale;
+          r.top = H * (0.12 + Math.random() * 0.22);
+          r.hue = Math.floor(Math.random() * 360);
+        }
+      }
+      if (r.alive) {
+        r.y += r.vy * dt;
+        ctx.fillStyle = `hsl(${r.hue} 90% 80%)`;
+        ctx.fillRect(r.x - 1, r.y, 2 * scale, 6 * scale);
+        if (r.y <= r.top) {
+          r.alive = false;
+          const n = 20;
+          const vx = new Float32Array(n);
+          const vy = new Float32Array(n);
+          const v = (85 + Math.random() * 40) * scale;
+          for (let k = 0; k < n; k++) {
+            vx[k] = Math.cos((k / n) * Math.PI * 2) * v;
+            vy[k] = Math.sin((k / n) * Math.PI * 2) * v;
+          }
+          decoBursts.push({ x: r.x, y: r.y, hue: r.hue, age: 0, life: 1.5, vx, vy });
+        }
+      }
+      for (let i = decoBursts.length - 1; i >= 0; i--) {
+        const b = decoBursts[i];
+        b.age += dt;
+        if (b.age >= b.life) {
+          decoBursts.splice(i, 1);
+          continue;
+        }
+        const k = b.age / b.life;
+        if (b.age < 0.12) {
+          // Destello del estallido
+          ctx.globalAlpha = 1 - b.age / 0.12;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 9 * scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Las chispas frenan al abrirse y caen por la gravedad; cada una deja una estela corta
+        const drag = b.age * (1 - k * 0.45);
+        const fall = 35 * scale * b.age * b.age;
+        const back = Math.max(0, b.age - 0.07);
+        const dragB = back * (1 - (back / b.life) * 0.45);
+        const fallB = 35 * scale * back * back;
+        const sz = (3 - k * 1.2) * scale;
+        ctx.globalAlpha = (1 - k) * 0.45 * Math.min(1, night * 1.5);
+        ctx.fillStyle = `hsl(${b.hue} 95% 80%)`;
+        for (let j = 0; j < b.vx.length; j++) ctx.fillRect(b.x + b.vx[j] * dragB, b.y + b.vy[j] * dragB + fallB, sz, sz);
+        ctx.globalAlpha = (1 - k) * Math.min(1, night * 1.5);
+        ctx.fillStyle = `hsl(${b.hue} 95% ${65 + k * 20}%)`;
+        for (let j = 0; j < b.vx.length; j++) ctx.fillRect(b.x + b.vx[j] * drag, b.y + b.vy[j] * drag + fall, sz, sz);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    /** Neón: perfil fino cian y magenta alternos en los bordes de cada edificio, con un halo suave; solo de noche. */
+    function drawNeon(night: number) {
+      const gy = groundY();
+      structures.forEach((st, i) => {
+        const y = gy - st.h;
+        ctx.beginPath();
+        if (st.spec.roof === 'bowl') {
+          ctx.moveTo(st.x, gy);
+          ctx.lineTo(st.x + st.w * 0.08, y);
+          ctx.lineTo(st.x + st.w * 0.92, y);
+          ctx.lineTo(st.x + st.w, gy);
+        } else {
+          ctx.moveTo(st.x, gy);
+          ctx.lineTo(st.x, y);
+          ctx.lineTo(st.x + st.w, y);
+          ctx.lineTo(st.x + st.w, gy);
+        }
+        ctx.strokeStyle = i % 2 ? '#ff4fd8' : '#3df2ff';
+        ctx.globalAlpha = (st.back ? 0.1 : 0.18) * night;
+        ctx.lineWidth = 5 * scale;
+        ctx.stroke();
+        ctx.globalAlpha = (st.back ? 0.5 : 0.9) * night;
+        ctx.lineWidth = Math.max(1, 1.1 * scale);
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    /** Farolillos: una guirnalda en catenaria entre los edificios más cercanos al ayuntamiento, con siete farolillos que se mecen y brillan de noche. */
+    function drawLanterns(t: number, night: number) {
+      const gy = groundY();
+      const cx = W / 2;
+      let left: Structure | null = null;
+      let right: Structure | null = null;
+      for (const st of structures) {
+        if (st.back) continue;
+        if (st.x + st.w <= cx && (!left || st.x > left.x)) left = st;
+        if (st.x >= cx && (!right || st.x < right.x)) right = st;
+      }
+      // Guirnalda nivelada a la altura del edificio más bajo de los dos (entre 60 y 110 px): se engancha en la
+      // fachada del alto y, si el bajo no llega, en un poste sobre su tejado
+      const hmin = Math.min(left ? left.h : Infinity, right ? right.h : Infinity);
+      const y = gy - Math.max(Math.min(hmin, 110 * scale), 60 * scale);
+      const anchor = (st: Structure | null, side: number) => {
+        if (!st) return { x: side < 0 ? 4 * scale : W - 4 * scale, y, pole: 0 };
+        return { x: side < 0 ? st.x + st.w - 2 * scale : st.x + 2 * scale, y, pole: Math.max(0, gy - st.h - y) };
+      };
+      const a = anchor(left, -1);
+      const b = anchor(right, 1);
+      const sag = 14 * scale;
+      ctx.fillStyle = '#3a2f55';
+      if (a.pole) ctx.fillRect(a.x - 0.6 * scale, a.y, 1.2 * scale, a.pole);
+      if (b.pole) ctx.fillRect(b.x - 0.6 * scale, b.y, 1.2 * scale, b.pole);
+      const at = (u: number) => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u + sag * 4 * u * (1 - u) });
+      ctx.strokeStyle = `rgba(40,30,60,${0.7 - night * 0.3})`;
+      ctx.lineWidth = Math.max(1, 0.7 * scale);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      for (let u = 0.1; u <= 1.001; u += 0.1) {
+        const p = at(u);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+      const n = 7;
+      const lw = 5 * scale;
+      const lh = 6.5 * scale;
+      for (let i = 0; i < n; i++) {
+        const p = at((i + 1) / (n + 1));
+        const x = p.x + Math.sin(t / 650 + i * 1.3) * 1.6 * scale;
+        const y = p.y + 2.5 * scale;
+        const col = LANTERN_COLORS[i % LANTERN_COLORS.length];
+        if (night > 0.15) {
+          ctx.globalAlpha = 0.22 * night;
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(x, y + lh / 2, lh * 1.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.strokeStyle = 'rgba(40,30,60,.8)';
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.ellipse(x, y + lh / 2, lw / 2, lh / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Luz interior, casquetes y borla
+        ctx.fillStyle = `rgba(255,245,200,${0.15 + night * 0.5})`;
+        ctx.fillRect(x - lw * 0.18, y + lh * 0.25, lw * 0.36, lh * 0.5);
+        ctx.fillStyle = '#5a3a1e';
+        ctx.fillRect(x - 1.2 * scale, y - 0.6 * scale, 2.4 * scale, 1.2 * scale);
+        ctx.fillRect(x - 1.2 * scale, y + lh - 0.6 * scale, 2.4 * scale, 1.2 * scale);
+        ctx.fillStyle = '#ffd24a';
+        ctx.fillRect(x - 0.5 * scale, y + lh + 0.6 * scale, 1 * scale, 2 * scale);
+      }
+    }
+
+    /** Jardín floral: cuatro parterres con césped y florecitas de colores al pie de la escalinata del ayuntamiento. */
+    function drawGarden(t: number, night: number) {
+      const gy = groundY();
+      const cx = W / 2;
+      const s = scale;
+      const hues = [350, 45, 300, 200, 20, 60];
+      [-44, -24, 24, 44].forEach((off, p) => {
+        const x = cx + off * s;
+        const hw = 5 * s;
+        ctx.fillStyle = night > 0.5 ? '#8f86b8' : '#d8cfb8';
+        ctx.fillRect(x - hw - 0.8 * s, gy - 2.2 * s, hw * 2 + 1.6 * s, 2.2 * s);
+        ctx.fillStyle = `hsl(125 45% ${34 - night * 10}%)`;
+        ctx.beginPath();
+        ctx.ellipse(x, gy - 2.2 * s, hw, 2.6 * s, 0, Math.PI, 0);
+        ctx.fill();
+        for (let i = 0; i < 6; i++) {
+          const fx = x - hw * 0.8 + (i / 5) * hw * 1.6 + Math.sin(t / 900 + i + p) * 0.4 * s;
+          const fy = gy - 3.2 * s - (i % 2) * 1.2 * s;
+          ctx.fillStyle = `hsl(${hues[(i + p) % hues.length]} 85% ${65 - night * 15}%)`;
+          ctx.fillRect(fx - 0.9 * s, fy - 0.9 * s, 1.8 * s, 1.8 * s);
+        }
+      });
+    }
+
+    /** Fuente de mármol en el centro de la plaza: pilón, columna, taza alta y un chorro con salpicaduras; de noche la baña una luz cálida. */
+    function drawFountain(t: number, night: number) {
+      const gy = groundY();
+      const s = scale;
+      const cx = W / 2;
+      const marble = night > 0.5 ? '#c9c1e4' : '#f1ecf4';
+      const marbleDark = night > 0.5 ? '#9a90c2' : '#cdc3d4';
+      const water = night > 0.4 ? 'rgba(130,190,255,.85)' : 'rgba(80,165,255,.8)';
+      if (night > 0.15) {
+        ctx.fillStyle = `rgba(255,205,120,${0.22 * night})`;
+        ctx.beginPath();
+        ctx.arc(cx, gy - 9 * s, 24 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Pilón con agua y una onda que se abre
+      ctx.fillStyle = marbleDark;
+      ctx.fillRect(cx - 17 * s, gy - 6 * s, 34 * s, 6 * s);
+      ctx.fillStyle = marble;
+      ctx.beginPath();
+      ctx.ellipse(cx, gy - 6 * s, 17 * s, 3.2 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = water;
+      ctx.beginPath();
+      ctx.ellipse(cx, gy - 6 * s, 14.5 * s, 2.3 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const rip = (t / 1400) % 1;
+      ctx.strokeStyle = `rgba(255,255,255,${0.5 * (1 - rip)})`;
+      ctx.lineWidth = Math.max(1, 0.6 * s);
+      ctx.beginPath();
+      ctx.ellipse(cx, gy - 6 * s, (4 + rip * 9) * s, (0.7 + rip * 1.4) * s, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // Columna y taza alta
+      ctx.fillStyle = marbleDark;
+      ctx.fillRect(cx - 1.8 * s, gy - 15 * s, 3.6 * s, 9 * s);
+      ctx.fillStyle = marble;
+      ctx.beginPath();
+      ctx.ellipse(cx, gy - 15 * s, 7 * s, 2 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = water;
+      ctx.beginPath();
+      ctx.ellipse(cx, gy - 15.2 * s, 5.5 * s, 1.3 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Chorro central y gotas que caen en arco
+      const jet = (9 + Math.sin(t / 260) * 1.2) * s;
+      ctx.fillStyle = 'rgba(200,230,255,.9)';
+      ctx.fillRect(cx - 0.8 * s, gy - 15 * s - jet, 1.6 * s, jet);
+      ctx.beginPath();
+      ctx.arc(cx, gy - 15 * s - jet, 1.6 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(220,240,255,.85)';
+      for (let i = 0; i < 8; i++) {
+        const u = (t / 700 + i / 8) % 1;
+        const dx = (i % 2 ? -1 : 1) * u * (5 + (i % 3)) * s;
+        const dy = -u * 3 * s + u * u * 14 * s;
+        ctx.fillRect(cx + dx - 0.6 * s, gy - 15 * s - jet + dy, 1.2 * s, 1.2 * s);
+      }
+    }
+
+    /** Estatua dorada del alcalde sobre un pedestal, a la derecha de la escalinata, con el brazo en alto; de noche la baña una luz cálida. */
+    function drawStatue(t: number, night: number) {
+      const gy = groundY();
+      const s = scale * 1.15;
+      const x = W / 2 + 36 * scale;
+      const base = gy - 7 * s;
+      if (night > 0.15) {
+        ctx.fillStyle = `rgba(255,200,110,${0.2 * night})`;
+        ctx.beginPath();
+        ctx.arc(x, base - 8 * s, 11 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Pedestal de dos cuerpos
+      ctx.fillStyle = night > 0.5 ? '#8f86b8' : '#d8cfb8';
+      ctx.fillRect(x - 5 * s, gy - 2.5 * s, 10 * s, 2.5 * s);
+      ctx.fillStyle = night > 0.5 ? '#b0a6d6' : '#efe7d3';
+      ctx.fillRect(x - 3.5 * s, base, 7 * s, 4.5 * s);
+      // Figura: piernas, cuerpo, cabeza y brazos (uno en alto con la antorcha)
+      const gold = night > 0.5 ? '#d9a52a' : '#f2c13c';
+      ctx.fillStyle = gold;
+      ctx.fillRect(x - 1.8 * s, base - 5 * s, 1.4 * s, 5 * s);
+      ctx.fillRect(x + 0.4 * s, base - 5 * s, 1.4 * s, 5 * s);
+      ctx.fillRect(x - 2.4 * s, base - 11 * s, 4.8 * s, 6.2 * s);
+      ctx.beginPath();
+      ctx.arc(x, base - 12.8 * s, 1.9 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = 1.5 * s;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + 2 * s, base - 10 * s);
+      ctx.lineTo(x + 4.5 * s, base - 16 * s);
+      ctx.moveTo(x - 2 * s, base - 10 * s);
+      ctx.lineTo(x - 3.5 * s, base - 6 * s);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+      ctx.fillStyle = `rgba(255,240,180,${0.35 + night * 0.4})`;
+      ctx.fillRect(x - 1.6 * s, base - 10.4 * s, 1 * s, 4.5 * s);
+      const flame = Math.sin(t / 150);
+      ctx.fillStyle = `rgba(255,${200 + Math.floor(flame * 30)},90,${0.6 + night * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(x + 4.6 * s, base - 17.2 * s, (1.4 + flame * 0.2) * s, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     function drawFireworks(dt: number, launch: boolean) {
@@ -978,6 +1365,8 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       const { s } = useGame.getState();
       const v = visitRef.current;
       const era = v ? v.era : s.era;
+      // Cosmético activo en la ciudad que se ve: la visitada o la propia
+      const on = (id: string) => (v ? !!v.decos?.includes(id) : hasDeco(s.pass, id));
       const date = new Date();
       const hour = date.getHours() + date.getMinutes() / 60;
       const night = nightAt(hour);
@@ -1080,6 +1469,9 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
         }
       }
 
+      // Aurora boreal del pase (detrás de las nubes)
+      if (night > 0.05 && on('aurora')) drawAurora(t, night);
+
       // Nubes: más y más oscuras con mal tiempo
       const cloudCount = weather === 'clear' ? 3 : weather === 'cloudy' ? 5 : clouds.length;
       for (let i = 0; i < clouds.length; i++) {
@@ -1100,8 +1492,10 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
         ctx.fill();
       }
 
-      // Zepelín dorado del pase de temporada (el propio o el de la ciudad visitada)
-      if (v ? v.decos?.includes('zeppelin') : hasDeco(s.pass, 'zeppelin')) drawZeppelin(t, dt, night);
+      // Cosméticos del cielo (los propios o los de la ciudad visitada)
+      if (on('birds')) drawBirds(t, dt, night);
+      if (on('kites')) drawKites(t, night);
+      if (on('zeppelin')) drawZeppelin(t, dt, night);
 
       // Silueta lejana
       const gy = groundY();
@@ -1110,9 +1504,11 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
 
       // Fuegos artificiales: al celebrar algo y la noche de Año Nuevo (detrás de los edificios)
       drawFireworks(dt, celebrating(t) || (season === 'newyear' && night > 0.4));
+      if (on('fireworks')) drawNightFireworks(dt, night);
 
       // Edificios (cache) y ayuntamiento
       ctx.drawImage(cache, 0, 0, W, H);
+      if (night > 0.05 && on('neon')) drawNeon(night);
       drawHall(t, night, boosted, era);
       if (era >= CASINO_ERA) drawCasino(t, night);
       const cups = v ? (v.cups ?? [0, 0, 0, 0]) : ([s.cup.gold, s.cup.silver, s.cup.bronze, s.cup.seasons] as const);
@@ -1121,6 +1517,7 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       const conq = v ? (v.conq ?? 0) : s.conquest.wins;
       if (conq > 0) drawConquestBanners(t, conq, cups[3] > 2);
       if (season === 'christmas' || season === 'newyear') drawChristmas(t, night);
+      if (on('lanterns')) drawLanterns(t, night);
 
       // Luces de las antenas
       if (Math.floor(t / 700) % 2 === 0) {
@@ -1132,6 +1529,11 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
           }
         }
       }
+
+      // Cosméticos de la plaza, a ras de suelo (los peatones pasan por delante)
+      if (on('garden')) drawGarden(t, night);
+      if (on('fountain')) drawFountain(t, night);
+      if (on('statue')) drawStatue(t, night);
 
       // Peatones: más cuanto más grande es la ciudad; pocos de noche y nadie en plena tormenta
       const people = Math.min(10, Math.floor(Math.log2(total + 1) * 1.2));

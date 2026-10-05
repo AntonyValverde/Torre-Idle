@@ -95,7 +95,7 @@ import {
   syncPeriods,
   type Division,
 } from './missions';
-import { addPassXp, claimNext, passRewardText, type PassReward } from './pass';
+import { addPassXp, buyDecoWith, claimNext, passRewardText, toggleDeco, type PassReward } from './pass';
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import {
@@ -291,6 +291,10 @@ interface GameStore {
   sendGift(uid: string): boolean;
   /** Cobra los regalos recibidos nuevos. */
   receiveGifts(gifts: GiftIn[]): { count: number; tickets: number; names: string[] };
+  /** Compra un cosmético de la tienda de Decoración con gemas; devuelve el precio pagado o 0 si no se pudo. */
+  buyDeco(id: string): number;
+  /** Enciende o apaga un cosmético conseguido. */
+  toggleDeco(id: string): void;
   /** Marca el periódico de hoy como leído; devuelve la propina en gemas (0 si ya se leyó hoy). */
   readPaper(): number;
   /** Avanza un paso del tutorial que se completa con su botón. */
@@ -1159,6 +1163,20 @@ export const useGame = create<GameStore>((set, get) => ({
     const r = applyGiftsReceived(get().s, gifts, dateKey(now()));
     if (r.count) set({ s: r.s });
     return { count: r.count, tickets: r.tickets, names: r.names };
+  },
+
+  buyDeco(id) {
+    const { s } = get();
+    const r = buyDecoWith(s.pass, id, s.gems);
+    if (!r) return 0;
+    set({ s: { ...s, gems: s.gems - r.price, pass: r.pass } });
+    return r.price;
+  },
+
+  toggleDeco(id) {
+    const { s } = get();
+    const pass = toggleDeco(s.pass, id);
+    if (pass !== s.pass) set({ s: { ...s, pass } });
   },
 
   readPaper() {

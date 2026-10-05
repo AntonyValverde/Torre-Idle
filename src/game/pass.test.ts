@@ -4,13 +4,17 @@ import { now } from './clock';
 import { LEAGUE_MAX, addPoints, applyPassReward, syncPeriods } from './missions';
 import { paperState, rollPaper } from './paper';
 import {
-  PASS_LEVELS,
-  PASS_MAX,
-  PASS_TOTAL_XP,
+  activeDecos,
   addPassXp,
+  buyDecoWith,
   claimNext,
   hasDeco,
   newPass,
+  ownsDeco,
+  PASS_DECOS,
+  PASS_LEVELS,
+  PASS_MAX,
+  PASS_TOTAL_XP,
   passClaimable,
   passLevel,
   passProgress,
@@ -21,6 +25,8 @@ import {
   passThreshold,
   rolloverPass,
   seasonDeco,
+  SHOP_DECOS,
+  toggleDeco,
   type PassState,
 } from './pass';
 import { newState, normalize, type GameState } from './state';
@@ -166,7 +172,7 @@ describe('pase: cambio de temporada', () => {
   it('temporada nueva: paga lo ganado y no cobrado, y conserva cosméticos y total', () => {
     const r = rolloverPass(pass({ xp: 130, claimed: 1, total: 500, decos: ['aurora'] }), 1);
     expect(r.owed).toEqual([{ kind: 'tickets', n: 1 }]);
-    expect(r.pass).toEqual({ season: 1, xp: 0, claimed: 0, decos: ['aurora'], total: 500 });
+    expect(r.pass).toEqual({ season: 1, xp: 0, claimed: 0, decos: ['aurora'], hidden: [], total: 500 });
     // El cosmético pendiente es el de la temporada que termina, no el de la nueva
     const full = rolloverPass(pass({ season: 1, xp: PASS_TOTAL_XP, claimed: 23 }), 2);
     expect(full.owed).toEqual([
@@ -188,9 +194,10 @@ describe('pase: partidas guardadas', () => {
       xp: 0,
       claimed: PASS_MAX,
       decos: ['zeppelin'],
+      hidden: [],
       total: 0,
     });
-    expect(passState({ season: 1, xp: 70.9, claimed: 2.5, decos: 'no', total: 80 }, 3)).toEqual({ season: 1, xp: 70, claimed: 2, decos: [], total: 80 });
+    expect(passState({ season: 1, xp: 70.9, claimed: 2.5, decos: 'no', total: 80 }, 3)).toEqual({ season: 1, xp: 70, claimed: 2, decos: [], hidden: [], total: 80 });
   });
 
   it('normalize crea la pista de la temporada actual y conserva la guardada', () => {
@@ -269,7 +276,7 @@ describe('pase: integración con el juego', () => {
     // Misma temporada: la pista no se toca
     expect(syncPeriods(s, t0 + 3_600_000).pass).toBe(s.pass);
     const next = syncPeriods(s, t1);
-    expect(next.pass).toEqual({ season: 1, xp: 0, claimed: 0, decos: [], total: 130 });
+    expect(next.pass).toEqual({ season: 1, xp: 0, claimed: 0, decos: [], hidden: [], total: 130 });
     expect(next.gems).toBe(3);
     expect(next.tickets).toBe(1);
   });
@@ -288,6 +295,49 @@ describe('pase: integración con el juego', () => {
     // Cobros repetidos no suman
     expect(g().claimConquest('2026-09-28', 1, 4, 40)).toBeNull();
     expect(g().s.pass.xp).toBe(145);
+  });
+});
+
+describe('tienda de Decoración', () => {
+  it('compra con gemas una sola vez y solo lo que está a la venta', () => {
+    const p = newPass(0);
+    expect(buyDecoWith(p, 'garden', 39)).toBeNull();
+    const r = buyDecoWith(p, 'garden', 40)!;
+    expect(r.price).toBe(40);
+    expect(r.pass.decos).toEqual(['garden']);
+    expect(buyDecoWith(r.pass, 'garden', 999)).toBeNull();
+    // Los de temporada no se compran
+    expect(buyDecoWith(p, 'zeppelin', 9999)).toBeNull();
+    expect(buyDecoWith(p, 'inventado', 9999)).toBeNull();
+    expect(SHOP_DECOS).toEqual(['garden', 'kites', 'birds', 'statue', 'neon', 'fireworks']);
+  });
+
+  it('apagar un cosmético lo quita de la escena y de la ciudad pública sin perderlo', () => {
+    let p = { ...newPass(0), decos: ['zeppelin', 'garden'] };
+    expect(activeDecos(p)).toEqual(['zeppelin', 'garden']);
+    p = toggleDeco(p, 'garden');
+    expect(ownsDeco(p, 'garden')).toBe(true);
+    expect(hasDeco(p, 'garden')).toBe(false);
+    expect(activeDecos(p)).toEqual(['zeppelin']);
+    p = toggleDeco(p, 'garden');
+    expect(hasDeco(p, 'garden')).toBe(true);
+    // No se puede apagar lo que no se tiene
+    expect(toggleDeco(p, 'neon')).toBe(p);
+    // En la ciudad pública viajan solo los activos, hasta ocho
+    const many = { ...p, decos: Object.keys(PASS_DECOS) };
+    expect(activeDecos(many)).toHaveLength(8);
+    expect(passState({ decos: ['garden'], hidden: ['garden', 'raro'] }, 0).hidden).toEqual(['garden']);
+  });
+
+  it('store.buyDeco y toggleDeco', () => {
+    const t = Date.now();
+    useGame.getState().init({ ...newState(t), gems: 100 });
+    expect(useGame.getState().buyDeco('neon')).toBe(100);
+    expect(useGame.getState().buyDeco('neon')).toBe(0);
+    expect(useGame.getState().s.gems).toBe(0);
+    expect(useGame.getState().buyDeco('garden')).toBe(0);
+    useGame.getState().toggleDeco('neon');
+    expect(useGame.getState().s.pass.hidden).toEqual(['neon']);
   });
 });
 
