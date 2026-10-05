@@ -32,6 +32,7 @@ import { attackFrom, joinConquest, myWorld, reinforce, sendRecruits, watchWorld,
 import { fmtClock, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
 import { sfx, vibrate } from '../haptics';
+import { ClaraTip } from '../ClaraTip';
 import { celebrate } from '../celebrate';
 import { ago } from '../../admin/metrics';
 import { assaultLevel, fmtMult } from '../../minigames/towers/logic';
@@ -77,35 +78,13 @@ export function ConquestView({ onVisit }: { onVisit: (uid: string) => void }) {
     );
   return (
     <>
-      <ClaraIntro />
+      <ClaraTip id="conquest" cta="¡A conquistar!" />
       {world === null ? (
         <JoinCard week={season.week} endsAt={season.endsAt} onJoined={setWorld} />
       ) : (
         <WorldBoard week={season.week} w={world} endsAt={season.endsAt} onVisit={onVisit} />
       )}
     </>
-  );
-}
-
-/** La primera vez, Clara presenta la Conquista. */
-function ClaraIntro() {
-  const seen = useGame((st) => st.s.conquest.intro);
-  if (seen) return null;
-  return (
-    <div className="card conquest-clara">
-      <span className="conquest-clara-face">👩‍💼</span>
-      <div>
-        <b>Clara</b>
-        <p>
-          Alcalde, las ciudades vecinas se disputan la región cada semana. Es como la Guerra de torres: tus territorios generan soldados. Toca uno tuyo y luego
-          uno vecino para atacarlo con sus soldados. Antes de atacar puedes lanzar un asalto: una batalla corta que les da más fuerza. Con la reserva refuerzas
-          lo que ya es tuyo. ¡El domingo se reparte el botín!
-        </p>
-        <button className="btn primary" onClick={() => useGame.getState().seeConquestIntro()}>
-          ¡A conquistar!
-        </button>
-      </div>
-    </div>
   );
 }
 

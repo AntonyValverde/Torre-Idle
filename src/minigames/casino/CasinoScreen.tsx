@@ -25,6 +25,7 @@ import { fmt, fmtTime } from '../../game/format';
 import { useGame } from '../../game/store';
 import { sfx, vibrate } from '../../ui/haptics';
 import { GameScreen } from '../../ui/Modal';
+import { ClaraTip } from '../../ui/ClaraTip';
 import { pushCasinoMusic } from '../../ui/music/engine';
 import { BlackjackGame } from './BlackjackGame';
 import { HiLoGame } from './HiLoGame';
@@ -118,6 +119,7 @@ export function CasinoScreen({ onClose }: { onClose: () => void }) {
 
         {!game && (
           <div className="cas-lobby">
+            <ClaraTip id="casino" />
             <div className="cas-hero">
               <div className="cas-neon">CASINO</div>
               <div className="cas-hero-chips">{chips(c.chips)}</div>

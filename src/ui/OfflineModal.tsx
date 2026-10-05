@@ -2,6 +2,7 @@ import { fmt, fmtTime } from '../game/format';
 import { useGame } from '../game/store';
 import { sfx } from './haptics';
 import { Modal } from './Modal';
+import { ClaraTip } from './ClaraTip';
 
 export function OfflineModal() {
   const offline = useGame((st) => st.s.pendingOffline);
@@ -21,6 +22,7 @@ export function OfflineModal() {
         <div className="result-label">Mientras no estabas ({fmtTime(offline.seconds)})</div>
         <div className="result-score">+{fmt(offline.earned)} 🪙</div>
         <p className="muted">Tu ciudad siguió trabajando. Mejora el “Gerente nocturno” para acumular más horas.</p>
+        <ClaraTip id="offline" />
         <div className="btn-row">
           <button className="btn" onClick={() => take(false)}>
             Recoger

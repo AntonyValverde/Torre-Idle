@@ -16,6 +16,7 @@ import { fmt, fmtClock, fmtTime } from '../game/format';
 import { DIVISIONS, divisionOf, nextDivision } from '../game/missions';
 import { useGame } from '../game/store';
 import { pressable } from './a11y';
+import { ClaraTip } from './ClaraTip';
 
 export type BoardTab = 'league' | DailyKind | Board;
 
@@ -90,6 +91,7 @@ export function RankingTab({ initial = 'league', onVisit }: { initial?: BoardTab
 
   return (
     <div className="tab">
+      <ClaraTip id="ranking" />
       <div className="segmented rank-groups" role="tablist">
         {GROUPS.map((g) => (
           <button

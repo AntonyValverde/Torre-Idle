@@ -9,6 +9,7 @@ import {
 import { fmt } from '../game/format';
 import { useGame } from '../game/store';
 import { sfx, vibrate } from './haptics';
+import { ClaraTip } from './ClaraTip';
 
 export function Achievements() {
   const s = useGame((st) => st.s);
@@ -32,6 +33,7 @@ export function Achievements() {
 
   return (
     <>
+      <ClaraTip id="achievements" />
       <div className="currency-banner">
         <span className="big">🏅 {total}</span>
         <small>Cada logro da +{Math.round(ACHIEVEMENT_BONUS * 100)}% de producción para siempre. Total: +{fmt(Math.round(total * ACHIEVEMENT_BONUS * 100))}%</small>

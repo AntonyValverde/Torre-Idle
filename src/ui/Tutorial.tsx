@@ -3,16 +3,9 @@ import { track } from '../firebase';
 import { useGame } from '../game/store';
 import { TUTORIAL, TUTORIAL_DONE, currentStep, rewardText } from '../game/tutorial';
 import type { TabId } from './BottomNav';
+import { TAB_LABEL } from './ClaraTip';
 import { celebrate } from './celebrate';
 import { sfx, vibrate } from './haptics';
-
-const TAB_LABEL: Record<TabId, string> = {
-  city: '🏙️ Ciudad',
-  upgrades: '⬆️ Mejoras',
-  games: '🎮 Juegos',
-  ranking: '🏆 Ranking',
-  profile: '🏅 Logros',
-};
 
 /**
  * Efectos del tutorial que deben funcionar aunque la burbuja no se vea (p. ej. con un minijuego abierto):
@@ -23,22 +16,26 @@ export function useTutorialEffects() {
   const stepId = useGame((st) => currentStep(st.s)?.id ?? null);
   const decree = useGame((st) => st.decree);
   const pendingOffline = useGame((st) => !!st.s.pendingOffline);
-  const prev = useRef(step);
+  const prev = useRef({ step, replay: false, later: 0 });
 
   useEffect(() => {
+    const t = useGame.getState().s.tutorial;
     const was = prev.current;
-    prev.current = step;
+    prev.current = { step, replay: !!t.replay, later: t.later?.length ?? 0 };
     // Solo un paso hacia delante: saltar el tutorial o cargar otra partida no es completar un paso
-    if (step !== was + 1) return;
-    const done = TUTORIAL[was];
+    if (step !== was.step + 1) return;
+    const done = TUTORIAL[was.step];
     const st = useGame.getState();
-    const reward = rewardText(done.reward);
+    // En el repaso y en los pasos dejados para más tarde no hay premio
+    const postponed = (t.later?.length ?? 0) > was.later;
+    const reward = was.replay || postponed ? '' : rewardText(done.reward);
     if (step >= TUTORIAL_DONE) {
-      celebrate(8);
+      celebrate(was.replay ? 3 : 8);
       sfx('win');
       vibrate([30, 50, 30, 50, 80]);
-      if (reward) st.toast(`🎉 ¡Tutorial completado! ${reward}`);
-      track('tutorial_done');
+      if (was.replay) st.toast('📖 ¡Repaso terminado!');
+      else if (reward) st.toast(`🎉 ¡Tutorial completado! ${reward}`);
+      track(was.replay ? 'tutorial_replay_done' : 'tutorial_done');
       return;
     }
     if (reward) {
@@ -46,7 +43,7 @@ export function useTutorialEffects() {
       sfx('win');
       vibrate([15, 30, 15]);
     }
-    track('tutorial_step', { step, id: TUTORIAL[step].id });
+    if (!was.replay) track(postponed ? 'tutorial_later' : 'tutorial_step', { step, id: postponed ? done.id : TUTORIAL[step].id });
   }, [step]);
 
   // Paso de decretos: el consejo propone uno enseguida (y otro si el anterior caducó sin elegir)
@@ -64,6 +61,7 @@ export function TutorialBubble({ tab, onTab }: { tab: TabId; onTab: (t: TabId) =
   const tutorial = useGame((st) => st.s.tutorial);
   const [confirmSkip, setConfirmSkip] = useState(false);
   const step = TUTORIAL[tutorial.step];
+  const replay = !!tutorial.replay;
 
   // Lo que señala Clara se desplaza a la vista (la burbuja ocupa la parte de abajo de la pantalla)
   useEffect(() => {
@@ -73,10 +71,12 @@ export function TutorialBubble({ tab, onTab }: { tab: TabId; onTab: (t: TabId) =
 
   if (!step) return null;
   const elsewhere = step.event !== null && step.tab !== tab;
-  const reward = rewardText(step.reward);
+  const reward = replay ? '' : rewardText(step.reward);
+  // En el repaso cualquier paso con evento se puede pasar (p. ej. el sobre de regalo ya se abrió)
+  const later = step.event !== null ? (replay ? 'Siguiente ›' : step.later) : undefined;
 
   const skip = () => {
-    track('tutorial_skip', { step: tutorial.step, id: step.id });
+    if (!replay) track('tutorial_skip', { step: tutorial.step, id: step.id });
     useGame.getState().tutorialSkip();
     setConfirmSkip(false);
   };
@@ -90,23 +90,27 @@ export function TutorialBubble({ tab, onTab }: { tab: TabId; onTab: (t: TabId) =
         <div className="tut-head">
           <b>Clara</b>
           <small className="muted">
-            Consejera · {tutorial.step + 1}/{TUTORIAL.length}
+            {replay ? 'Repaso' : 'Consejera'} · {tutorial.step + 1}/{TUTORIAL.length}
           </small>
           {!confirmSkip && (
             <button className="tut-skip" onClick={() => setConfirmSkip(true)}>
-              Saltar
+              {replay ? 'Terminar' : 'Saltar'}
             </button>
           )}
         </div>
         {confirmSkip ? (
           <>
-            <p className="tut-text">¿Saltar el tutorial? Se abrirá todo el juego de golpe y no recibirás sus premios.</p>
+            <p className="tut-text">
+              {replay
+                ? '¿Terminar el repaso? Puedes volver a empezarlo cuando quieras desde la Guía de Clara.'
+                : '¿Saltar el tutorial? Se abrirá todo el juego de golpe y no recibirás sus premios. Te lo iré explicando sobre la marcha.'}
+            </p>
             <div className="btn-row">
               <button className="btn small" onClick={() => setConfirmSkip(false)}>
                 Seguir con Clara
               </button>
               <button className="btn small primary" onClick={skip}>
-                Saltar
+                {replay ? 'Terminar' : 'Saltar'}
               </button>
             </div>
           </>
@@ -137,6 +141,11 @@ export function TutorialBubble({ tab, onTab }: { tab: TabId; onTab: (t: TabId) =
               {elsewhere && (
                 <button className="tut-go" onClick={() => onTab(step.tab)}>
                   👉 Ir a {TAB_LABEL[step.tab]}
+                </button>
+              )}
+              {later && (
+                <button className="tut-later" onClick={() => useGame.getState().tutorialLater()}>
+                  {later}
                 </button>
               )}
               {reward && <small className="tut-reward">🎁 {reward}</small>}

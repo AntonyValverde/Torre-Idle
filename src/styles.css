@@ -1338,32 +1338,6 @@ img.splash-logo {
   font-weight: 800;
 }
 
-.card.conquest-clara {
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 4px 12px 0;
-  border-color: rgba(255, 194, 61, 0.5);
-  animation: tabIn 0.25s ease-out;
-}
-
-.conquest-clara-face {
-  font-size: 2rem;
-  line-height: 1;
-}
-
-.conquest-clara > div {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
-}
-
-.conquest-clara .btn {
-  flex: 0 0 auto;
-  padding: 8px 16px;
-}
-
 .conquest-reports ul,
 .conquest-history ul {
   list-style: none;
@@ -6401,4 +6375,137 @@ img.splash-logo {
   .balloon {
     animation-duration: 11s !important;
   }
+}
+
+/* ---------- Consejos de Clara ---------- */
+
+.card.clara-tip {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  border-color: rgba(255, 194, 61, 0.5);
+  background: linear-gradient(135deg, hsl(var(--hue) 40% 20% / 0.95), hsl(calc(var(--hue) + 30) 40% 16% / 0.95));
+  text-align: left;
+  animation: tabIn 0.25s ease-out;
+}
+
+.clara-tip-face {
+  flex: 0 0 auto;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.clara-tip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.clara-tip p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.clara-tip .btn {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+}
+
+/* Dentro de pantallas que ya separan sus bloques */
+.world-wrap > .clara-tip,
+.stock-wrap > .clara-tip,
+.cup-wrap > .clara-tip {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.cas-lobby > .clara-tip,
+.law-card > .clara-tip,
+.result > .clara-tip {
+  margin: 0 0 8px;
+}
+
+.tut-ok {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.tut-later {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+.tut-later + .tut-reward {
+  margin-left: 8px;
+}
+
+.tut-foot .tut-later:first-child {
+  margin-right: auto;
+}
+
+/* Guía de Clara */
+.guide-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 24px;
+  overflow-y: auto;
+}
+
+.guide-list {
+  margin: 0;
+}
+
+.guide-item {
+  background: linear-gradient(180deg, var(--card), hsl(var(--hue) 34% 14%));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.guide-item.open {
+  border-color: rgba(255, 194, 61, 0.45);
+}
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.guide-head b {
+  flex: 1;
+  min-width: 0;
+}
+
+.guide-caret {
+  color: var(--muted);
+}
+
+.guide-text {
+  margin: 0;
+  padding: 0 12px 12px 52px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  animation: fadeIn 0.2s;
+}
+
+.guide-item.locked {
+  opacity: 0.6;
+}
+
+.guide-item.locked .guide-head {
+  flex-wrap: wrap;
+}
+
+.guide-card {
+  border-color: rgba(255, 194, 61, 0.45);
 }

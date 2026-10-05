@@ -24,6 +24,7 @@ import { RankingTab, type BoardTab } from './ui/RankingTab';
 import { Toasts } from './ui/Toasts';
 import { TopBar } from './ui/TopBar';
 import { TutorialBubble, useTutorialEffects } from './ui/Tutorial';
+import { ClaraTipBubble, useClaraTips } from './ui/ClaraTip';
 import { TUTORIAL_DONE } from './game/tutorial';
 import { UpgradesTab } from './ui/UpgradesTab';
 import { useUpdate } from './ui/update';
@@ -120,6 +121,8 @@ export default function App() {
   }, []);
   useDecreeScheduler(onDecree);
   useTutorialEffects();
+  // Consejos de Clara en burbuja (incidentes, hitos, primera estrella, la cuenta…)
+  useClaraTips(ready);
   // Regalos que otros alcaldes dejaron en tu ciudad
   useGiftInbox(ready);
   // Conquista: premio de la temporada terminada y partes de batalla
@@ -130,6 +133,7 @@ export default function App() {
   const canOfferIncident = useCallback(() => tabRef.current === 'city' && !overlayRef.current, []);
   useIncidentScheduler(canOfferIncident);
   const tutorialOn = useGame((st) => st.s.tutorial.step < TUTORIAL_DONE);
+  const tipOn = useGame((st) => !!st.tip);
 
   // Música de la era: más baja mientras hay un minijuego abierto
   useEffect(() => {
@@ -250,7 +254,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app${tutorialOn ? ' tutorial-on' : ''}`} style={{ '--hue': eraHue(era) } as CSSProperties}>
+    <div className={`app${tutorialOn || tipOn ? ' tutorial-on' : ''}`} style={{ '--hue': eraHue(era) } as CSSProperties}>
       <TopBar />
       <main className="content" key={tab}>
         {tab === 'city' && <CityTab paused={overlay} onIncident={playIncident} onWorld={() => setWorldOpen(true)} />}
@@ -259,7 +263,7 @@ export default function App() {
         {tab === 'ranking' && <RankingTab key={rankingBoard} initial={rankingBoard} onVisit={setVisit} />}
         {tab === 'profile' && <ProfileTab onAdmin={() => setAdmin(true)} onVisit={setVisit} onWorld={() => setWorldOpen(true)} />}
       </main>
-      {tutorialOn && <TutorialBubble tab={tab} onTab={setTab} />}
+      {tutorialOn ? <TutorialBubble tab={tab} onTab={setTab} /> : <ClaraTipBubble tab={tab} onTab={setTab} />}
       <BottomNav tab={tab} onTab={setTab} />
 
       {tab === 'city' && !game && <GoldenBalloon />}

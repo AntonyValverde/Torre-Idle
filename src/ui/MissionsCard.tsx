@@ -14,6 +14,7 @@ import {
   type MissionSlot,
 } from '../game/missions';
 import { useGame } from '../game/store';
+import { currentStep } from '../game/tutorial';
 import { celebrate } from './celebrate';
 import { sfx, vibrate } from './haptics';
 
@@ -47,8 +48,9 @@ export function MissionsTile({ open, onToggle }: { open: boolean; onToggle: () =
   const claimable = claimableMissions(s);
   const dailyDone = s.missions.daily.filter((x) => x.c).length;
   const ready = claimable > 0 || !!s.league.prev || chestReady(s);
+  const tut = currentStep(s)?.id === 'missions';
   return (
-    <button className={`hub-tile hub-missions${open ? ' open' : ''}${ready ? ' ready' : ''}`} onClick={onToggle} aria-expanded={open}>
+    <button className={`hub-tile hub-missions${open ? ' open' : ''}${ready ? ' ready' : ''}${tut ? ' tut-target' : ''}`} onClick={onToggle} aria-expanded={open}>
       {claimable > 0 && <span className="hub-badge">{claimable}</span>}
       <span className="hub-icon">📋</span>
       <b>Misiones</b>

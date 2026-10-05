@@ -7,6 +7,7 @@ import { currentStep, isUnlocked } from '../game/tutorial';
 import { vipReady } from '../game/legacy';
 import { CASINO_ERA, casinoOpen, casinoToday } from '../game/casino';
 import { CupCard } from './cup/CupCard';
+import { ClaraTip } from './ClaraTip';
 
 export type GameId =
   | 'stack'
@@ -51,6 +52,7 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
 
   return (
     <div className="tab">
+      <ClaraTip id="games" />
       {isUnlocked(s, 'cup') && <CupCard onOpen={onCup} />}
 
       <div className="ticket-banner">
@@ -58,7 +60,7 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
         <span className="muted">{s.tickets >= max ? 'Tickets llenos: ¡juega ya!' : `Próximo ticket en ${fmtClock(nextTicket)}`}</span>
       </div>
 
-      <div className="section-head">
+      <div className={`section-head${tut === 'daily' ? ' tut-target' : ''}`}>
         <h2>Diarios</h2>
       </div>
 

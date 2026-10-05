@@ -207,7 +207,21 @@ function SummaryView({
             : 'Aún no hay partidas creadas desde que existe el tutorial'}
         </small>
         {sum.tutorialPlayers > 0 && <BarList data={sum.tutorial} total={sum.tutorialPlayers} />}
+        {sum.tutorialLater.length > 0 && (
+          <>
+            <small className="muted">Pasos dejados para más tarde</small>
+            <BarList data={sum.tutorialLater} total={sum.tutorialPlayers} />
+          </>
+        )}
       </div>
+
+      {sum.tutorialPlayers > 0 && (
+        <div className="card">
+          <b>Consejos de Clara</b>
+          <small className="muted">Cuántas de las {sum.tutorialPlayers} partidas nuevas han visto cada consejo</small>
+          <BarList data={sum.tips} total={sum.tutorialPlayers} />
+        </div>
+      )}
 
       <div className="card">
         <b>Leyes de era</b>

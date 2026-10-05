@@ -12,10 +12,16 @@ import { isMusicOn, musicVolume, nowPlaying, setMusicOn, setMusicVolume } from '
 import { SuggestionBox } from './SuggestionBox';
 import { GiftsCard } from './Gifts';
 import { PassCard } from './PassCard';
+import { ClaraTip, GuideCard } from './ClaraTip';
+import { currentStep } from '../game/tutorial';
 
 export function ProfileTab({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: (uid: string) => void; onWorld: () => void }) {
   const s = useGame((st) => st.s);
-  const [section, setSection] = useState<'ach' | 'profile'>('ach');
+  // Clara manda al Perfil para cambiar el nombre (tutorial) o vincular la cuenta (consejo)
+  const [section, setSection] = useState<'ach' | 'profile'>(() => {
+    const st = useGame.getState();
+    return currentStep(st.s)?.id === 'name' || st.tip === 'google' ? 'profile' : 'ach';
+  });
   const claimable = claimableAchievements(s);
 
   return (
@@ -88,9 +94,12 @@ function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: 
 
   const google = account?.googleEmail != null;
 
+  const tutName = currentStep(s)?.id === 'name';
+  const tipGoogle = useGame((st) => st.tip === 'google');
+
   return (
     <>
-      <div className="card">
+      <div className={`card${tutName ? ' tut-target' : ''}`}>
         <label className="field">
           <span>Nombre en el ranking</span>
           <div className="field-row">
@@ -109,9 +118,10 @@ function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: 
         </label>
       </div>
 
+      <ClaraTip id="pass" />
       <PassCard />
 
-      <div className="card">
+      <div className={`card${tipGoogle ? ' tut-target' : ''}`}>
         <b>Cuenta</b>
         {!cloudEnabled && <p className="muted">Firebase no está configurado: el progreso solo se guarda en este dispositivo.</p>}
         {cloudEnabled && google && <p className="muted">Vinculada con Google ({account?.googleEmail}). Tu progreso está a salvo.</p>}
@@ -186,6 +196,8 @@ function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: 
           </div>
         </button>
       )}
+
+      <GuideCard />
 
       {cloudEnabled && <SuggestionBox />}
 

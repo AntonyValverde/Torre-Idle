@@ -6,6 +6,7 @@ import { useGame } from '../game/store';
 import { celebrate } from './celebrate';
 import { sfx, vibrate } from './haptics';
 import { Modal } from './Modal';
+import { ClaraTip } from './ClaraTip';
 
 /**
  * Ley de la era: si falta elegirla, muestra las tres opciones; si ya rige, un resumen
@@ -47,6 +48,7 @@ export function LawCard({ showCurrent = false }: { showCurrent?: boolean }) {
 
   return (
     <section className="law-card">
+      <ClaraTip id="law" />
       <div className="law-head">
         <b>⚖️ Ley de la era {s.era}</b>
         <small className="muted">{eraName(s.era)} · elige una: rige hasta que refundes</small>

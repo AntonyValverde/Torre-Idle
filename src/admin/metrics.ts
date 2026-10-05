@@ -2,6 +2,7 @@ import { dateKey } from '../game/clock';
 import { totalAchievements, totalBuildings } from '../game/economy';
 import type { GameState } from '../game/state';
 import { TUTORIAL, TUTORIAL_SINCE, stepsCompleted } from '../game/tutorial';
+import { TIPS } from '../game/tips';
 import { LAWS } from '../game/laws';
 
 // Métricas del panel de administración, calculadas a partir de las partidas guardadas en Firestore.
@@ -85,13 +86,19 @@ export interface Summary {
   /** Partidas que pudieron ver el tutorial, y cuántas lo saltaron. */
   tutorialPlayers: number;
   tutorialSkipped: number;
+  /** Pasos que se dejaron para más tarde (solo los que alguien dejó). */
+  tutorialLater: Bucket[];
+  /** Consejos de Clara: cuántas partidas nuevas vieron cada uno. */
+  tips: Bucket[];
   /** Jugadores que rigen su era actual con cada ley. */
   laws: Bucket[];
 }
 
-export function tutorialFunnel(players: Player[]): { funnel: Bucket[]; players: number; skipped: number } {
+export function tutorialFunnel(players: Player[]): { funnel: Bucket[]; players: number; skipped: number; later: Bucket[]; tips: Bucket[] } {
   const fresh = players.filter((p) => p.s.createdAt >= TUTORIAL_SINCE);
   return {
+    later: TUTORIAL.map((step) => ({ label: step.label, value: fresh.filter((p) => p.s.tutorial.later?.includes(step.id)).length })).filter((b) => b.value > 0),
+    tips: TIPS.map((t) => ({ label: `${t.emoji} ${t.title}`, value: fresh.filter((p) => !!p.s.tips[t.id]).length })),
     funnel: TUTORIAL.map((step, i) => ({
       label: `${i + 1}. ${step.label}`,
       value: fresh.filter((p) => stepsCompleted(p.s.tutorial) > i).length,
@@ -155,6 +162,8 @@ export function summarize(players: Player[], nowMs: number): Summary {
     tutorial: tut.funnel,
     tutorialPlayers: tut.players,
     tutorialSkipped: tut.skipped,
+    tutorialLater: tut.later,
+    tips: tut.tips,
     laws: LAWS.map((l) => ({ label: `${l.emoji} ${l.name}`, value: players.filter((p) => p.s.law === l.id).length })),
   };
 }

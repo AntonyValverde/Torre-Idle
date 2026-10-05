@@ -5,6 +5,8 @@ import { useGame } from '../game/store';
 import { celebrate } from './celebrate';
 import { sfx, vibrate } from './haptics';
 import { Modal } from './Modal';
+import { ClaraTip } from './ClaraTip';
+import { currentStep } from '../game/tutorial';
 
 const SEAT_ERAS = [3, 6, 10];
 
@@ -23,6 +25,7 @@ export function Council() {
   const seats = seatCount(s);
   const nextSeatEra = SEAT_ERAS.find((e) => s.era < e);
   const owned = ADVISORS.filter((d) => a.copies[d.id]).length;
+  const tut = currentStep(s)?.id === 'council';
 
   const open = () => {
     const st = useGame.getState();
@@ -55,6 +58,7 @@ export function Council() {
 
   return (
     <>
+      <ClaraTip id="council" />
       <div className="council-card">
         <div className="council-head">
           <b>🏛️ Tu consejo</b>
@@ -86,7 +90,7 @@ export function Council() {
           })}
         </div>
         <small className="muted">Solo dan su ventaja los consejeros sentados. Toca uno para sentarlo o levantarlo.</small>
-        <button className="btn primary big" disabled={!canOpen} onClick={open}>
+        <button className={`btn primary big${tut ? " tut-target" : ""}`} disabled={!canOpen} onClick={open}>
           {packLabel}
         </button>
         <small className="muted council-note">Más sobres: cofre del día y misiones semanales. Las copias repetidas suben de nivel.</small>

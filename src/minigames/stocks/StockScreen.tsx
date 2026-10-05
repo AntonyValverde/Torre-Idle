@@ -5,6 +5,7 @@ import { STOCKS, STOCK_FEE, priceHistory, saleValue, stockInvestCap, stockPrice,
 import { useGame } from '../../game/store';
 import { sfx, vibrate } from '../../ui/haptics';
 import { GameScreen } from '../../ui/Modal';
+import { ClaraTip } from '../../ui/ClaraTip';
 
 const RANGES = [
   { id: '1h', label: '1 h', ms: 3_600_000 },
@@ -174,6 +175,7 @@ export function StockScreen({ onClose }: { onClose: () => void }) {
   return (
     <GameScreen title="Bolsa de la ciudad" right={`🪙 ${fmt(s.coins)}`} onClose={onClose}>
       <div className="stock-wrap">
+        <ClaraTip id="stocks" />
         <div className="portfolio">
           <div>
             <small>Tu cartera</small>

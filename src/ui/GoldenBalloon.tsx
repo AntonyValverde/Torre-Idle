@@ -14,7 +14,11 @@ export function GoldenBalloon() {
     const schedule = () => {
       timer = setTimeout(
         () => {
-          if (document.visibilityState === 'visible') setBalloon({ id: Date.now(), top: 18 + Math.random() * 45 });
+          if (document.visibilityState === 'visible') {
+            setBalloon({ id: Date.now(), top: 18 + Math.random() * 45 });
+            // La primera vez, Clara lo señala
+            useGame.getState().showTip('balloon');
+          }
           schedule();
         },
         (60_000 + Math.random() * 120_000) * eventFrequency(useGame.getState().s),

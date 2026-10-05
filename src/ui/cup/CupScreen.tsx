@@ -51,6 +51,7 @@ import { useGame } from '../../game/store';
 import { celebrate } from '../celebrate';
 import { sfx } from '../haptics';
 import { GameScreen, Modal } from '../Modal';
+import { ClaraTip } from '../ClaraTip';
 import { CupPlay } from './CupPlay';
 
 const PHASES: { id: CupPhase; label: string; when: string }[] = [
@@ -228,6 +229,7 @@ export function CupScreen({ onClose, onVisit }: { onClose: () => void; onVisit: 
           </button>
         )}
 
+        <ClaraTip id="cup" />
         {!cloudEnabled && <p className="empty">La Copa necesita conexión con Firebase.</p>}
 
         <div className="segmented cup-tabs">

@@ -87,12 +87,28 @@ Pestaña ⚔️ Conquista del Mapa del mundo. Va en la misma semana que la Copa 
 
 ## Tutorial de Clara
 
-- Un jugador nuevo conoce el juego con **Clara, su consejera**, en 9 pasos: tocar la ciudad, construir, comprar una mejora, firmar un decreto, girar la rueda, jugar un arcade y conocer las misiones. Cada paso da un pequeño premio y el último, 10 💎 y 2 🎟️.
-- Los pasos avanzan con los mismos eventos que las misiones ([tutorial.ts](src/game/tutorial.ts)).
-- Las secciones se abren poco a poco: Mejoras, decretos, Juegos y misiones durante el tutorial; Ranking, Logros, la Copa, la Bolsa, las Gemas y el Legado al terminarlo. Las pestañas cerradas muestran 🔒.
-- Se puede saltar en cualquier momento (se abre todo, sin los premios).
-- Las partidas de antes del tutorial no lo ven.
-- El panel de administración muestra el embudo: cuántos jugadores nuevos completan cada paso y cuántos lo saltan.
+- Un jugador nuevo conoce el juego con **Clara, su consejera**, en 12 pasos:
+  - tocar la ciudad, construir, comprar una mejora y firmar un decreto;
+  - girar la rueda, jugar un arcade y completar un reto diario;
+  - abrir el sobre de regalo del Consejo, cobrar una misión y ponerse nombre.
+- Cada paso da un pequeño premio; el último da 10 💎 y 2 🎟️. El reto diario, la misión y el nombre se pueden dejar **para más tarde** (sin su premio).
+- Los pasos avanzan con los mismos eventos que las misiones, más tres propios: abrir un sobre, cobrar una misión y cambiar el nombre ([tutorial.ts](src/game/tutorial.ts)).
+- Las secciones se abren poco a poco: Mejoras, decretos y Juegos al principio; el Consejo, las Gemas y el Legado con el sobre; las misiones y el Perfil después; y Ranking, la Copa, el Mundo y la Bolsa al terminar. Las pestañas cerradas muestran 🔒.
+- Se puede saltar en cualquier momento (se abre todo, sin los premios). Las partidas de antes del tutorial no lo ven.
+- El paso se guarda como posición junto con la versión de la lista (`v`). Las partidas de la primera versión (9 pasos, sin `v`) se traducen por id al cargar, así que quien ya lo terminó no lo vuelve a ver.
+
+### Consejos de Clara
+
+Lo que el tutorial no cuenta lo explica Clara la primera vez que aparece ([tips.ts](src/game/tips.ts), [ClaraTip.tsx](src/ui/ClaraTip.tsx)):
+- **Tarjetas** al abrir por primera vez cada pantalla: Juegos, Consejo, misiones, ganancias offline, Logros, Ranking, pase de temporada, Gemas, Legado, ley de era, casino, Copa, Mundo, Conquista y Bolsa.
+- **Burbujas** abajo cuando pasa algo: el primer incidente, el globo dorado, el primer edificio con 10 (hitos x2), la primera estrella y, cuando ya hay progreso que perder, vincular la cuenta con Google. Sale una a la vez, con al menos 45 s entre una y otra (el incidente no espera).
+- Los pasos completados dan por vistos los consejos que ya explican; quien salta el tutorial los va viendo en su sitio.
+- **Guía de Clara** (👤 Perfil): todos los consejos para repasarlos (lo que aún no ha llegado sale con candado) y **repetir el tutorial** como repaso, sin premios y sin cerrar nada.
+- Las partidas que ya conocían el juego cuando llegaron los consejos solo ven el de la cuenta.
+
+### Panel
+- Embudo: cuántos jugadores nuevos completan cada paso, cuántos lo saltan y qué pasos dejan para más tarde.
+- Cuántos ven cada consejo.
 
 ## Periódico: La Gaceta de Infinite City
 

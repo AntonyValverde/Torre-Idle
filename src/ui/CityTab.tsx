@@ -28,6 +28,7 @@ import { CityIncident } from './CityIncident';
 import { LawCard } from './LawCard';
 import { NewspaperCard, NewspaperScreen } from './Newspaper';
 import { CityScene } from './CityScene';
+import { ClaraTip } from './ClaraTip';
 import { DecreeCard } from './DecreeCard';
 import { sfx, vibrate } from './haptics';
 import { MissionsCard, MissionsTile, useMissionsOpen } from './MissionsCard';
@@ -109,6 +110,7 @@ export function CityTab({ paused = false, onIncident, onWorld }: { paused?: bool
       )}
       {paper && <NewspaperScreen onClose={() => setPaper(false)} />}
 
+      {missions && missionsOpen && <ClaraTip id="missions" />}
       {missions && <MissionsCard open={missionsOpen} onToggle={toggleMissions} />}
 
       <DecreeCard />

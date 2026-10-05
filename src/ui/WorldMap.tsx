@@ -26,6 +26,7 @@ import { ago } from '../admin/metrics';
 import { CityList } from './Gifts';
 import { ConquestView } from './conquest/ConquestView';
 import { GameScreen } from './Modal';
+import { ClaraTip } from './ClaraTip';
 
 const DECOR = landDecor();
 /** Hasta cuántos píxeles se puede mover el dedo para que cuente como toque y no como arrastre. */
@@ -80,6 +81,7 @@ export function WorldScreen({ onVisit, onClose }: { onVisit: (uid: string) => vo
   return (
     <GameScreen title="Mapa del mundo" right={count > 0 ? `🏙️ ${count}` : null} onClose={onClose}>
       <div className="world-wrap">
+        <ClaraTip id="world" />
         <div className="segmented world-tabs" role="tablist">
           <button role="tab" aria-selected={mode === 'map'} className={mode === 'map' ? 'active' : ''} onClick={() => setMode('map')}>
             🗺️ Mapa

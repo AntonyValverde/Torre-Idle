@@ -27,12 +27,15 @@ import { Council } from './Council';
 import { LawCard } from './LawCard';
 import { LegacyTree } from './LegacyTree';
 import { Modal } from './Modal';
+import { ClaraTip } from './ClaraTip';
 
 type Section = 'upgrades' | 'council' | 'gems' | 'legacy';
 
 export function UpgradesTab() {
-  const [section, setSection] = useState<Section>('upgrades');
   const s = useGame((st) => st.s);
+  // En el paso del consejo del tutorial se abre directamente el Consejo
+  const tutCouncil = currentStep(s)?.id === 'council';
+  const [section, setSection] = useState<Section>(tutCouncil ? 'council' : 'upgrades');
   const upgradesCount = availableUpgrades(s).filter((u) => s.coins >= upgradeCost(s, u)).length;
 
   // Durante el tutorial solo están las mejoras con monedas; Gemas y Legado llegan al terminarlo
@@ -50,7 +53,7 @@ export function UpgradesTab() {
         <button className={section === 'upgrades' ? 'active' : ''} onClick={() => setSection('upgrades')}>
           🪙 Mejoras{upgradesCount > 0 && <span className="seg-badge">{upgradesCount}</span>}
         </button>
-        <button className={section === 'council' ? 'active' : ''} onClick={() => setSection('council')}>
+        <button className={`${section === 'council' ? 'active' : ''}${tutCouncil && section !== 'council' ? ' tut-target' : ''}`} onClick={() => setSection('council')}>
           🧑‍💼 Consejo{advisorsAlert(s) && <span className="seg-badge">!</span>}
         </button>
         <button className={section === 'gems' ? 'active' : ''} onClick={() => setSection('gems')}>
@@ -161,6 +164,7 @@ function GemShop() {
   const buyGem = useGame((st) => st.buyGemItem);
   return (
     <>
+      <ClaraTip id="gems" />
       <div className="currency-banner gem">
         <span className="big">💎 {fmt(s.gems)}</span>
         <small>Gana gemas en Fusión, el Apagón diario, logros, decretos y globos dorados. También compran sobres de consejeros en 🧑‍💼 Consejo.</small>
@@ -198,6 +202,7 @@ function Legacy() {
 
   return (
     <>
+      <ClaraTip id="legacy" />
       <div className="era-card">
         <div className="era-title">
           <small>Era {s.era}</small>
