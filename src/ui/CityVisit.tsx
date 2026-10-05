@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { cityLink, parseCups, type CitySnapshot } from '../game/cities';
+import { type CitySnapshot, cityLink, parseCups, parseDecos } from '../game/cities';
 import { now } from '../game/clock';
 import { currentUid, fetchCity, type PublicCity } from '../game/cloud';
 import { eraName } from '../game/economy';
@@ -80,7 +80,7 @@ export function CityVisit({ uid, city: given, onClose }: { uid: string; city?: C
         {city && city !== 'error' && (
           <>
             <div className="scene-wrap visit-scene">
-              <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings, cups: parseCups(city.cups), conq: city.conq ?? 0 }} />
+              <CityScene visit={{ layout: city.layout, era: city.era, buildings: city.buildings, cups: parseCups(city.cups), conq: city.conq ?? 0, decos: parseDecos(city.deco) }} />
               <div className="scene-badge">
                 Era {city.era} · {eraName(city.era)}
               </div>

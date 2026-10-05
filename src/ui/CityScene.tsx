@@ -349,6 +349,8 @@ export interface CityVisitView {
   cups?: [number, number, number, number];
   /** Temporadas de Conquista ganadas. */
   conq?: number;
+  /** Cosméticos del pase de temporada de esa ciudad. */
+  decos?: string[];
 }
 
 /** Distancia máxima (px) entre tocar y soltar para que cuente como toque y no como desplazamiento. */
@@ -1098,8 +1100,8 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
         ctx.fill();
       }
 
-      // Zepelín dorado del pase de temporada (solo en la ciudad propia)
-      if (!v && hasDeco(s.pass, 'zeppelin')) drawZeppelin(t, dt, night);
+      // Zepelín dorado del pase de temporada (el propio o el de la ciudad visitada)
+      if (v ? v.decos?.includes('zeppelin') : hasDeco(s.pass, 'zeppelin')) drawZeppelin(t, dt, night);
 
       // Silueta lejana
       const gy = groundY();

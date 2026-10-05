@@ -138,6 +138,8 @@ await no('ciudad: actualizar antes de 30 s', () => setDoc(ca, city({ buildings: 
 await no('ciudad: publicar la de otro', () => setDoc(doc(bob, 'cities/alice'), city({ name: 'Bob' })));
 await no('ciudad: plano mal formado', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', layout: '<img src=x>' })));
 await no('ciudad: tamaño de edificio imposible', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', layout: '9,9,9' })));
+await no('ciudad: cosmético mal formado', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', deco: 'Zeppelin,<b>' })));
+await no('ciudad: demasiados cosméticos', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', deco: 'a1,bb,ccc,dddd,eeee' })));
 await no('ciudad: campo extra', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', admin: true })));
 await no('ciudad: falta un campo', () => {
   const { stars, ...rest } = city({ name: 'Bob' });
@@ -147,7 +149,7 @@ await no('ciudad: era decimal', () => setDoc(doc(bob, 'cities/bob'), city({ name
 await no('ciudad: nombre con HTML', () => setDoc(doc(bob, 'cities/bob'), city({ name: '<b>x</b>' })));
 await no('ciudad: un jugador no borra', () => deleteDoc(ca));
 await no('ciudad: copas mal escritas', () => setDoc(doc(carolDb(), 'cities/carol'), city({ name: 'Carol', cups: 'muchas' })));
-await ok('ciudad: con su vitrina y temporadas', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', cups: '2,0,1,1' })));
+await ok('ciudad: con su vitrina, temporadas y cosméticos del pase', () => setDoc(doc(bob, 'cities/bob'), city({ name: 'Bob', cups: '2,0,1,1', deco: 'zeppelin,aurora' })));
 await ok('ciudad: vitrina de una versión anterior (3 números)', () => setDoc(doc(carolDb(), 'cities/carol'), city({ name: 'Carol', cups: '1,0,0' })));
 await no('ciudad: vitrina con 5 números', () => setDoc(doc(fakeAdmin, 'cities/fake'), city({ name: 'Fake', cups: '1,1,1,1,1' })));
 const dave = env.authenticatedContext('dave').firestore();

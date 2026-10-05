@@ -27,7 +27,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { citySnapshot, parseCups, parseLayout, type CitySnapshot } from './cities';
+import { citySnapshot, parseCups, parseDecos, parseLayout, type CitySnapshot } from './cities';
 import { dateKey, now, resyncFromDevice, setServerTime, weekKey } from './clock';
 import { cupWeekKey } from './cup';
 import {
@@ -697,7 +697,7 @@ export interface PublicCity extends CitySnapshot {
 }
 
 export function citySignature(c: CitySnapshot): string {
-  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}|${c.gifts ?? 0}|${c.conq ?? 0}`;
+  return `${c.name}|${c.era}|${c.layout}|${c.buildings}|${c.stars}|${c.cups}|${c.gifts ?? 0}|${c.conq ?? 0}|${c.deco ?? ''}`;
 }
 
 /** Publica la ciudad del jugador (solo lo que se ve al visitarla). */
@@ -732,6 +732,7 @@ function parseCity(uid: string, x: Record<string, unknown> | undefined): PublicC
     cups: parseCups(x.cups).join(','),
     gifts: Math.max(0, Math.floor(n(x.gifts))),
     conq: Math.max(0, Math.floor(n(x.conq))),
+    ...(parseDecos(x.deco).length ? { deco: parseDecos(x.deco).join(',') } : {}),
     updatedAt: (x.updatedAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null,
   };
 }

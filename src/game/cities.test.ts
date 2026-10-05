@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cityFromUrl, cityLayout, cityLink, citySnapshot, parseCups, parseLayout } from './cities';
+import { cityFromUrl, cityLayout, cityLink, citySnapshot, parseCups, parseDecos, parseLayout } from './cities';
 import { now } from './clock';
 import { BUILDINGS, boostMultiplier } from './economy';
 import { newState, normalize } from './state';
@@ -29,6 +29,18 @@ describe('ciudades públicas', () => {
     expect(parseCups('2,0,1,3')).toEqual([2, 0, 1, 3]);
     expect(parseCups('<b>')).toEqual([0, 0, 0, 0]);
     expect(parseCups(undefined)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('los cosméticos del pase viajan en la foto y se leen con cuidado', () => {
+    const s = newState(0);
+    expect(citySnapshot(s).deco).toBeUndefined();
+    expect(citySnapshot({ ...s, pass: { ...s.pass, decos: ['zeppelin', 'aurora'] } }).deco).toBe('zeppelin,aurora');
+    expect(parseDecos('zeppelin,aurora')).toEqual(['zeppelin', 'aurora']);
+    // Ids que esta versión no conoce se ignoran; cadenas raras no pasan
+    expect(parseDecos('zeppelin,futuro')).toEqual(['zeppelin']);
+    expect(parseDecos('Zeppelin')).toEqual([]);
+    expect(parseDecos('<b>')).toEqual([]);
+    expect(parseDecos(undefined)).toEqual([]);
   });
 
   it('el enlace para compartir lleva el UID y se lee al abrir el juego', () => {
