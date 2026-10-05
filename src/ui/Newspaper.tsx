@@ -302,7 +302,8 @@ export function NewspaperScreen({ onClose }: { onClose: () => void }) {
     if (turn || to === page || to < 0 || to >= pages.length) return;
     rustle();
     vibrate(8);
-    screenRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    // Cada hoja se desplaza por dentro: la nueva se abre por arriba
+    screenRef.current?.querySelectorAll<HTMLElement>('.paper')[to]?.scrollTo({ top: 0 });
     setPage(to);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     setTurn({ from: page, to });

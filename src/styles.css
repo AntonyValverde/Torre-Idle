@@ -1670,10 +1670,9 @@ img.splash-logo {
   position: fixed;
   inset: 0;
   z-index: 70;
-  overflow-y: auto;
-  /* La hoja que gira asoma por la izquierda: sin barra horizontal */
-  overflow-x: hidden;
-  /* Centrado en vertical con márgenes automáticos: si no cabe, se desplaza desde arriba sin recortar */
+  /* Ocupa justo la pantalla: si la página no cabe, se desplaza dentro de la hoja y la navegación queda a la vista */
+  overflow: hidden;
+  /* Centrado en vertical con márgenes automáticos */
   display: flex;
   flex-direction: column;
   background: rgba(10, 8, 20, 0.75);
@@ -1691,7 +1690,10 @@ img.splash-logo {
   display: grid;
   /* minmax(0, …): que el contenido sin cortes (white-space: nowrap) no ensanche la columna */
   grid-template-columns: minmax(0, 1fr);
-  flex-shrink: 0;
+  /* Mide lo que la página más alta, pero encoge hasta el alto libre de la pantalla */
+  grid-template-rows: minmax(0, 1fr);
+  flex: 0 1 auto;
+  min-height: 0;
   width: 100%;
   max-width: 500px;
   margin: auto auto 0;
@@ -1705,6 +1707,11 @@ img.splash-logo {
   display: flex;
   flex-direction: column;
   visibility: hidden;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
   padding: 18px 18px 12px;
   background-color: var(--paper);
   background-image:
@@ -1718,6 +1725,11 @@ img.splash-logo {
     0 14px 40px rgba(0, 0, 0, 0.55),
     inset 0 0 50px rgba(140, 100, 40, 0.16);
   user-select: text;
+}
+
+/* La hoja desplaza su contenido: nada se aplasta para caber */
+.paper > * {
+  flex-shrink: 0;
 }
 
 @keyframes paperIn {
@@ -2383,6 +2395,38 @@ img.splash-logo {
 @media (max-width: 380px) {
   .paper-tagline {
     visibility: hidden;
+  }
+}
+
+/* Pantallas bajas: cabecera y portada más compactas para que quepa más sin desplazar */
+@media (max-height: 760px) {
+  .paper {
+    padding: 12px 14px 8px;
+  }
+  .paper-masthead h1 {
+    font-size: 2.5rem;
+  }
+  .paper-weather {
+    padding: 4px 0;
+  }
+  .paper-lead {
+    padding: 8px 4px 6px;
+  }
+  .paper-lead-emoji {
+    font-size: 34px;
+  }
+  .paper-lead h2 {
+    font-size: 1.35rem;
+  }
+  .paper-briefs p {
+    padding: 5px 0;
+  }
+  .paper-nav {
+    margin-top: 8px;
+  }
+  .paper-nav > button {
+    width: 38px;
+    height: 38px;
   }
 }
 
