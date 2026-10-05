@@ -76,9 +76,23 @@ export function headlines(s: GameState, d: PaperDelta | null): Story[] {
       text: 'Los vecinos piden recuperarlos. Las tropas esperan en el Mapa del mundo → Conquista.',
     });
   }
+  if (d.passDone) {
+    out.push({
+      emoji: '🏁',
+      title: `¡${mayor} completa el pase de temporada!`,
+      text: 'Los 25 niveles de la pista, cobrados. El cosmético exclusivo de la temporada ya luce en la ciudad.',
+    });
+  }
   if (d.league >= 0) {
     const div = DIVISIONS[d.league];
     if (div) out.push({ emoji: div.emoji, title: `Ascenso histórico a la liga ${div.name}`, text: 'Mejor división de la liga semanal alcanzada hasta hoy.' });
+  }
+  if (d.passSeason) {
+    out.push({
+      emoji: '🎫',
+      title: 'Nueva temporada: pista del pase renovada',
+      text: 'Los niveles ganados y sin cobrar se pagaron solos. Los puntos de liga, Copa y Conquista vuelven a sumar desde cero.',
+    });
   }
   for (const r of d.records) {
     const info = PAPER_RECORDS[r.key];

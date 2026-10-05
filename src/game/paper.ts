@@ -1,4 +1,5 @@
 import { isNewDay } from './clock';
+import { PASS_MAX } from './pass';
 import type { GameState } from './state';
 
 // Estado del periódico diario: cada día guarda una foto de las estadísticas de la ciudad. Al empezar
@@ -38,6 +39,9 @@ export interface PaperStats {
   conqWins: number;
   conqLost: number;
   conqTaken: number;
+  /** Pase de temporada: temporada de la pista (-1 en fotos de antes del pase) y niveles cobrados. */
+  passSeason: number;
+  passClaimed: number;
   bests: Record<RecordKey, number>;
 }
 
@@ -55,6 +59,9 @@ export interface PaperDelta {
   conqWins?: number;
   conqLost?: number;
   conqTaken?: number;
+  /** Pase de temporada: pista completada (los 25 niveles cobrados) y temporada nueva desde la edición anterior. */
+  passDone?: boolean;
+  passSeason?: boolean;
   /** Eras ganadas (refundaciones). */
   eras: number;
   stars: number;
@@ -108,6 +115,9 @@ function statsOf(v: unknown): PaperStats | null {
     conqWins: num(r.conqWins),
     conqLost: num(r.conqLost),
     conqTaken: num(r.conqTaken),
+    // Fotos de antes del pase: -1, para que no salga "temporada nueva" al estrenarlo
+    passSeason: Number.isFinite(r.passSeason) ? (r.passSeason as number) : -1,
+    passClaimed: num(r.passClaimed),
     bests,
   };
 }
@@ -150,6 +160,8 @@ export function paperStats(s: GameState): PaperStats {
     conqWins: s.conquest.wins,
     conqLost: s.conquest.lost,
     conqTaken: s.conquest.captured,
+    passSeason: s.pass.season,
+    passClaimed: s.pass.claimed,
     bests,
   };
 }
@@ -169,6 +181,9 @@ export function paperDelta(a: PaperStats, b: PaperStats, since: string): PaperDe
     conqWins: Math.max(0, b.conqWins - a.conqWins),
     conqLost: Math.max(0, b.conqLost - a.conqLost),
     conqTaken: Math.max(0, b.conqTaken - a.conqTaken),
+    // La pista se completa dentro de una temporada: si cambió, los niveles cobrados ya volvieron a cero
+    passDone: b.passSeason === a.passSeason && b.passClaimed >= PASS_MAX && a.passClaimed < PASS_MAX,
+    passSeason: a.passSeason >= 0 && b.passSeason > a.passSeason,
     eras: Math.max(0, b.era - a.era),
     stars: Math.max(0, b.stars - a.stars),
     era: b.era,

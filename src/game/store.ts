@@ -46,6 +46,7 @@ import {
   pendingCup,
   registeredFor,
   returnCards,
+  seasonPoints,
   seasonReward,
   slotOpen,
   trackActivity,
@@ -85,6 +86,7 @@ import {
   PUZZLE_POINTS,
   WEEKLY_REWARD,
   addPoints,
+  applyPassReward,
   bump,
   chestReady,
   divisionOf,
@@ -93,6 +95,7 @@ import {
   syncPeriods,
   type Division,
 } from './missions';
+import { addPassXp, claimNext, passRewardText, type PassReward } from './pass';
 import { newState, type GameState, type OfflineReport } from './state';
 import { STOCK_BY_ID, investedTotal, saleValue, stockInvestCap, stockPrice, unitsFor } from './stocks';
 import {
@@ -127,7 +130,8 @@ import {
   type seasonPrize,
 } from './conquest';
 import { arcadeBoostTime, critMultiplier, festivalDuration, festivalMult, legacyBlock, respecCost, vipReady } from './legacy';
-import { tutorialNext, tutorialSkip } from './tutorial';
+import { tutorialDone, tutorialLater, tutorialNext, tutorialProgress, tutorialReplay, tutorialSkip } from './tutorial';
+import { seeTip } from './tips';
 import { WHEEL, pickSegment } from './wheel';
 
 export type { OfflineReport } from './state';
@@ -189,6 +193,8 @@ interface GameStore {
   incident: Incident | null;
   /** Minijuego abierto para resolver un incidente: su premio lleva el extra. */
   incidentPlay: IncidentKind | null;
+  /** Consejo de Clara que se ve ahora en la burbuja (tips.ts). */
+  tip: string | null;
   /** Saca un incidente a la ciudad (si no hay ya uno). */
   offerIncident(): void;
   /** Atiende el incidente: devuelve su tipo (el minijuego que hay que abrir gratis) o null si ya no está. */
@@ -223,10 +229,9 @@ interface GameStore {
   setConquestWorld(week: string, w: string): void;
   /** Conquista: guarda los partes de batalla nuevos y devuelve los recién llegados. */
   receiveReports(list: Report[]): Report[];
-  /** Conquista: guarda la foto de la reserva (para los avisos), marca los partes como leídos y la presentación de Clara. */
+  /** Conquista: guarda la foto de la reserva (para los avisos), y marca los partes como leídos. */
   noteReserve(p: Reserve): void;
   readReports(): void;
-  seeConquestIntro(): void;
   /** Conquista: apunta un territorio conquistado (logro y periódico). */
   noteCapture(): void;
   /** Conquista: cobra el premio de una temporada terminada (una vez). */
@@ -238,6 +243,11 @@ interface GameStore {
   claimChest(): string | null;
   /** Cobra el premio de la liga de la semana anterior. */
   claimLeague(): { division: Division; points: number } | null;
+  /**
+   * Pase de temporada: cobra el siguiente nivel ganado y da su premio (gemas, tickets, carta, sobre, fichas
+   * o el cosmético de la temporada). Devuelve el nivel, el premio y su texto corto; null si no hay nada que cobrar.
+   */
+  claimPass(): { level: number; reward: PassReward; text: string } | null;
   /** Marca la inscripción en la Copa de esa semana. */
   cupRegister(week: string): void;
   /** Gasta un intento de una prueba de la Copa; false si no quedan o si esa prueba no se juega ahora. */
@@ -286,6 +296,14 @@ interface GameStore {
   /** Avanza un paso del tutorial que se completa con su botón. */
   tutorialNext(): void;
   tutorialSkip(): void;
+  /** Deja el paso actual del tutorial para más tarde (sin premio). */
+  tutorialLater(): void;
+  /** Repasa el tutorial desde la Guía de Clara (sin premios). */
+  tutorialReplay(): void;
+  /** Enseña un consejo en la burbuja de Clara, si no lo ha visto y no hay otro en pantalla. */
+  showTip(id: string): void;
+  /** Marca un consejo como visto (y quita la burbuja si era ese). */
+  seeTip(id: string): void;
   /** Devuelve un mensaje de error, o null si el nombre se guardó. */
   setName(name: string): string | null;
   toast(text: string): void;
@@ -384,6 +402,7 @@ export const useGame = create<GameStore>((set, get) => ({
   decree: null,
   incident: null,
   incidentPlay: null,
+  tip: null,
 
   offerIncident() {
     const { incident } = get();
@@ -660,11 +679,6 @@ export const useGame = create<GameStore>((set, get) => ({
     if (s.conquest.unread) set({ s: { ...s, conquest: { ...s.conquest, unread: 0 } } });
   },
 
-  seeConquestIntro() {
-    const { s } = get();
-    if (!s.conquest.intro) set({ s: { ...s, conquest: { ...s.conquest, intro: true } } });
-  },
-
   noteCapture() {
     set({ s: withCapture(get().s) });
   },
@@ -672,7 +686,8 @@ export const useGame = create<GameStore>((set, get) => ({
   claimConquest(week, rank, size, points) {
     const r = applySeason(get().s, week, rank, size, points);
     if (!r) return null;
-    set({ s: r.s });
+    // La participación (la base del premio) también avanza el pase de temporada
+    set({ s: { ...r.s, pass: addPassXp(r.s.pass, 5 + Math.min(15, Math.max(0, points))) } });
     return r.prize;
   },
 
@@ -920,7 +935,11 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!slot || slot.c || !isDone(slot)) return null;
     const claimed = list.map((x, i) => (i === index ? { ...x, c: true } : x));
     const missions = kind === 'daily' ? { ...s.missions, daily: claimed } : { ...s.missions, weekly: claimed };
-    let next: GameState = addRecruits({ ...s, missions, missionsDone: s.missionsDone + 1 }, RECRUIT_MISSION, dateKey(now()));
+    let next: GameState = tutorialProgress(
+      addRecruits({ ...s, missions, missionsDone: s.missionsDone + 1 }, RECRUIT_MISSION, dateKey(now())),
+      'mission',
+      1,
+    );
     if (kind === 'daily') {
       next = addPoints({ ...next, gems: next.gems + DAILY_REWARD.gems, tickets: next.tickets + DAILY_REWARD.tickets }, DAILY_REWARD.points);
       set({ s: next });
@@ -962,6 +981,15 @@ export const useGame = create<GameStore>((set, get) => ({
     const paid = payLeague(s, prev.points);
     set({ s: { ...paid, league: { ...paid.league, prev: null } } });
     return { division: divisionOf(prev.points), points: prev.points };
+  },
+
+  claimPass() {
+    const { s } = get();
+    const r = claimNext(s.pass);
+    if (!r) return null;
+    // claimNext ya apunta el cosmético en la pista; applyPassReward no lo repite y da el resto del premio
+    set({ s: applyPassReward({ ...s, pass: r.pass }, r.reward) });
+    return { level: r.level, reward: r.reward, text: passRewardText(r.reward) };
   },
 
   cupRegister(week) {
@@ -1068,7 +1096,8 @@ export const useGame = create<GameStore>((set, get) => ({
       played: c.played + (outcome.played ? 1 : 0),
       history: [...c.history, record].slice(-HISTORY_MAX),
     };
-    set({ s: { ...s, gems: s.gems + gems, tickets: s.tickets + reward.tickets, cup } });
+    // Los puntos de temporada de la Copa también avanzan el pase
+    set({ s: { ...s, gems: s.gems + gems, tickets: s.tickets + reward.tickets, cup, pass: addPassXp(s.pass, seasonPoints(outcome)) } });
     return { ...reward, gems, lines, card };
   },
 
@@ -1092,7 +1121,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const before = a.copies[def.id] ?? 0;
     const copies = { ...a.copies, [def.id]: before + 1 };
     const advisors = { ...a, copies, gift: true, packs: !a.gift || paid ? a.packs : a.packs - 1 };
-    set({ s: { ...s, gems: s.gems - paid, advisors } });
+    set({ s: tutorialProgress({ ...s, gems: s.gems - paid, advisors }, 'advisor', 1) });
     const level = levelFor(before + 1);
     return { def, level, isNew: before === 0, levelUp: before > 0 && level > levelFor(before), paid };
   },
@@ -1148,11 +1177,30 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ s: tutorialSkip(get().s) });
   },
 
+  tutorialLater() {
+    set({ s: tutorialLater(get().s) });
+  },
+
+  tutorialReplay() {
+    set({ s: tutorialReplay(get().s), tip: null });
+  },
+
+  showTip(id) {
+    const { s, tip } = get();
+    if (tip || s.tips[id] || !tutorialDone(s)) return;
+    set({ tip: id });
+  },
+
+  seeTip(id) {
+    const { s, tip } = get();
+    set({ s: seeTip(s, id), tip: tip === id ? null : tip });
+  },
+
   setName(name) {
     const clean = sanitizeName(name);
     if (clean.length < 3) return 'El nombre debe tener al menos 3 letras o números';
     if (!isNameAllowed(clean)) return 'Ese nombre no está permitido';
-    set({ s: { ...get().s, name: clean } });
+    set({ s: tutorialProgress({ ...get().s, name: clean }, 'name', 1) });
     return null;
   },
 

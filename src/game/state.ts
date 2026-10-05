@@ -2,12 +2,14 @@ import { MISSION_BY_ID, newLeague, newMissions, type LeagueState, type MissionSl
 import { isNameAllowed, randomName, sanitizeName } from './names';
 import { CARD_IDS, HISTORY_MAX, TRAINING_MAX, newCup, type CardId, type CupState } from './cup';
 import { newTutorial, tutorialState, type TutorialState } from './tutorial';
+import { tipsState } from './tips';
 import { LAW_BY_ID } from './laws';
 import { advisorsState, newAdvisors, type AdvisorsState } from './advisors';
 import { newPaper, paperState, type PaperState } from './paper';
 import { newSocial, socialState, type SocialState } from './social';
 import { casinoState, newCasino, type CasinoState } from './casino';
 import { conquestState, newConquest, type ConquestState } from './conquest';
+import { newPass, passSeason, passState, type PassState } from './pass';
 import { dateKey } from './clock';
 import { LEGACY_BY_ID } from './legacy';
 
@@ -100,6 +102,8 @@ export interface GameState {
   pendingOffline: OfflineReport | null;
   /** Tutorial de Clara: paso actual y su progreso. */
   tutorial: TutorialState;
+  /** Consejos de Clara ya vistos (id → 1). */
+  tips: Record<string, number>;
   /** Ley elegida para la era actual (null: aún sin elegir o en la era 1). Se reinicia al refundar. */
   law: string | null;
   /** Consejeros: colección, sillas del consejo y sobres sin abrir. */
@@ -116,6 +120,8 @@ export interface GameState {
   casino: CasinoState;
   /** Conquista: reclutas ganados hoy por jugar (se suben a la reserva al abrirla). */
   conquest: ConquestState;
+  /** Pase de temporada (gratuito): puntos de la temporada, niveles cobrados y cosméticos conseguidos. */
+  pass: PassState;
   createdAt: number;
 }
 
@@ -186,6 +192,7 @@ export function newState(t: number): GameState {
     cup: newCup(),
     pendingOffline: null,
     tutorial: newTutorial(),
+    tips: {},
     law: null,
     advisors: newAdvisors(),
     respecFree: true,
@@ -194,6 +201,7 @@ export function newState(t: number): GameState {
     social: newSocial(),
     casino: newCasino(),
     conquest: newConquest(),
+    pass: newPass(passSeason(t)),
     createdAt: t,
   };
 }
@@ -419,6 +427,7 @@ export function normalize(raw: unknown, t: number): GameState {
     pendingOffline: offlineReport(r.pendingOffline),
     // Sin campo: partida de antes del tutorial, que ya no lo necesita
     tutorial: tutorialState(r.tutorial),
+    tips: tipsState(r.tips, tutorialState(r.tutorial)),
     // Una ley que ya no existe (de otra versión) se descarta: se vuelve a elegir
     law: typeof r.law === 'string' && LAW_BY_ID.has(r.law) ? r.law : null,
     advisors: advisorsState(r.advisors),
@@ -429,6 +438,8 @@ export function normalize(raw: unknown, t: number): GameState {
     social: socialState(r.social),
     casino: casinoState(r.casino),
     conquest: conquestState(r.conquest),
+    // Sin campo (partidas de antes del pase): pista nueva de la temporada actual
+    pass: passState(r.pass, passSeason(t)),
     createdAt: ms(r.createdAt, t),
   };
   // Claves de día/semana en el futuro (reloj roto al guardar): se anulan para que vuelva a contar como día nuevo

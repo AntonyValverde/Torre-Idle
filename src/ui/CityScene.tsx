@@ -6,6 +6,7 @@ import { FANS_GROUPS, activeDays, cupPhase } from '../game/cup';
 import type { GameState } from '../game/state';
 import { BUILDINGS, eraHue, isBoosted, isTapBoosted } from '../game/economy';
 import { fmt } from '../game/format';
+import { hasDeco } from '../game/pass';
 import { useGame } from '../game/store';
 import { mulberry32 } from '../minigames/rng';
 import { celebrating } from './celebrate';
@@ -401,6 +402,8 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
     const confetti: { x: number; y: number; v: number; hue: number; r: number }[] = [];
     let pulse = 0;
     let shake = 0;
+    // Zepelín dorado (cosmético del pase): posición horizontal relativa, da la vuelta sin fin
+    let zepX = Math.random();
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -488,6 +491,44 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
       const ms = now();
       weather = weatherAt(ms);
       season = seasonAt(ms);
+    }
+
+    /** Zepelín dorado que cruza el cielo despacio: una elipse, una aleta, una góndola y un brillo cálido de noche. */
+    function drawZeppelin(t: number, dt: number, night: number) {
+      zepX += dt * 0.014;
+      if (zepX > 1.18) zepX = -0.18;
+      const x = zepX * W;
+      const y = H * 0.2 + Math.sin(t / 1800) * 4 * scale;
+      const rx = 20 * scale;
+      const ry = 7 * scale;
+      if (night > 0.2) {
+        const g = ctx.createRadialGradient(x, y, ry, x, y, rx * 1.8);
+        g.addColorStop(0, `rgba(255,205,90,${0.22 * night})`);
+        g.addColorStop(1, 'rgba(255,205,90,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x - rx * 1.8, y - rx * 1.8, rx * 3.6, rx * 3.6);
+      }
+      // Aleta trasera
+      ctx.fillStyle = '#c98a1c';
+      ctx.beginPath();
+      ctx.moveTo(x - rx * 0.75, y);
+      ctx.lineTo(x - rx * 1.15, y - ry * 1.3);
+      ctx.lineTo(x - rx * 0.45, y - ry * 0.4);
+      ctx.fill();
+      // Cuerpo
+      const body = ctx.createLinearGradient(x, y - ry, x, y + ry);
+      body.addColorStop(0, '#ffe58a');
+      body.addColorStop(0.55, '#f2b93b');
+      body.addColorStop(1, '#b8771a');
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Góndola con ventanita encendida
+      ctx.fillStyle = '#6b4512';
+      ctx.fillRect(x - 4 * scale, y + ry - 1 * scale, 8 * scale, 3.5 * scale);
+      ctx.fillStyle = `rgba(255,236,170,${0.5 + night * 0.5})`;
+      ctx.fillRect(x - 1 * scale, y + ry, 2 * scale, 2 * scale);
     }
 
     function drawFireworks(dt: number, launch: boolean) {
@@ -1056,6 +1097,9 @@ export function CityScene({ visit, paused = false }: { visit?: CityVisitView; pa
         ctx.arc(cx - r, cy + 4 * scale, r * 0.7, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // Zepelín dorado del pase de temporada (solo en la ciudad propia)
+      if (!v && hasDeco(s.pass, 'zeppelin')) drawZeppelin(t, dt, night);
 
       // Silueta lejana
       const gy = groundY();

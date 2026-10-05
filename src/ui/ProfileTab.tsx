@@ -11,6 +11,7 @@ import { isSoundOn, setSoundOn } from './haptics';
 import { isMusicOn, musicVolume, nowPlaying, setMusicOn, setMusicVolume } from './music/engine';
 import { SuggestionBox } from './SuggestionBox';
 import { GiftsCard } from './Gifts';
+import { PassCard } from './PassCard';
 
 export function ProfileTab({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: (uid: string) => void; onWorld: () => void }) {
   const s = useGame((st) => st.s);
@@ -107,6 +108,8 @@ function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: 
           </div>
         </label>
       </div>
+
+      <PassCard />
 
       <div className="card">
         <b>Cuenta</b>

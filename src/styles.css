@@ -6177,6 +6177,133 @@ img.splash-logo {
   margin-top: 4px;
 }
 
+/* ---------- Pase de temporada ---------- */
+
+.card.pass-card {
+  gap: 10px;
+  overflow: hidden;
+}
+
+.card.pass-card.ready {
+  border-color: var(--accent);
+  box-shadow: 0 0 16px rgba(255, 194, 61, 0.22);
+}
+
+.pass-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pass-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pass-lvl {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.pass-lvl b {
+  font-size: 1.05rem;
+  color: var(--accent);
+}
+
+.pass-bar {
+  flex: 1;
+  margin-top: 0;
+}
+
+.pass-bar div {
+  background: linear-gradient(90deg, #ffd35a, var(--accent-2));
+}
+
+/* Pista de niveles: una fila que se desplaza en horizontal */
+.pass-track {
+  display: flex;
+  gap: 6px;
+  margin: 0 -14px;
+  padding: 6px 14px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.pass-track::-webkit-scrollbar {
+  display: none;
+}
+
+.pass-level {
+  flex: 0 0 auto;
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 2px;
+  border-radius: 12px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  scroll-snap-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.pass-level .pass-emoji {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.pass-level .pass-n {
+  min-height: 0.75rem;
+}
+
+.pass-level.last {
+  width: 52px;
+  border-color: rgba(255, 194, 61, 0.55);
+  background: linear-gradient(180deg, rgba(255, 194, 61, 0.18), var(--card-2));
+}
+
+.pass-level.locked {
+  opacity: 0.55;
+}
+
+.pass-level.done {
+  opacity: 0.45;
+}
+
+.pass-level.done .pass-n {
+  color: var(--good);
+}
+
+/* Nivel ganado y sin cobrar: resaltado y con latido (la animación usa `scale`, no `transform`) */
+.pass-level.ready {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 194, 61, 0.35), rgba(255, 122, 61, 0.2));
+  box-shadow: 0 0 12px rgba(255, 194, 61, 0.45);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.pass-claim {
+  width: 100%;
+}
+
+.pass-decos {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pass-level.ready {
+    animation: none;
+  }
+}
+
 /* ---------- Animaciones ---------- */
 
 @keyframes popUp {

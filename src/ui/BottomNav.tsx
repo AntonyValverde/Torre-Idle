@@ -17,6 +17,7 @@ import { lawPending } from '../game/laws';
 import { affordableLegacy } from '../game/legacy';
 import { advisorsAlert } from '../game/advisors';
 import { casinoOpen, casinoToday } from '../game/casino';
+import { passClaimable } from '../game/pass';
 
 export type TabId = 'city' | 'upgrades' | 'games' | 'ranking' | 'profile';
 
@@ -47,7 +48,8 @@ export function BottomNav({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => voi
     cupAlert(s, s.lastTick) ||
     // Casino: regalo de bienvenida o bono del día sin cobrar
     (isUnlocked(s, 'stocks') && casinoOpen(s) && (!s.casino.welcome || !casinoToday(s.casino, s.lastTick).bonus));
-  const claimable = claimableAchievements(s);
+  // Logros y niveles del pase de temporada por cobrar
+  const claimable = claimableAchievements(s) + passClaimable(s.pass);
   const missions = claimableMissions(s) + (s.league.prev ? 1 : 0);
 
   const badge = (id: TabId) => {

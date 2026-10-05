@@ -1,5 +1,7 @@
 import { hashString, mulberry32 } from '../minigames/rng';
 import { dateKey, isNewDay, weekKey } from './clock';
+import { randomCard } from './cup';
+import { addPassXp, passSeason, rolloverPass, type PassReward } from './pass';
 import type { GameState } from './state';
 import { tutorialProgress } from './tutorial';
 import { rollPaper } from './paper';
@@ -165,8 +167,39 @@ export function syncPeriods(s: GameState, t: number): GameState {
     if (ended && l.prev) next = payLeague(next, l.prev.points);
     next = { ...next, league: { ...next.league, week, points: 0, prev: ended ?? l.prev } };
   }
+  // Pase de temporada: al cambiar de temporada, los niveles ganados y no cobrados se pagan solos
+  const rolled = rolloverPass(next.pass, passSeason(t));
+  if (rolled.pass !== next.pass) {
+    next = { ...next, pass: rolled.pass };
+    for (const r of rolled.owed) next = applyPassReward(next, r);
+  }
   // El periódico hace su foto diaria de la ciudad
   return rollPaper(m === s.missions && next === s ? s : { ...next, missions: m }, today);
+}
+
+/**
+ * Da un premio del pase: gemas, tickets, fichas del casino, una carta de la Copa (al azar), un sobre de
+ * consejero o el cosmético de la temporada (con sus gemas). El cosmético no se repite si ya se tenía.
+ */
+export function applyPassReward(s: GameState, r: PassReward): GameState {
+  switch (r.kind) {
+    case 'gems':
+      return { ...s, gems: s.gems + r.n };
+    case 'tickets':
+      return { ...s, tickets: s.tickets + r.n };
+    case 'chips':
+      return { ...s, casino: { ...s.casino, chips: s.casino.chips + r.n } };
+    case 'card': {
+      const card = randomCard(Math.random);
+      return { ...s, cup: { ...s.cup, cards: { ...s.cup.cards, [card]: s.cup.cards[card] + r.n } } };
+    }
+    case 'pack':
+      return { ...s, advisors: { ...s.advisors, packs: s.advisors.packs + r.n } };
+    case 'deco': {
+      const decos = r.deco && !s.pass.decos.includes(r.deco) ? [...s.pass.decos, r.deco] : s.pass.decos;
+      return { ...s, gems: s.gems + (r.gems ?? 0), pass: decos === s.pass.decos ? s.pass : { ...s.pass, decos } };
+    }
+  }
 }
 
 /** Cobra el premio de una semana de liga: gemas, tickets y la mejor división (para el logro). */
@@ -219,8 +252,9 @@ export function chestReady(s: GameState): boolean {
   return !s.missions.chest && d.length > 0 && d.every((x) => x.c);
 }
 
+/** Suma puntos de liga (con su tope semanal); los mismos puntos avanzan el pase de temporada. */
 export function addPoints(s: GameState, points: number): GameState {
-  return { ...s, league: { ...s.league, points: Math.min(LEAGUE_MAX, s.league.points + points) } };
+  return { ...s, league: { ...s.league, points: Math.min(LEAGUE_MAX, s.league.points + points) }, pass: addPassXp(s.pass, points) };
 }
 
 // ---------- Divisiones de la liga ----------

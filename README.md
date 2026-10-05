@@ -35,6 +35,10 @@ Va en hora de Costa Rica (UTC-6) para que los cortes sean iguales para todos.
   - El **rival directo** es quien va justo por delante, con una barra que compara los puntos.
 - **Domingo: final** entre los 2 primeros de cada grupo (4 si solo hay un grupo), con una prueba sorpresa y 3 intentos.
 - **En vivo**: mientras se juega, las clasificaciones se actualizan al instante con las marcas que suben los demás (una lectura por marca nueva, ninguna con la pestaña en segundo plano).
+
+## Pase de temporada (gratuito)
+
+En Logros → Perfil. Una pista de 25 niveles por temporada de la Copa (4 semanas) que se recorre con los mismos puntos que ya da el juego: cada punto de liga (misiones 10, cofre 20, semanal 40, retos diarios 15), los puntos de temporada de cada Copa y los de la Conquista (5 + puntos del mundo). Los diez primeros niveles cuestan 60 puntos, los diez siguientes 100 y los cinco últimos 140. Los premios se cobran nivel a nivel: gemas, tickets, cartas de la Copa, sobres de consejero, fichas del casino y, en el nivel 25, el cosmético exclusivo de la temporada (el de la primera es un zepelín dorado que sobrevuela la ciudad). Al cambiar de temporada, los niveles ganados y no cobrados se pagan solos y la pista vuelve a empezar. La lógica está en [pass.ts](src/game/pass.ts).
 - **Lunes: ceremonia** con podio y premios: gemas y tickets para todos los que juegan, más copas de oro, plata o bronce para el podio. Las copas se ven en la plaza de tu ciudad, en tu vitrina del Perfil y junto a tu nombre en la Copa.
 - **Preparación** (pestaña 🏋️ de la Copa):
   - **Centro de entrenamiento**: se mejora con monedas (el coste depende de tu producción), hasta el nivel 5. Cada nivel da +2% en las marcas de la Copa, y los niveles 2 y 4 añaden un hueco de carta (de 1 a 3).
