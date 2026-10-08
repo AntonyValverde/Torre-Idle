@@ -11,8 +11,9 @@ export default defineConfig({
       // 'prompt': la versión nueva espera a que el jugador pulse "Actualizar" (ver src/ui/update.ts)
       registerType: 'prompt',
       workbox: {
-        // /__/auth/* y /__/firebase/* son de Firebase (vía vercel.json): no se sirven con index.html
-        navigateFallbackDenylist: [/^\/__\//],
+        // /__/auth/* y /__/firebase/* son de Firebase (vía vercel.json), y la política de privacidad y la página para
+        // eliminar la cuenta son páginas sueltas (public/*.html): ninguna se sirve con index.html
+        navigateFallbackDenylist: [/^\/__\//, /^\/(privacidad|borrar-cuenta)(\.html)?$/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,

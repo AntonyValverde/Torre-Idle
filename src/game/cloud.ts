@@ -4,6 +4,8 @@ import {
   linkWithPopup,
   linkWithRedirect,
   onIdTokenChanged,
+  reauthenticateWithPopup,
+  reauthenticateWithRedirect,
   signInAnonymously,
   signInWithCredential,
   signOut,
@@ -108,21 +110,41 @@ export function saveLocal(s: GameState): boolean {
 }
 
 // =====================================================================
-// Cuenta eliminada por el administrador
+// Cuenta eliminada (por el administrador o por el propio jugador)
 // =====================================================================
 
-/** true desde que se detecta que el administrador eliminó la cuenta: ya no se guarda ni se sube nada. */
+/** true desde que se detecta que la cuenta se eliminó (o se está eliminando): ya no se guarda ni se sube nada. */
 let wiping = false;
 const DELETED_NOTICE_KEY = 'torre-account-deleted';
 
+/** uid cuya eliminación empezó el jugador en este dispositivo: si se cortó a medias, se termina al volver. */
+const ERASE_KEY = 'torre-erase';
+
 /**
- * El administrador eliminó la cuenta (en la nube solo queda la marca `deleted`): se borra también lo
- * que hay en el dispositivo y la cuenta de Firebase, y se recarga para empezar de cero.
+ * La cuenta se eliminó (en la nube solo queda la marca `deleted`): se borra también lo que hay en el
+ * dispositivo y la cuenta de Firebase, y se recarga para empezar de cero.
  * Si se detecta al entrar con Google desde una partida de invitado, esa partida se conserva.
+ * `erased`: el propio jugador acaba de borrar todos sus datos.
  */
-async function wipeDeletedAccount(): Promise<never> {
+async function wipeDeletedAccount(erased = false): Promise<never> {
   const keepLocal = switching;
   wiping = true;
+  const a = auth;
+  const user = a?.currentUser;
+  // La eliminación que empezó el jugador se cortó a medias (sin conexión, app cerrada): se termina ahora
+  let resumed = false;
+  try {
+    resumed = !erased && !!user && localStorage.getItem(ERASE_KEY) === user.uid;
+  } catch {
+    /* sin almacenamiento */
+  }
+  if (resumed && db && user) {
+    const d = db;
+    await withTimeout(
+      import('./accountData').then((m) => m.eraseAccountData(d, user.uid, 'self')),
+      20_000,
+    ).catch((e) => console.warn('No se pudo terminar de borrar los datos de la cuenta', e));
+  }
   try {
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -130,12 +152,10 @@ async function wipeDeletedAccount(): Promise<never> {
       if (k?.startsWith('torre-') && !(keepLocal && k.startsWith('torre-save'))) keys.push(k);
     }
     for (const k of keys) localStorage.removeItem(k);
-    sessionStorage.setItem(DELETED_NOTICE_KEY, keepLocal ? 'kept' : 'reset');
+    sessionStorage.setItem(DELETED_NOTICE_KEY, erased || resumed ? 'erased' : keepLocal ? 'kept' : 'reset');
   } catch {
     /* sin almacenamiento */
   }
-  const a = auth;
-  const user = a?.currentUser;
   if (a && user) {
     // Borrarla libera también su cuenta de Google. Si Firebase pide un inicio de sesión reciente, basta con salir
     await withTimeout(user.delete(), 5000)
@@ -154,7 +174,13 @@ function noticeDeleted() {
     sessionStorage.removeItem(DELETED_NOTICE_KEY);
     useGame
       .getState()
-      .toast(v === 'kept' ? '🗑️ Esa cuenta de Google fue eliminada. Sigues con tu partida de invitado' : '🗑️ Tu cuenta fue eliminada. Empiezas una partida nueva');
+      .toast(
+        v === 'erased'
+          ? '🗑️ Eliminamos tu cuenta y todos sus datos. Empiezas una partida nueva'
+          : v === 'kept'
+            ? '🗑️ Esa cuenta de Google fue eliminada. Sigues con tu partida de invitado'
+            : '🗑️ Tu cuenta fue eliminada. Empiezas una partida nueva',
+      );
   } catch {
     /* sin almacenamiento */
   }
@@ -898,6 +924,8 @@ export function authErrorMessage(e: unknown): string {
       return 'Demasiados intentos. Espera un momento';
     case 'auth/provider-already-linked':
       return 'Esta partida ya está vinculada a una cuenta de Google';
+    case 'auth/user-mismatch':
+      return 'Esa no es la cuenta de Google de esta partida';
     default:
       return code ? `No se pudo vincular la cuenta (${code})` : 'No se pudo vincular la cuenta';
   }
@@ -973,6 +1001,11 @@ async function startRedirect(user: User, provider: GoogleAuthProvider): Promise<
   return 'redirecting';
 }
 
+/** En la app instalada (pantalla de inicio o Play Store) las ventanas emergentes no funcionan bien: se usa redirección. */
+function installedApp(): boolean {
+  return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
 /**
  * Vincula la cuenta anónima con Google para no perder el progreso.
  * Usa una ventana emergente; si el navegador la bloquea (móviles, app instalada), usa redirección.
@@ -981,10 +1014,7 @@ export async function linkGoogle(): Promise<'linked' | 'switched' | 'redirecting
   const user = auth?.currentUser;
   if (!auth || !user) throw new Error('Sin sesión');
   const provider = new GoogleAuthProvider();
-  // En la app instalada en la pantalla de inicio las ventanas emergentes no funcionan bien
-  const standalone =
-    window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  if (standalone) return startRedirect(user, provider);
+  if (installedApp()) return startRedirect(user, provider);
   try {
     await linkWithPopup(user, provider);
     await saveCloud(useGame.getState().s);
@@ -1003,11 +1033,18 @@ export async function linkGoogle(): Promise<'linked' | 'switched' | 'redirecting
 export async function completeGoogleRedirect(): Promise<'linked' | 'switched' | null> {
   if (!auth) return null;
   let started = false;
+  let erasing = false;
   try {
     started = sessionStorage.getItem(REDIRECT_KEY) === '1';
     sessionStorage.removeItem(REDIRECT_KEY);
+    erasing = sessionStorage.getItem(ERASE_REDIRECT_KEY) === '1';
+    sessionStorage.removeItem(ERASE_REDIRECT_KEY);
   } catch {
     /* sin almacenamiento */
+  }
+  if (erasing) {
+    await finishEraseRedirect(auth);
+    return null;
   }
   try {
     const r = await getRedirectResult(auth);
@@ -1030,4 +1067,114 @@ export async function completeGoogleRedirect(): Promise<'linked' | 'switched' | 
     if (started) useGame.getState().toast(`⚠️ ${authErrorMessage(e)}`);
     return null;
   }
+}
+
+// =====================================================================
+// Eliminar la cuenta (el propio jugador, desde Perfil)
+// =====================================================================
+
+/** Salimos hacia Google para confirmar la eliminación: al volver, sigue sola. */
+const ERASE_REDIRECT_KEY = 'torre-erase-redirect';
+
+/** Firebase solo deja borrar una cuenta de Google con un inicio de sesión de hace menos de 5 min: se confirma antes. */
+const RECENT_LOGIN_MS = 4 * 60_000;
+
+/** Explica por qué no se pudo eliminar la cuenta. */
+export function eraseErrorMessage(e: unknown): string {
+  if (errCode(e).startsWith('auth/')) return authErrorMessage(e);
+  return 'No se pudo eliminar la cuenta. Comprueba la conexión e inténtalo de nuevo';
+}
+
+/**
+ * Elimina la cuenta del jugador: marca su partida como `deleted` (desde ahí las reglas le dejan borrar el resto),
+ * borra todo lo que tiene en la nube y en el dispositivo y su cuenta de Firebase, y recarga para empezar de cero.
+ * Con Google, si el inicio de sesión no es reciente, antes se confirma con Google (en la app instalada, con
+ * redirección: la eliminación sigue al volver, en completeGoogleRedirect).
+ */
+export async function deleteMyAccount(): Promise<'redirecting'> {
+  const user = auth?.currentUser;
+  if (!auth || !db || !user) throw new Error('Sin sesión');
+  const google = user.providerData.some((p) => p.providerId === 'google.com');
+  const lastLogin = Date.parse(user.metadata.lastSignInTime ?? '') || 0;
+  if (google && Date.now() - lastLogin > RECENT_LOGIN_MS) {
+    const provider = new GoogleAuthProvider();
+    if (installedApp()) return eraseRedirect(user, provider);
+    try {
+      await reauthenticateWithPopup(user, provider);
+    } catch (e) {
+      const code = errCode(e);
+      if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') return eraseRedirect(user, provider);
+      throw e;
+    }
+  }
+  return eraseAccount(user);
+}
+
+async function eraseRedirect(user: User, provider: GoogleAuthProvider): Promise<'redirecting'> {
+  saveLocal(useGame.getState().s);
+  try {
+    sessionStorage.setItem(ERASE_REDIRECT_KEY, '1');
+  } catch {
+    /* sin almacenamiento: al volver no se sabrá que había que seguir */
+  }
+  try {
+    await reauthenticateWithRedirect(user, provider);
+  } catch (e) {
+    try {
+      sessionStorage.removeItem(ERASE_REDIRECT_KEY);
+    } catch {
+      /* sin almacenamiento */
+    }
+    throw e;
+  }
+  return 'redirecting';
+}
+
+/** Al volver de confirmar con Google: sigue con la eliminación. */
+async function finishEraseRedirect(a: NonNullable<typeof auth>) {
+  const toast = useGame.getState().toast;
+  try {
+    const r = await getRedirectResult(a);
+    if (!r) {
+      toast('⚠️ No se pudo confirmar con Google. Vuelve a intentar eliminar la cuenta desde Perfil');
+      return;
+    }
+    toast('🗑️ Eliminando tu cuenta…');
+    await eraseAccount(r.user);
+  } catch (e) {
+    console.warn('No se pudo eliminar la cuenta', e);
+    toast(`⚠️ ${eraseErrorMessage(e)}`);
+  }
+}
+
+async function eraseAccount(user: User): Promise<never> {
+  const d = db;
+  if (!d) throw new Error('Firebase no está configurado');
+  // Desde ahora no se guarda ni se sube nada: lo que se subiera habría que volver a borrarlo
+  wiping = true;
+  let marked = false;
+  try {
+    localStorage.setItem(ERASE_KEY, user.uid);
+  } catch {
+    /* sin almacenamiento: si se corta a medias, no se podrá terminar sola */
+  }
+  try {
+    await setDoc(doc(d, 'users', user.uid), { deleted: true, deletedAt: serverTimestamp() });
+    marked = true;
+    const { eraseAccountData } = await import('./accountData');
+    await eraseAccountData(d, user.uid, 'self');
+  } catch (e) {
+    // Sin la marca no se borró nada: se sigue jugando como siempre. Con la marca, la cuenta ya está eliminada:
+    // se puede reintentar ahora y, si no, se termina de borrar al volver a abrir el juego (ver wipeDeletedAccount)
+    if (!marked) {
+      wiping = false;
+      try {
+        localStorage.removeItem(ERASE_KEY);
+      } catch {
+        /* sin almacenamiento */
+      }
+    }
+    throw e;
+  }
+  return wipeDeletedAccount(true);
 }

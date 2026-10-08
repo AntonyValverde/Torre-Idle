@@ -536,11 +536,11 @@ await ok('el admin borra una ciudad pública', () => deleteDoc(doc(admin, 'citie
 console.log('eliminar cuenta');
 const tomb = () => ({ deleted: true, deletedAt: serverTimestamp() });
 await no('un jugador no elimina la cuenta de otro', () => setDoc(doc(bob, 'users/alice'), tomb()));
-await no('un jugador no se pone la marca a sí mismo', () => setDoc(ua, tomb()));
 await no('marca con campos extra', () => setDoc(doc(admin, 'users/alice'), { ...tomb(), state: {} }));
 await no('marca con hora del cliente', () => setDoc(doc(admin, 'users/alice'), { deleted: true, deletedAt: Timestamp.now() }));
 await no('marca a medias (merge con la partida)', () => setDoc(doc(admin, 'users/alice'), tomb(), { merge: true }));
-await no('el admin no elimina su propia cuenta', () => setDoc(doc(admin, 'users/boss'), tomb()));
+// El panel no deja al admin eliminarse a sí mismo; desde Perfil puede, como cualquier jugador
+await ok('el admin elimina su propia cuenta (desde Perfil)', () => setDoc(doc(admin, 'users/boss'), tomb()));
 await ok('el admin elimina la cuenta', () => setDoc(doc(admin, 'users/alice'), tomb()));
 await ok('repetirlo no falla', () => setDoc(doc(admin, 'users/alice'), tomb()));
 await ok('el admin elimina una cuenta que nunca guardó', () => setDoc(doc(admin, 'users/ghost'), tomb()));
@@ -550,7 +550,7 @@ await no('ni sustituyendo el documento entero', () =>
   setDoc(ua, { state: { coins: 1 }, name: 'Alice', totalEarned: 999, savedAt: serverTimestamp() }),
 );
 await no('ni borrándola', () => deleteDoc(ua));
-await no('un jugador no borra su suggestionMeta', () => deleteDoc(doc(alice, 'suggestionMeta/alice')));
+await no('un jugador sin la marca no borra su suggestionMeta', () => deleteDoc(doc(bob, 'suggestionMeta/bob')));
 await ok('el admin borra su suggestionMeta', () => deleteDoc(doc(admin, 'suggestionMeta/alice')));
 await ok('el admin borra en lote (también documentos que no existen)', () => {
   const b = writeBatch(admin);
@@ -560,6 +560,91 @@ await ok('el admin borra en lote (también documentos que no existen)', () => {
   b.delete(doc(admin, 'leaderboards/metro/scores/alice'));
   return b.commit();
 });
+
+console.log('el jugador elimina su cuenta');
+{
+  const hugo = env.authenticatedContext('hugo').firestore();
+  const H = `conquest/${cupWeek}/worlds/w9`;
+  const seed = {
+    'users/hugo': { state: { coins: 1 }, name: 'Hugo', totalEarned: 50 },
+    'leaderboards/stack/scores/hugo': { name: 'Hugo', score: 10 },
+    'leaderboards/stack/scores/bob': { name: 'Bob', score: 10 },
+    [`daily/${today}/scores/hugo`]: { name: 'Hugo', moves: 5, timeMs: 9000, score: 50009000 },
+    [`roads/${today}/scores/hugo`]: { name: 'Hugo', moves: 5, timeMs: 9000, score: 50009000 },
+    [`parks/${today}/scores/hugo`]: { name: 'Hugo', moves: 5, timeMs: 9000, score: 50009000 },
+    [`league/${thisMonday}/scores/hugo`]: { name: 'Hugo', score: 40 },
+    'cities/hugo': { name: 'Hugo' },
+    [`cup/${cupWeek}/entries/hugo`]: { name: 'Hugo' },
+    [`cup/${cupWeek}/results/hugo`]: { name: 'Hugo', g1: 10 },
+    'suggestionMeta/hugo': { lastAt: Timestamp.now() },
+    'suggestions/hugo-1': { uid: 'hugo', name: 'Hugo', kind: 'idea', text: 'Más trenes', status: 'nuevo' },
+    'suggestions/bob-1': { uid: 'bob', name: 'Bob', kind: 'idea', text: 'Más barcos', status: 'nuevo' },
+    'gifts/hugo/inbox/bob': { name: 'Bob', day: today },
+    [`conquest/${cupWeek}/members/hugo`]: { w: 'w9' },
+    [`${H}/players/hugo`]: { name: 'Hugo', slot: 3 },
+    [`${H}/players/hugo/reports/1_1`]: { by: 'bob', name: 'Bob', tile: '1_1' },
+    [`${H}/tiles/1_1`]: { owner: 'hugo', name: 'Hugo' },
+    [`${H}/tiles/1_2`]: { owner: 'bob', name: 'Bob' },
+  };
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    for (const [path, data] of Object.entries(seed)) await setDoc(doc(ctx.firestore(), path), data);
+  });
+  const mineSugg = () => getDocs(query(collection(hugo, 'suggestions'), where('uid', '==', 'hugo')));
+  await no('sin la marca no borra su récord', () => deleteDoc(doc(hugo, 'leaderboards/stack/scores/hugo')));
+  await no('sin la marca no borra su resultado diario (lo repetiría)', () => deleteDoc(doc(hugo, `daily/${today}/scores/hugo`)));
+  await no('sin la marca no borra su suggestionMeta', () => deleteDoc(doc(hugo, 'suggestionMeta/hugo')));
+  await no('sin la marca no borra sus territorios', () => deleteDoc(doc(hugo, `${H}/tiles/1_1`)));
+  await ok('lee sus sugerencias', mineSugg);
+  await no('no lee las de otros', () => getDocs(query(collection(hugo, 'suggestions'), where('uid', '==', 'alice'))));
+  await no('marca propia con campos extra', () => setDoc(doc(hugo, 'users/hugo'), { ...tomb(), state: {} }));
+  await no('marca propia a medias (merge)', () => setDoc(doc(hugo, 'users/hugo'), tomb(), { merge: true }));
+  await ok('se pone la marca a sí mismo', () => setDoc(doc(hugo, 'users/hugo'), tomb()));
+  await ok('repetir la marca no falla', () => setDoc(doc(hugo, 'users/hugo'), tomb()));
+  await no('ya no guarda partida', () => setDoc(doc(hugo, 'users/hugo'), { ping: serverTimestamp() }, { merge: true }));
+  await ok('borra en lotes de 10 (también documentos que no existen)', () => {
+    const b = writeBatch(hugo);
+    for (const path of [
+      'leaderboards/stack/scores/hugo',
+      'leaderboards/merge/scores/hugo',
+      `daily/${today}/scores/hugo`,
+      `roads/${today}/scores/hugo`,
+      `parks/${today}/scores/hugo`,
+      'daily/2026-09-27/scores/hugo',
+      `league/${thisMonday}/scores/hugo`,
+      'league/2026-09-28/scores/hugo',
+      'cities/hugo',
+      `cup/${cupWeek}/results/hugo`,
+    ])
+      b.delete(doc(hugo, path));
+    return b.commit();
+  });
+  await ok('borra su suggestionMeta, su buzón y sus sugerencias', async () => {
+    const b = writeBatch(hugo);
+    b.delete(doc(hugo, 'suggestionMeta/hugo'));
+    b.delete(doc(hugo, 'gifts/hugo/inbox/bob'));
+    for (const s of (await mineSugg()).docs) b.delete(s.ref);
+    return b.commit();
+  });
+  await no('no borra territorios de otro', () => deleteDoc(doc(hugo, `${H}/tiles/1_2`)));
+  await no('no borra récords de otro', () => deleteDoc(doc(hugo, 'leaderboards/stack/scores/bob')));
+  await no('no borra sugerencias de otro', () => deleteDoc(doc(hugo, 'suggestions/bob-1')));
+  await ok('borra sus partes y territorios (vuelven a los bandidos)', () => {
+    const b = writeBatch(hugo);
+    b.delete(doc(hugo, `${H}/players/hugo/reports/1_1`));
+    b.delete(doc(hugo, `${H}/tiles/1_1`));
+    return b.commit();
+  });
+  await ok('borra su reserva y su plaza en la Conquista', () => {
+    const b = writeBatch(hugo);
+    b.delete(doc(hugo, `${H}/players/hugo`));
+    b.delete(doc(hugo, `conquest/${cupWeek}/members/hugo`));
+    return b.commit();
+  });
+  if (cupPhaseNow === 'signup') await ok('se borra de la Copa antes de los grupos', () => deleteDoc(doc(hugo, `cup/${cupWeek}/entries/hugo`)));
+  else await no('ya no se borra de la Copa tras los grupos', () => deleteDoc(doc(hugo, `cup/${cupWeek}/entries/hugo`)));
+  await no('otro jugador no borra lo de quien se marcó', () => deleteDoc(doc(bob, 'cities/hugo')));
+  await no('ni con la marca puede borrar la partida', () => deleteDoc(doc(hugo, 'users/hugo')));
+}
 
 console.log('otros');
 await no('colección inventada', () => setDoc(doc(alice, 'admin/config'), { x: 1 }));

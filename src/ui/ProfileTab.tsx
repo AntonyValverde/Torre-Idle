@@ -13,6 +13,7 @@ import { SuggestionBox } from './SuggestionBox';
 import { GiftsCard } from './Gifts';
 import { InstallCard } from './InstallCard';
 import { PassCard } from './PassCard';
+import { PrivacyCard } from './PrivacyCard';
 import { ClaraTip, GuideCard } from './ClaraTip';
 import { currentStep } from '../game/tutorial';
 
@@ -250,6 +251,8 @@ function Profile({ onAdmin, onVisit, onWorld }: { onAdmin: () => void; onVisit: 
           </>
         )}
       </div>
+
+      {cloudEnabled && account && <PrivacyCard google={google} />}
 
       <div className="section-head">
         <h2>Estadísticas</h2>

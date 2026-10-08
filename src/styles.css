@@ -6661,3 +6661,25 @@ img.splash-logo {
   line-height: 1.35;
   text-align: left;
 }
+
+/* ---------- Privacidad y eliminar la cuenta (Perfil) ---------- */
+.privacy-card .btn-row {
+  flex-wrap: wrap;
+}
+
+.privacy-card a.btn {
+  color: var(--text);
+  text-decoration: none;
+  text-align: center;
+}
+
+.privacy-confirm {
+  width: 100%;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.privacy-confirm input {
+  padding: 10px 12px;
+  letter-spacing: 0.08em;
+}

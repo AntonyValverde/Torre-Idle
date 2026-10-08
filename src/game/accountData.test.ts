@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FIRST_DAY, daysBetween, mondaysBetween } from './data';
+import { FIRST_DAY, daysBetween, mondaysBetween } from './accountData';
 
 describe('fechas que se limpian al eliminar una cuenta', () => {
   it('daysBetween incluye los dos extremos y cruza meses', () => {

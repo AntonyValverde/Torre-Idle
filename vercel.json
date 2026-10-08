@@ -2,6 +2,8 @@
   "rewrites": [
     { "source": "/__/auth/:path*", "destination": "https://game-f5ffa.firebaseapp.com/__/auth/:path*" },
     { "source": "/__/firebase/:path*", "destination": "https://game-f5ffa.firebaseapp.com/__/firebase/:path*" },
+    { "source": "/privacidad", "destination": "/privacidad.html" },
+    { "source": "/borrar-cuenta", "destination": "/borrar-cuenta.html" },
     { "source": "/((?!assets/|__/|.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [
