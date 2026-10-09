@@ -16,7 +16,7 @@ export const GROUP_MAX = 8;
 /** Puntos por puesto en cada prueba del grupo. */
 export const PLACE_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 
-export type CupGame = 'thief' | 'fire' | 'metro' | 'traffic' | 'memory' | 'stack' | 'flak' | 'artillery' | 'lanes' | 'duel';
+export type CupGame = 'thief' | 'fire' | 'metro' | 'traffic' | 'memory' | 'stack' | 'flak' | 'artillery' | 'lanes' | 'duel' | 'squadron' | 'neon';
 export type CupSlot = 'g1' | 'g2' | 'g3' | 'f';
 export const GROUP_SLOTS: CupSlot[] = ['g1', 'g2', 'g3'];
 export type CupPhase = 'signup' | 'groups' | 'final';
@@ -32,15 +32,28 @@ export const CUP_GAME_INFO: Record<CupGame, { emoji: string; name: string; unit:
   artillery: { emoji: '🎯', name: 'Artillería', unit: 'pts' },
   lanes: { emoji: '🚧', name: 'Defensa de calles', unit: 'pts' },
   duel: { emoji: '🎖️', name: 'Duelo de generales', unit: 'pts' },
+  squadron: { emoji: '✈️', name: 'Escuadrilla', unit: 'pts' },
+  neon: { emoji: '💠', name: 'Arena de neón', unit: 'pts' },
 };
 /** Pruebas de siempre (el orden importa: de él sale el sorteo de cada semana). */
 const CLASSIC_GAMES: CupGame[] = ['thief', 'fire', 'metro', 'traffic', 'memory', 'stack'];
 /** Los juegos de guerra entran desde esta Copa: las semanas anteriores no cambian de pruebas. */
 export const WAR_CUP_WEEK = '2026-10-12';
 
+/** Juegos de guerra (el orden importa, como en las de siempre). */
+const WAR_CUP_GAMES: CupGame[] = ['flak', 'artillery', 'lanes', 'duel'];
+/**
+ * Escuadrilla y Arena de neón entran desde esta Copa. Son los shooters de pura puntería: los demás
+ * duran demasiado para una prueba o guardan mejoras entre partidas (no sería justo).
+ */
+export const SHOOTER_CUP_WEEK = '2026-10-19';
+const SHOOTER_CUP_GAMES: CupGame[] = ['squadron', 'neon'];
+
 /** Pruebas que pueden salir en una semana. */
 export function cupGamesFor(week: string): CupGame[] {
-  return week >= WAR_CUP_WEEK ? (Object.keys(CUP_GAME_INFO) as CupGame[]) : CLASSIC_GAMES;
+  if (week < WAR_CUP_WEEK) return CLASSIC_GAMES;
+  if (week < SHOOTER_CUP_WEEK) return [...CLASSIC_GAMES, ...WAR_CUP_GAMES];
+  return [...CLASSIC_GAMES, ...WAR_CUP_GAMES, ...SHOOTER_CUP_GAMES];
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

@@ -14,6 +14,8 @@ import { ArtilleryGameView } from '../../minigames/artillery/ArtilleryScreen';
 import { DuelGameView } from '../../minigames/duel/DuelScreen';
 import { FlakGameView } from '../../minigames/flak/FlakScreen';
 import { LanesGameView } from '../../minigames/lanes/LanesScreen';
+import { NeonGameView } from '../../minigames/neon/NeonScreen';
+import { SquadronGameView } from '../../minigames/squadron/SquadronScreen';
 import { celebrate } from '../celebrate';
 import { sfx } from '../haptics';
 import { GameScreen, Modal } from '../Modal';
@@ -33,6 +35,8 @@ const GAMES: Record<CupGame, (p: Props) => ReactElement> = {
   artillery: (p) => <ArtilleryGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
   lanes: (p) => <LanesGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
   duel: (p) => <DuelGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
+  squadron: (p) => <SquadronGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
+  neon: (p) => <NeonGameView onOver={(r) => p.onOver(r.score)} onScore={(r) => p.onScore(r.score)} />,
 };
 
 /**

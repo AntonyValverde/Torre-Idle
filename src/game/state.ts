@@ -10,6 +10,7 @@ import { newSocial, socialState, type SocialState } from './social';
 import { casinoState, newCasino, type CasinoState } from './casino';
 import { conquestState, newConquest, type ConquestState } from './conquest';
 import { newPass, passSeason, passState, type PassState } from './pass';
+import { emptySewerLevels, parseSewerLevels, type SewerLevels } from '../minigames/sewer/meta';
 import { dateKey } from './clock';
 import { LEGACY_BY_ID } from './legacy';
 
@@ -79,6 +80,16 @@ export interface GameState {
   duelBest: number;
   /** Unidades que el jugador ha sacado en el Duelo: de aquí sale su estilo público de general. */
   duelPicks: { inf: number; arc: number; cav: number };
+  /** Récords de los shooters: Escuadrilla, Torre vigía, Ronda nocturna, Alcantarillas, Arena de neón y Alcalde bala (metros). */
+  squadronBest: number;
+  sentryBest: number;
+  nightBest: number;
+  sewerBest: number;
+  neonBest: number;
+  cannonBest: number;
+  /** Alcantarillas: chatarra guardada y mejoras permanentes del taller. */
+  sewerScrap: number;
+  sewerLv: SewerLevels;
   /** Apagón diario. */
   daily: DailyRecord;
   /** Conecta las calles (segundo puzzle diario). */
@@ -189,6 +200,14 @@ export function newState(t: number): GameState {
     lanesBest: 0,
     duelBest: 0,
     duelPicks: { inf: 0, arc: 0, cav: 0 },
+    squadronBest: 0,
+    sentryBest: 0,
+    nightBest: 0,
+    sewerBest: 0,
+    neonBest: 0,
+    cannonBest: 0,
+    sewerScrap: 0,
+    sewerLv: emptySewerLevels(),
     daily: { last: null, streak: 0, bestStreak: 0 },
     roads: { last: null, streak: 0, bestStreak: 0 },
     parks: { last: null, streak: 0, bestStreak: 0 },
@@ -432,6 +451,14 @@ export function normalize(raw: unknown, t: number): GameState {
       arc: Math.max(0, num(r.duelPicks?.arc, 0)),
       cav: Math.max(0, num(r.duelPicks?.cav, 0)),
     },
+    squadronBest: num(r.squadronBest, 0),
+    sentryBest: num(r.sentryBest, 0),
+    nightBest: num(r.nightBest, 0),
+    sewerBest: num(r.sewerBest, 0),
+    neonBest: num(r.neonBest, 0),
+    cannonBest: num(r.cannonBest, 0),
+    sewerScrap: Math.max(0, Math.floor(num(r.sewerScrap, 0))),
+    sewerLv: parseSewerLevels(r.sewerLv),
     submittedBest: numRecord(r.submittedBest),
     pendingDaily: pendingDaily(r.pendingDaily),
     wheelLast: day(typeof r.wheelLast === 'string' ? r.wheelLast : null),

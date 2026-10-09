@@ -1,0 +1,73 @@
+/* Ronda nocturna: barra de experiencia, vida del jefe y armas que llevas */
+
+.nt-xp .sh-meter {
+  height: 14px;
+  border-color: rgba(167, 139, 250, 0.45);
+}
+
+.nt-xp .sh-meter span {
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.nt-boss .sh-meter {
+  height: 14px;
+  border-color: rgba(255, 45, 85, 0.6);
+}
+
+.nt-boss .sh-meter span {
+  font-size: 0.7rem;
+}
+
+.nt-kit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.nt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-height: 20px;
+  padding: 0 4px 0 3px;
+  border-radius: 99px;
+  background: rgba(10, 8, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.nt-chip.weapon {
+  border-color: rgba(255, 194, 61, 0.45);
+}
+
+.nt-chip i {
+  font-style: normal;
+}
+
+.nt-chip b {
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nt-chip.max b {
+  color: var(--accent);
+}
+
+/* En la pausa, más grandes y centradas */
+.nt-kit.big {
+  justify-content: center;
+  gap: 6px;
+}
+
+.nt-kit.big .nt-chip {
+  min-height: 30px;
+  padding: 0 9px 0 6px;
+  font-size: 1rem;
+}
+
+.nt-kit.big .nt-chip b {
+  font-size: 0.8rem;
+}

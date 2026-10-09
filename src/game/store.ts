@@ -114,6 +114,7 @@ import { lawOptions, lawPending } from './laws';
 import { PACK_GEMS, drawAdvisor, levelFor, seatCount, type AdvisorDef } from './advisors';
 import { PAPER_GEMS, paperUnread } from './paper';
 import { WAR_INFO, warCoins, warGems, type WarGame } from './war';
+import { sewerMetaCost, type SewerMetaId } from '../minigames/sewer/meta';
 import { applyGiftSent, applyGiftsReceived, type GiftIn } from './social';
 import {
   RECRUIT_DAILY,
@@ -230,6 +231,10 @@ interface GameStore {
   rewardWar(game: WarGame, score: number): ThiefReward;
   /** Apunta una unidad sacada en el Duelo (para el estilo público de general). */
   noteDuelPick(unit: 'inf' | 'arc' | 'cav'): void;
+  /** Alcantarillas: guarda la chatarra recogida (se queda aunque pierdas). */
+  addSewerScrap(n: number): void;
+  /** Alcantarillas: compra el siguiente nivel de una mejora del taller. */
+  buySewerMeta(id: SewerMetaId): boolean;
   /** Conquista: apunta en qué semana y mundo juega el alcalde. */
   setConquestWorld(week: string, w: string): void;
   /** Conquista: guarda los partes de batalla nuevos y devuelve los recién llegados. */
@@ -679,6 +684,21 @@ export const useGame = create<GameStore>((set, get) => ({
   noteDuelPick(unit) {
     const { s } = get();
     set({ s: { ...s, duelPicks: { ...s.duelPicks, [unit]: s.duelPicks[unit] + 1 } } });
+  },
+
+  addSewerScrap(n) {
+    const add = Math.floor(n);
+    if (!(add > 0)) return;
+    const { s } = get();
+    set({ s: { ...s, sewerScrap: s.sewerScrap + add } });
+  },
+
+  buySewerMeta(id) {
+    const { s } = get();
+    const cost = sewerMetaCost(s.sewerLv, id);
+    if (cost === null || s.sewerScrap < cost) return false;
+    set({ s: { ...s, sewerScrap: s.sewerScrap - cost, sewerLv: { ...s.sewerLv, [id]: s.sewerLv[id] + 1 } } });
+    return true;
   },
 
   setConquestWorld(week, w) {

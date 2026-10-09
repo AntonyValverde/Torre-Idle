@@ -1,0 +1,681 @@
+/* ---------- Shooters del arcade (Escuadrilla, Torre vigía, Ronda nocturna, Alcantarillas, Arena de neón, Alcalde bala) ---------- */
+
+.sh-wrap {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: #07061a;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.sh-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* Marcador: flota sobre el juego y deja pasar los toques (salvo sus botones) */
+.sh-hud {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.sh-hud-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sh-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 2px 11px;
+  border-radius: 99px;
+  background: rgba(10, 8, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sh-pill i {
+  font-style: normal;
+  font-size: 0.95rem;
+}
+
+.sh-pill b {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.sh-pill.hot {
+  border-color: rgba(255, 107, 129, 0.7);
+}
+
+.sh-pill.hot b {
+  color: #ff8a9a;
+}
+
+.sh-pause-btn {
+  pointer-events: auto;
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 8, 30, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 1rem;
+  display: grid;
+  place-items: center;
+}
+
+.sh-pause-btn:focus-visible,
+.sh-action:focus-visible,
+.sh-choice:focus-visible,
+.sh-shop-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sh-hearts {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 0.9rem;
+  letter-spacing: -1px;
+}
+
+.sh-hearts i {
+  font-style: normal;
+}
+
+.sh-hearts i:not(.on) {
+  opacity: 0.45;
+}
+
+.sh-meter {
+  position: relative;
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(10, 8, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.sh-meter-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.18s ease-out;
+}
+
+.sh-meter span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.sh-meter.tall {
+  height: 16px;
+}
+
+.sh-meter.tall span {
+  font-size: 0.72rem;
+}
+
+/* Botones de acción abajo (bomba, habilidad, velocidad…) */
+.sh-bottom {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.sh-action {
+  --cd: 0%;
+  pointer-events: auto;
+  position: relative;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.25), rgba(10, 8, 30, 0.7) 70%);
+  color: #fff;
+  font: inherit;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  touch-action: manipulation;
+}
+
+.sh-action > span {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.sh-action small {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: #2a1a00;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+/* Enfriamiento: un velo que se va abriendo */
+.sh-action::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgba(8, 6, 24, 0.72) var(--cd), transparent 0);
+  pointer-events: none;
+}
+
+.sh-action:disabled {
+  opacity: 0.55;
+}
+
+.sh-action.ready {
+  border-color: var(--accent);
+  animation: shReady 1.4s ease-in-out infinite;
+}
+
+/* Capas a pantalla completa (inicio, pausa, elegir mejora, tienda) */
+.sh-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sh-dim {
+  background: rgba(8, 6, 24, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.sh-card {
+  width: min(100%, 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 18px 16px;
+  border-radius: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  text-align: center;
+  animation: shPop 0.22s ease-out;
+}
+
+.sh-card h3,
+.sh-pick h3,
+.sh-shop h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.sh-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.sh-start {
+  background: rgba(8, 6, 24, 0.45);
+  cursor: pointer;
+}
+
+.sh-howto {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.sh-howto li {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.sh-howto li span {
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.sh-start-count {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sh-start-count > span {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+  animation: countPop 0.45s ease-out;
+}
+
+.sh-start-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.sh-start-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.sh-start-count small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Elegir mejora */
+.sh-pick {
+  width: min(100%, 380px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.sh-pick h3 {
+  color: var(--accent);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  animation: countPop 0.4s ease-out;
+}
+
+.sh-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sh-choice,
+.sh-shop-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.6rem 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.sh-choice {
+  animation: shPop 0.25s ease-out both;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.sh-choice:not(:disabled):active,
+.sh-shop-item:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.sh-choice.weapon {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--card), color-mix(in srgb, var(--accent) 18%, var(--card)));
+}
+
+.sh-choice:disabled {
+  opacity: 1;
+}
+
+.sh-choice-emoji {
+  font-size: 1.9rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.sh-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sh-choice-text b {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.sh-choice-text b em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.sh-choice-text small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.sh-choice-lv {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.sh-dots {
+  display: flex;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.sh-choice > .sh-dots {
+  position: absolute;
+  left: 12px;
+  bottom: 6px;
+  margin: 0;
+}
+
+.sh-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.sh-dots i.on {
+  background: var(--accent);
+}
+
+.sh-dots i.next {
+  background: var(--accent);
+  animation: shBlink 0.9s ease-in-out infinite;
+}
+
+.sh-choice kbd {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sh-choice kbd {
+    display: block;
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font: inherit;
+    font-size: 0.65rem;
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .sh-choice:not(:disabled):hover,
+  .sh-shop-item:not(:disabled):hover {
+    border-color: var(--accent);
+  }
+}
+
+/* Tienda */
+.sh-shop {
+  width: min(100%, 380px);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  animation: shPop 0.22s ease-out;
+}
+
+.sh-shop header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sh-money {
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sh-shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.sh-shop-item {
+  padding: 9px 11px;
+}
+
+.sh-price {
+  font-weight: 800;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.sh-shop-item.poor {
+  opacity: 0.55;
+}
+
+.sh-shop-item.poor .sh-price {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.sh-shop-item.maxed .sh-price {
+  background: rgba(61, 220, 151, 0.18);
+  color: var(--good);
+}
+
+.sh-shop-item:disabled {
+  cursor: default;
+}
+
+.sh-done {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1.05rem;
+}
+
+/* Pausa */
+.sh-paused-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.sh-paused .btn {
+  min-width: 160px;
+  min-height: 46px;
+}
+
+/* Avisos que no bloquean */
+.sh-banner {
+  position: absolute;
+  top: 24%;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  text-align: center;
+  pointer-events: none;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #fff;
+  text-shadow:
+    0 2px 0 rgba(8, 6, 24, 0.9),
+    0 4px 18px rgba(0, 0, 0, 0.7);
+}
+
+.sh-banner span {
+  display: inline-block;
+  animation: shBanner 1.6s ease-out both;
+}
+
+.sh-banner.bad {
+  color: #ff8a9a;
+}
+
+.sh-banner.boss {
+  color: #ffb938;
+  font-size: 1.7rem;
+}
+
+@keyframes shPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shBanner {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  25% {
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shReady {
+  0%,
+  100% {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.45),
+      0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+@keyframes shBlink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-card,
+  .sh-choice,
+  .sh-shop,
+  .sh-banner span,
+  .sh-action.ready,
+  .sh-dots i.next {
+    animation: none;
+  }
+}
+
+/* Escuadrilla: estrellas del arma */
+.sq-power {
+  display: inline-flex;
+  gap: 1px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: rgba(10, 8, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 0.85rem;
+}
+
+.sq-power i {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.sq-power i.on {
+  color: #ffe066;
+  text-shadow: 0 0 6px rgba(255, 224, 102, 0.6);
+}

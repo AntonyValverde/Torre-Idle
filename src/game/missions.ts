@@ -5,6 +5,7 @@ import { addPassXp, passSeason, rolloverPass, type PassReward } from './pass';
 import type { GameState } from './state';
 import { tutorialProgress } from './tutorial';
 import { rollPaper } from './paper';
+import type { ShooterGame } from './war';
 
 // Misiones diarias y semanales, y la liga semanal que se alimenta de ellas.
 // Las misiones del día (y de la semana) son las mismas para todos: salen de la fecha.
@@ -33,7 +34,8 @@ export type MissionEvent =
   | 'flak'
   | 'artillery'
   | 'lanes'
-  | 'duel';
+  | 'duel'
+  | ShooterGame;
 
 export interface MissionDef {
   id: string;
@@ -53,6 +55,9 @@ export interface MissionDef {
 /** Desde cuándo salen las misiones de los juegos de guerra (día y semana). */
 export const WAR_MISSIONS_DAY = '2026-10-07';
 export const WAR_MISSIONS_WEEK = '2026-10-12';
+/** Desde cuándo salen las de los shooters (día y semana). */
+export const SHOOTER_MISSIONS_DAY = '2026-10-12';
+export const SHOOTER_MISSIONS_WEEK = '2026-10-19';
 
 export interface MissionSlot {
   id: string;
@@ -102,6 +107,12 @@ const DAILY: MissionDef[][] = [
     { id: 'd-artillery', event: 'artillery', kind: 'max', target: 25, emoji: '🎯', text: 'Consigue 25 puntos en Artillería', since: WAR_MISSIONS_DAY },
     { id: 'd-lanes', event: 'lanes', kind: 'max', target: 40, emoji: '🚧', text: 'Consigue 40 puntos en Defensa de calles', since: WAR_MISSIONS_DAY },
     { id: 'd-duel', event: 'duel', kind: 'max', target: 12, emoji: '🎖️', text: 'Consigue 12 puntos en Duelo de generales', since: WAR_MISSIONS_DAY },
+    { id: 'd-squadron', event: 'squadron', kind: 'max', target: 120, emoji: '✈️', text: 'Consigue 120 puntos en Escuadrilla', since: SHOOTER_MISSIONS_DAY },
+    { id: 'd-sentry', event: 'sentry', kind: 'max', target: 150, emoji: '🗼', text: 'Consigue 150 puntos en Torre vigía', since: SHOOTER_MISSIONS_DAY },
+    { id: 'd-night', event: 'night', kind: 'max', target: 150, emoji: '🌙', text: 'Consigue 150 puntos en Ronda nocturna', since: SHOOTER_MISSIONS_DAY },
+    { id: 'd-sewer', event: 'sewer', kind: 'max', target: 80, emoji: '🐀', text: 'Consigue 80 puntos en Alcantarillas', since: SHOOTER_MISSIONS_DAY },
+    { id: 'd-neon', event: 'neon', kind: 'max', target: 150, emoji: '💠', text: 'Consigue 150 puntos en Arena de neón', since: SHOOTER_MISSIONS_DAY },
+    { id: 'd-cannon', event: 'cannon', kind: 'max', target: 300, emoji: '🎪', text: 'Vuela 300 m en Alcalde bala', since: SHOOTER_MISSIONS_DAY },
   ],
   [
     { id: 'd-daily', event: 'daily', kind: 'sum', target: 1, emoji: '🌃', text: 'Completa el Apagón diario' },
@@ -130,6 +141,12 @@ const WEEKLY: MissionDef[][] = [
     { id: 'w-artillery', event: 'artillery', kind: 'max', target: 80, emoji: '🎯', text: 'Consigue 80 puntos en Artillería', since: WAR_MISSIONS_WEEK },
     { id: 'w-lanes', event: 'lanes', kind: 'max', target: 130, emoji: '🚧', text: 'Consigue 130 puntos en Defensa de calles', since: WAR_MISSIONS_WEEK },
     { id: 'w-duel', event: 'duel', kind: 'max', target: 45, emoji: '🎖️', text: 'Consigue 45 puntos en Duelo de generales', since: WAR_MISSIONS_WEEK },
+    { id: 'w-squadron', event: 'squadron', kind: 'max', target: 400, emoji: '✈️', text: 'Consigue 400 puntos en Escuadrilla', since: SHOOTER_MISSIONS_WEEK },
+    { id: 'w-sentry', event: 'sentry', kind: 'max', target: 500, emoji: '🗼', text: 'Consigue 500 puntos en Torre vigía', since: SHOOTER_MISSIONS_WEEK },
+    { id: 'w-night', event: 'night', kind: 'max', target: 700, emoji: '🌙', text: 'Aguanta la Ronda nocturna hasta el amanecer (700 puntos)', since: SHOOTER_MISSIONS_WEEK },
+    { id: 'w-sewer', event: 'sewer', kind: 'max', target: 300, emoji: '🐀', text: 'Consigue 300 puntos en Alcantarillas', since: SHOOTER_MISSIONS_WEEK },
+    { id: 'w-neon', event: 'neon', kind: 'max', target: 600, emoji: '💠', text: 'Consigue 600 puntos en Arena de neón', since: SHOOTER_MISSIONS_WEEK },
+    { id: 'w-cannon', event: 'cannon', kind: 'max', target: 900, emoji: '🎪', text: 'Vuela 900 m en Alcalde bala', since: SHOOTER_MISSIONS_WEEK },
   ],
   [
     { id: 'w-puzzle', event: 'puzzle', kind: 'sum', target: 6, emoji: '🧩', text: 'Completa 6 retos diarios (Apagón, Calles o Plan verde)' },

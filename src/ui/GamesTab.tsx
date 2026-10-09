@@ -8,7 +8,7 @@ import { vipReady } from '../game/legacy';
 import { CASINO_ERA, casinoOpen, casinoToday } from '../game/casino';
 import { CupCard } from './cup/CupCard';
 import { ClaraTip } from './ClaraTip';
-import { WAR_GAMES, type WarGame } from '../game/war';
+import { WAR_GAMES, WAR_INFO, type ShooterGame, type WarGame } from '../game/war';
 
 export type GameId =
   | 'stack'
@@ -31,6 +31,16 @@ export type GameId =
 export const TICKET_GAMES: GameId[] = ['stack', 'merge', 'thief', 'traffic', 'memory', 'fire', 'metro', 'towers', ...WAR_GAMES];
 
 const NEW_TAG = <span className="new-tag">NUEVO</span>;
+
+/** Los shooters: qué se hace en cada uno y de qué tipo de juego es. */
+const SHOOTERS: { id: ShooterGame; genre: string; text: string }[] = [
+  { id: 'squadron', genre: 'Matamarcianos', text: 'Pilota el avión de la ciudad contra oleadas enemigas. Monedas, hangar y dirigibles jefe.' },
+  { id: 'sentry', genre: 'Defensa de torre', text: 'Tu torre dispara sola: gasta monedas en mejoras sin parar y aguanta oleadas y jefes.' },
+  { id: 'night', genre: 'Supervivencia', text: 'Patrulla la plaza de noche: tus armas disparan solas. Sube de nivel y aguanta al amanecer.' },
+  { id: 'sewer', genre: 'Roguelite', text: 'Roguelite de salas: quieto disparas, moviéndote esquivas. Mejora tu taller con chatarra.' },
+  { id: 'neon', genre: 'Dos joysticks', text: 'Twin-stick de neón: mueve con un pulgar, dispara con el otro y sube el multiplicador.' },
+  { id: 'cannon', genre: 'Juego de mejoras', text: 'Lanza al alcalde con el cañón de la feria y mejora el taller para volar cada vez más lejos.' },
+];
 
 export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup: () => void }) {
   const s = useGame((st) => st.s);
@@ -111,6 +121,27 @@ export function GamesTab({ onPlay, onCup }: { onPlay: (g: GameId) => void; onCup
         </div>
         <span className="game-cost">{wheelFree ? 'GRATIS' : '🎟️1'}</span>
       </button>
+
+      <div className="section-head">
+        <h2>Acción</h2>
+        <small className="muted">{vip ? '🏆 Partida VIP gratis' : '1 🎟️ por partida'}</small>
+      </div>
+
+      {SHOOTERS.map((g) => (
+        <button key={g.id} className={`game-card shooter ${g.id}`} disabled={!canPlay} onClick={() => onPlay(g.id)}>
+          <span className="game-emoji">{WAR_INFO[g.id].emoji}</span>
+          <div className="game-info">
+            <b>
+              {WAR_INFO[g.id].name} {NEW_TAG}
+            </b>
+            <small>{g.text}</small>
+            <small className="game-meta">
+              {g.genre} · 🏆 Récord: {s[WAR_INFO[g.id].best]} {WAR_INFO[g.id].unit}
+            </small>
+          </div>
+          <span className="game-cost">{vip ? 'VIP' : '🎟️1'}</span>
+        </button>
+      ))}
 
       <div className={`section-head${tut === 'arcade' ? ' tut-target' : ''}`}>
         <h2>Arcade</h2>

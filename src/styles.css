@@ -5924,6 +5924,31 @@ img.splash-logo {
   background: linear-gradient(135deg, #8a6a1a, #6a2a2a);
 }
 
+/* Shooters (sección Acción) */
+.game-card.squadron:not(:disabled) {
+  background: linear-gradient(135deg, #1d3f8a, #b07a1a);
+}
+
+.game-card.sentry:not(:disabled) {
+  background: linear-gradient(135deg, #4a2a7a, #1d6a7a);
+}
+
+.game-card.night:not(:disabled) {
+  background: linear-gradient(135deg, #141a4a, #6a3a8a);
+}
+
+.game-card.sewer:not(:disabled) {
+  background: linear-gradient(135deg, #2a4a3a, #5a4a2a);
+}
+
+.game-card.neon:not(:disabled) {
+  background: linear-gradient(135deg, #0a0a2a, #8a1a8a 60%, #1a8a9a);
+}
+
+.game-card.cannon:not(:disabled) {
+  background: linear-gradient(135deg, #b0243f, #e0a01a);
+}
+
 /* Bomberos */
 .fire-danger {
   height: 8px;

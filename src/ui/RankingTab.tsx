@@ -15,7 +15,7 @@ import {
 import { fmt, fmtClock, fmtTime } from '../game/format';
 import { DIVISIONS, divisionOf, nextDivision } from '../game/missions';
 import { useGame } from '../game/store';
-import { isWarGame } from '../game/war';
+import { WAR_INFO, isWarGame } from '../game/war';
 import { pressable } from './a11y';
 import { ClaraTip } from './ClaraTip';
 
@@ -34,6 +34,12 @@ const BOARD_INFO: Record<BoardTab, { emoji: string; label: string }> = {
   artillery: { emoji: '🎯', label: 'Artillería' },
   lanes: { emoji: '🚧', label: 'Calles' },
   duel: { emoji: '🎖️', label: 'Duelo' },
+  squadron: { emoji: '✈️', label: 'Escuadrilla' },
+  sentry: { emoji: '🗼', label: 'Torre vigía' },
+  night: { emoji: '🌙', label: 'Ronda' },
+  sewer: { emoji: '🐀', label: 'Alcantarillas' },
+  neon: { emoji: '💠', label: 'Neón' },
+  cannon: { emoji: '🎪', label: 'Alcalde bala' },
   traffic: { emoji: '🚦', label: 'Semáforo' },
   memory: { emoji: '🧠', label: 'Memoria' },
   stack: { emoji: '🏗️', label: 'Torre' },
@@ -46,7 +52,7 @@ const BOARD_INFO: Record<BoardTab, { emoji: string; label: string }> = {
 const GROUPS: { id: string; emoji: string; label: string; boards: BoardTab[] }[] = [
   { id: 'league', emoji: '🏆', label: 'Liga', boards: ['league'] },
   { id: 'today', emoji: '📅', label: 'Hoy', boards: ['daily', 'roads', 'parks'] },
-  { id: 'arcade', emoji: '🎮', label: 'Arcade', boards: ['towers', 'flak', 'artillery', 'lanes', 'duel', 'thief', 'fire', 'metro', 'traffic', 'memory', 'stack', 'merge'] },
+  { id: 'arcade', emoji: '🎮', label: 'Arcade', boards: ['squadron', 'sentry', 'night', 'sewer', 'neon', 'cannon', 'towers', 'flak', 'artillery', 'lanes', 'duel', 'thief', 'fire', 'metro', 'traffic', 'memory', 'stack', 'merge'] },
   { id: 'city', emoji: '🏙️', label: 'Ciudad', boards: ['city', 'stars'] },
 ];
 
@@ -85,7 +91,8 @@ export function RankingTab({ initial = 'league', onVisit }: { initial?: BoardTab
     if (board === 'league') return `${divisionOf(r.score).emoji} ${r.score} pts`;
     if (isDaily(board)) return `${r.moves} mov · ${fmtClock(r.timeMs ?? 0)}`;
     if (board === 'stack') return `${r.score} pisos`;
-    if (board === 'thief' || board === 'fire' || board === 'towers' || isWarGame(board)) return `${r.score} pts`;
+    if (isWarGame(board)) return `${r.score} ${WAR_INFO[board].unit}`;
+    if (board === 'thief' || board === 'fire' || board === 'towers') return `${r.score} pts`;
     if (board === 'metro') return `${r.score} viajeros`;
     if (board === 'traffic') return `${r.score} coches`;
     if (board === 'memory') return `${r.score} rondas`;

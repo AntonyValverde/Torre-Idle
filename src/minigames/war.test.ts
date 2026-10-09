@@ -388,6 +388,6 @@ describe('Premios de los juegos de guerra', () => {
   });
 
   it('cada juego tiene su logro', () => {
-    for (const id of ['flak', 'artillery', 'lanes', 'duel']) expect(ACHIEVEMENTS.some((a) => a.id === id)).toBe(true);
+    for (const id of WAR_GAMES) expect(ACHIEVEMENTS.some((a) => a.id === id)).toBe(true);
   });
 });

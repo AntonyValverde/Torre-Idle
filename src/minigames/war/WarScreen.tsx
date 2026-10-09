@@ -56,7 +56,7 @@ export function WarScreen({ game, label, view, onClose }: { game: WarGame; label
   const close = () => {
     if (!live.current.rewarded && live.current.sum.score > 0) {
       handleOver(live.current.sum);
-      useGame.getState().toast(`${info.emoji} Cobraste ${live.current.sum.score} puntos`);
+      useGame.getState().toast(`${info.emoji} Cobraste ${live.current.sum.score} ${info.unit === 'm' ? 'metros' : 'puntos'}`);
     }
     onClose();
   };
@@ -80,7 +80,9 @@ export function WarScreen({ game, label, view, onClose }: { game: WarGame; label
             )}
             <ul className="reward-list">
               <li>+{fmt(result.reward.coins)} 🪙</li>
-              {result.reward.gems > 0 ? <li>+{result.reward.gems} 💎</li> : <li className="muted">Llega a {warFirstGems(game)} puntos para ganar gemas</li>}
+              {result.reward.gems > 0 ? <li>+{result.reward.gems} 💎</li> : <li className="muted">
+                  Llega a {warFirstGems(game)} {info.unit === 'm' ? 'metros' : 'puntos'} para ganar gemas
+                </li>}
             </ul>
             <div className="btn-row">
               <button className="btn" onClick={onClose}>

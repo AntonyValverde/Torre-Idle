@@ -19,6 +19,12 @@ export const PAPER_RECORDS = {
   artilleryBest: { emoji: '🎯', name: 'Artillería', unit: 'puntos' },
   lanesBest: { emoji: '🚧', name: 'Defensa de calles', unit: 'puntos' },
   duelBest: { emoji: '🎖️', name: 'Duelo de generales', unit: 'puntos' },
+  squadronBest: { emoji: '✈️', name: 'Escuadrilla', unit: 'puntos' },
+  sentryBest: { emoji: '🗼', name: 'Torre vigía', unit: 'puntos' },
+  nightBest: { emoji: '🌙', name: 'Ronda nocturna', unit: 'puntos' },
+  sewerBest: { emoji: '🐀', name: 'Alcantarillas', unit: 'puntos' },
+  neonBest: { emoji: '💠', name: 'Arena de neón', unit: 'puntos' },
+  cannonBest: { emoji: '🎪', name: 'Alcalde bala', unit: 'metros' },
   mergeBestTile: { emoji: '🧱', name: 'Fusión', unit: '(ficha)' },
 } as const;
 

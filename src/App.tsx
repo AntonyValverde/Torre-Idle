@@ -94,6 +94,12 @@ const FlakScreen = lazyRetry(() => import('./minigames/flak/FlakScreen').then((m
 const ArtilleryScreen = lazyRetry(() => import('./minigames/artillery/ArtilleryScreen').then((m) => ({ default: m.ArtilleryScreen })));
 const LanesScreen = lazyRetry(() => import('./minigames/lanes/LanesScreen').then((m) => ({ default: m.LanesScreen })));
 const DuelScreen = lazyRetry(() => import('./minigames/duel/DuelScreen').then((m) => ({ default: m.DuelScreen })));
+const SquadronScreen = lazyRetry(() => import('./minigames/squadron/SquadronScreen').then((m) => ({ default: m.SquadronScreen })));
+const SentryScreen = lazyRetry(() => import('./minigames/sentry/SentryScreen').then((m) => ({ default: m.SentryScreen })));
+const NightScreen = lazyRetry(() => import('./minigames/night/NightScreen').then((m) => ({ default: m.NightScreen })));
+const SewerScreen = lazyRetry(() => import('./minigames/sewer/SewerScreen').then((m) => ({ default: m.SewerScreen })));
+const NeonScreen = lazyRetry(() => import('./minigames/neon/NeonScreen').then((m) => ({ default: m.NeonScreen })));
+const CannonScreen = lazyRetry(() => import('./minigames/cannon/CannonScreen').then((m) => ({ default: m.CannonScreen })));
 const WorldScreen = lazyRetry(() => import('./ui/WorldMap').then((m) => ({ default: m.WorldScreen })));
 
 const loading = (
@@ -293,6 +299,12 @@ export default function App() {
             {game === 'artillery' && <ArtilleryScreen onClose={() => setGame(null)} />}
             {game === 'lanes' && <LanesScreen onClose={() => setGame(null)} />}
             {game === 'duel' && <DuelScreen onClose={() => setGame(null)} />}
+            {game === 'squadron' && <SquadronScreen onClose={() => setGame(null)} />}
+            {game === 'sentry' && <SentryScreen onClose={() => setGame(null)} />}
+            {game === 'night' && <NightScreen onClose={() => setGame(null)} />}
+            {game === 'sewer' && <SewerScreen onClose={() => setGame(null)} />}
+            {game === 'neon' && <NeonScreen onClose={() => setGame(null)} />}
+            {game === 'cannon' && <CannonScreen onClose={() => setGame(null)} />}
           </Suspense>
         </ErrorBoundary>
       )}

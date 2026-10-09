@@ -30,6 +30,12 @@ export const BOARD_CAP: Record<ArcadeBoard | 'city' | 'stars', number> = {
   artillery: 5000,
   lanes: 5000,
   duel: 5000,
+  squadron: 5000,
+  sentry: 5000,
+  night: 5000,
+  sewer: 5000,
+  neon: 5000,
+  cannon: 5000,
   city: Infinity,
   stars: 1e9,
 };

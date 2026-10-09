@@ -64,6 +64,19 @@ describe('misiones', () => {
     expect([...seen].some((id) => war.test(id) && id.startsWith('w-'))).toBe(true);
   });
 
+  it('las misiones de los shooters solo salen desde su fecha y no cambian las de antes', () => {
+    const shooter = /^[dw]-(squadron|sentry|night|sewer|neon|cannon)$/;
+    // Las de antes de la fecha son las mismas que antes de añadirlas
+    for (let d = 1; d <= 11; d++) expect(dailyMissions(`2026-10-${String(d).padStart(2, '0')}`).some((m) => shooter.test(m.id))).toBe(false);
+    expect(dailyMissions('2026-10-04').map((m) => m.id)).toEqual(['d-decree', 'd-memory', 'd-roads']);
+    expect(weeklyMissions('2026-10-12').some((m) => shooter.test(m.id))).toBe(false);
+    const seen = new Set<string>();
+    for (let d = 12; d <= 31; d++) for (const m of dailyMissions(`2026-10-${String(d).padStart(2, '0')}`)) seen.add(m.id);
+    for (let w = 0; w < 30; w++) for (const m of weeklyMissions(`2027-0${1 + (w % 9)}-${String(1 + w).padStart(2, '0')}`)) seen.add(m.id);
+    expect([...seen].some((id) => shooter.test(id) && id.startsWith('d-'))).toBe(true);
+    expect([...seen].some((id) => shooter.test(id) && id.startsWith('w-'))).toBe(true);
+  });
+
   it('el progreso suma o guarda el máximo, sin pasar del objetivo', () => {
     let s = withDay(at(2026, 9, 30));
     s = {

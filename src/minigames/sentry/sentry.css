@@ -1,0 +1,439 @@
+/* ---------- Torre vigía (defensa de torre idle) ---------- */
+
+.se-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Marcador de arriba: fuera del campo para no tapar a los enemigos que llegan por arriba */
+.se-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 6px;
+  z-index: 3;
+}
+
+.se-top .sh-pill {
+  min-height: 36px;
+  padding: 2px 10px;
+}
+
+.se-wave {
+  position: relative;
+  overflow: hidden;
+}
+
+.se-wave b {
+  font-size: 0.95rem !important;
+}
+
+.se-wave-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7ad7ff, #ffc23d);
+  transition: width 0.2s linear;
+}
+
+.se-hp {
+  flex: 1;
+  min-width: 0;
+}
+
+.se-hp .sh-meter {
+  height: 22px;
+}
+
+.se-hp .sh-meter span {
+  font-size: 0.78rem;
+}
+
+.se-hp.low .sh-meter {
+  border-color: rgba(255, 90, 110, 0.85);
+  animation: seLow 0.8s ease-in-out infinite;
+}
+
+.se-top .sh-pause-btn {
+  margin-left: 0;
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
+/* Campo */
+.se-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.se-boss {
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  right: 12px;
+  z-index: 3;
+  pointer-events: none;
+  animation: shPop 0.3s ease-out;
+}
+
+.se-boss .sh-meter {
+  height: 16px;
+  border-color: rgba(255, 90, 110, 0.6);
+}
+
+.se-boss .sh-meter span {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.se-stage .sh-banner {
+  top: 16%;
+}
+
+/* Botones sobre el campo: velocidad (izquierda) y rayo (derecha) */
+.se-speed {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 3;
+  min-width: 52px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(10, 8, 30, 0.7);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  touch-action: manipulation;
+}
+
+.se-speed.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, rgba(10, 8, 30, 0.75));
+}
+
+.se-speed:focus-visible,
+.se-rayo:focus-visible,
+.se-tab:focus-visible,
+.se-up:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.se-rayo {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  width: 66px;
+  height: 66px;
+  border-color: rgba(122, 215, 255, 0.45);
+  background: radial-gradient(circle at 35% 30%, rgba(160, 225, 255, 0.35), rgba(10, 8, 30, 0.75) 70%);
+}
+
+.se-rayo > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 1.5rem !important;
+}
+
+.se-rayo > span em {
+  font-style: normal;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  margin-top: 1px;
+}
+
+.se-rayo.ready {
+  border-color: #7ad7ff;
+}
+
+.se-rayo small {
+  background: #7ad7ff !important;
+  color: #04202c !important;
+}
+
+/* Panel de mejoras */
+.se-panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 10px 10px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 3;
+}
+
+.se-panel.off {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+.se-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.se-coins {
+  flex: none;
+  min-width: 92px;
+  font-weight: 800;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.se-tabs {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.se-tab {
+  position: relative;
+  flex: 1;
+  min-height: 40px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+.se-tab.on {
+  background: var(--card-2);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Punto: en esta pestaña hay algo que puedes pagar */
+.se-tab i {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.se-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 56px;
+  gap: 6px;
+  height: calc(56px * 3 + 6px * 2);
+  align-content: start;
+}
+
+.se-up {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  touch-action: manipulation;
+  transition:
+    transform 0.08s,
+    border-color 0.15s;
+}
+
+.se-up.can {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.se-up:not(.max):active {
+  transform: scale(0.97);
+}
+
+.se-up-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+
+.se-up-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 0.86rem;
+  line-height: 1.15;
+}
+
+.se-up-cost {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-weight: 800;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.se-up-val {
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.15;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.se-up-val b {
+  color: var(--good);
+}
+
+.se-up.poor {
+  opacity: 0.62;
+}
+
+.se-up.poor .se-up-cost {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.se-up.max .se-up-cost {
+  background: rgba(61, 220, 151, 0.18);
+  color: var(--good);
+}
+
+.se-up.pop0 {
+  animation: seBuy 0.35s ease-out;
+}
+
+.se-up.pop1 {
+  animation: seBuy2 0.35s ease-out;
+}
+
+.se-up.no0 {
+  animation: seNo 0.3s ease-out;
+}
+
+.se-up.no1 {
+  animation: seNo2 0.3s ease-out;
+}
+
+.se-hint {
+  grid-column: 1 / -1;
+  align-self: center;
+  margin: 0;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+@keyframes seBuy {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  35% {
+    transform: scale(1.04);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--card));
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+@keyframes seBuy2 {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.04);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--card));
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes seNo2 {
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes seNo {
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes seLow {
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 60, 80, 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .se-up.pop0,
+  .se-up.pop1,
+  .se-up.no0,
+  .se-up.no1,
+  .se-hp.low .sh-meter,
+  .se-boss {
+    animation: none;
+  }
+}

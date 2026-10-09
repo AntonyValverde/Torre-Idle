@@ -22,6 +22,7 @@ import {
   cupEvents,
   cupGamesFor,
   WAR_CUP_WEEK,
+  SHOOTER_CUP_WEEK,
   cupPhase,
   cupRewards,
   cupStart,
@@ -86,6 +87,10 @@ describe('calendario de la Copa', () => {
     for (const w of ['2026-09-28', '2026-10-05']) expect(Object.values(cupEvents(w)).every((g) => classic.includes(g))).toBe(true);
     expect(cupGamesFor('2026-10-05')).toHaveLength(6);
     expect(cupGamesFor(WAR_CUP_WEEK)).toHaveLength(10);
+    // La Copa de esa semana no cambia al añadir los shooters; desde la siguiente entran dos
+    expect(cupGamesFor('2026-10-12')).not.toContain('squadron');
+    expect(cupGamesFor(SHOOTER_CUP_WEEK)).toEqual(expect.arrayContaining(['squadron', 'neon']));
+    expect(cupGamesFor(SHOOTER_CUP_WEEK)).toHaveLength(12);
     // Desde entonces, a veces sale alguno
     const later = Array.from({ length: 20 }, (_, i) => Object.values(cupEvents(cupWeekKey(cupStart(WAR_CUP_WEEK) + i * 7 * 86_400_000)))).flat();
     expect(later.some((g) => !classic.includes(g))).toBe(true);

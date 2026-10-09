@@ -1,0 +1,234 @@
+/* ---------- Alcalde bala ---------- */
+
+.cn-wrap {
+  background: #2a2468;
+}
+
+.cn-hud-row2 {
+  flex-wrap: nowrap;
+}
+
+.cn-fuel {
+  flex: 1 1 auto;
+  max-width: 200px;
+}
+
+.cn-fuel .sh-meter {
+  height: 20px;
+}
+
+.cn-fuel .sh-meter span {
+  font-size: 0.78rem;
+}
+
+.cn-alt b {
+  font-size: 0.9rem;
+}
+
+/* Qué hacer ahora: abajo, sobre la tierra */
+.cn-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 99px;
+  background: rgba(10, 8, 30, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 1.02rem;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation:
+    cnHintIn 0.3s ease-out both,
+    cnHintPulse 1.2s ease-in-out 0.3s infinite;
+}
+
+/* Resultado de cada intento */
+.cn-result {
+  gap: 8px;
+  padding: 18px 18px 16px;
+  cursor: pointer;
+}
+
+.cn-result.best {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 10px 40px rgba(255, 194, 61, 0.18);
+}
+
+.cn-result-kicker {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cn-result-dist {
+  font-size: 3.1rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  animation: cnPop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.cn-result-dist span {
+  font-size: 1.4rem;
+  color: var(--muted);
+}
+
+.cn-result-badge {
+  padding: 3px 12px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+  color: var(--good);
+  font-weight: 800;
+  font-size: 0.95rem;
+  animation: cnPop 0.5s 0.15s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.cn-result-badge.gold {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.cn-result-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.92rem;
+}
+
+.cn-result-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cn-result-list li b {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.cn-result-list li.bad {
+  color: #e0b07a;
+}
+
+.cn-result-total {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+/* Barras de los 5 intentos */
+.cn-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  height: 74px;
+  padding: 0 4px;
+}
+
+.cn-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+}
+
+.cn-bar i {
+  width: 100%;
+  border-radius: 6px 6px 3px 3px;
+  background: rgba(255, 255, 255, 0.25);
+  transform-origin: bottom;
+  animation: cnGrow 0.5s ease-out both;
+}
+
+.cn-bar.top i {
+  background: linear-gradient(180deg, #ffe066, #ffb938);
+}
+
+.cn-bar.now i {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.cn-bar.empty i {
+  background: rgba(255, 255, 255, 0.08);
+  animation: none;
+}
+
+.cn-bar small {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cn-result-btn {
+  min-width: 190px;
+  min-height: 48px;
+  margin-top: 4px;
+}
+
+@keyframes cnHintIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes cnHintPulse {
+  50% {
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.4),
+      0 0 0 5px rgba(255, 194, 61, 0.25);
+  }
+}
+
+@keyframes cnPop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cnGrow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cn-hint,
+  .cn-result-dist,
+  .cn-result-badge,
+  .cn-bar i {
+    animation: none;
+  }
+}
